@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"golang.org/x/net/ipv4"
 )
@@ -14,6 +15,7 @@ import (
 
 var allSPFRouters = net.IPAddr{IP: net.ParseIP("224.0.0.5")}
 var allDRouters = net.IPAddr{IP: net.ParseIP("224.0.0.6")}
+var helloInterval = 10 * time.Second
 
 type messageType uint8
 
@@ -155,6 +157,31 @@ func (p Packet) String() string {
 	return b.String()
 }
 
+func listen(conn net.PacketConn, c chan *Packet) {
+	for {
+		buf := make([]byte, 1500)
+		n, _, err := conn.ReadFrom(buf)
+		if err != nil {
+			panic(err)
+		}
+
+		p, err := decodePacket(buf[:n])
+		if err != nil {
+			fmt.Printf("Error decoding header: %v\n", err)
+			continue
+		}
+
+		c <- p
+	}
+}
+
+func send(conn net.PacketConn, c chan *Packet) {
+	for {
+		p := <-c
+		fmt.Printf("Sending %s\n", p)
+	}
+}
+
 func main() {
 	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
 
@@ -194,21 +221,38 @@ func main() {
 		panic(err)
 	}
 
+	r := make(chan *Packet)
+	w := make(chan *Packet)
+	hello := time.Tick(helloInterval)
+
+	go listen(conn, r)
+	go send(conn, w)
+
 	for {
-		buf := make([]byte, 1500)
-		n, cm, src, err := raw.ReadFrom(buf)
-		if err != nil {
-			panic(err)
-		}
+		select {
+		case p := <-r:
+			fmt.Println(p)
+		case <-hello:
+			var p Packet
+			p.Type = TypeHello
+			p.Length = 44
+			p.RouterID = []byte{192, 168, 1, 1}
+			p.AreaID = []byte{0, 0, 0, 0}
+			p.AuthType = 0
+			p.AuthData = 0
 
-		p, err := decodePacket(buf[:n])
-		if err != nil {
-			fmt.Printf("Error decoding header: %v\n", err)
-			continue
-		}
+			var hello Hello
+			hello.NetworkMask = []byte{255, 255, 255, 0}
+			hello.HelloInterval = 10
+			hello.Options = 0x2
+			hello.RtrPriority = 1
+			hello.RtrDeadInterval = 40
+			hello.DRouter = []byte{0, 0, 0, 0}
+			hello.BDRouter = []byte{0, 0, 0, 0}
+			p.Content = hello
 
-		fmt.Println(n, cm, src)
-		fmt.Println(p)
+			w <- &p
+		}
 	}
 
 	// allSPFRouters := net.IPAddr{IP: net.IPv4(224, 0, 0, 5)}
