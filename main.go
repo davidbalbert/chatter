@@ -54,7 +54,7 @@ type Header struct {
 	AuthData uint64
 }
 
-func (h Header) String() string {
+func (h *Header) String() string {
 	return fmt.Sprintf("OSPFv2 %s len=%d router=%s area=%s checksum=0x%x authType=%d authData=%d", h.Type, h.Length, h.RouterID, h.AreaID, h.Checksum, h.AuthType, h.AuthData)
 }
 
@@ -72,6 +72,7 @@ type Hello struct {
 type Packet struct {
 	Header
 	Content any
+	data    []byte
 }
 
 func decodePacket(data []byte) (*Packet, error) {
@@ -98,10 +99,13 @@ func decodePacket(data []byte) (*Packet, error) {
 		return nil, fmt.Errorf("packet length mismatch")
 	}
 
-	// TODO: calculate checksum
+	if checksum(data) != 0 {
+		return nil, fmt.Errorf("packet checksum mismatch")
+	}
 
 	var p Packet
 	p.Header = h
+	p.data = data
 
 	switch h.Type {
 	case TypeHello:
@@ -138,7 +142,96 @@ func decodePacket(data []byte) (*Packet, error) {
 	return &p, nil
 }
 
-func (p Packet) String() string {
+func (p *Packet) updateLength() error {
+	switch p.Type {
+	case TypeHello:
+		hello := p.Content.(Hello)
+		p.Length = 44 + uint16(len(hello.Neighbors)*4)
+	case TypeDatabaseDescription:
+		fallthrough
+	case TypeLinkStateRequest:
+		fallthrough
+	case TypeLinkStateUpdate:
+		fallthrough
+	case TypeLinkStateAcknowledgement:
+		return fmt.Errorf("unsupported OSPF packet type %s", p.Type)
+	default:
+		return fmt.Errorf("unknown OSPF packet type %d", p.Type)
+	}
+
+	return nil
+}
+
+func checksum(data ...[]byte) uint16 {
+	var sum uint32
+	for _, d := range data {
+		l := len(d)
+		for i := 0; i < l; i += 2 {
+			if i+1 < l {
+				sum += uint32(d[i])<<8 | uint32(d[i+1])
+			} else {
+				sum += uint32(d[i]) << 8
+			}
+		}
+	}
+
+	sum = (sum >> 16) + (sum & 0xffff)
+	sum += sum >> 16
+
+	return ^uint16(sum)
+}
+
+func (p *Packet) encode() ([]byte, error) {
+	if p.data != nil {
+		return p.data, nil
+	}
+
+	if err := p.updateLength(); err != nil {
+		return nil, err
+	}
+
+	p.Checksum = checksum(p.data[0:16], p.data[24:])
+
+	b := make([]byte, p.Length)
+
+	b[0] = 2
+	b[1] = uint8(p.Type)
+	binary.BigEndian.PutUint16(b[2:4], p.Length)
+	copy(b[4:8], p.RouterID)
+	copy(b[8:12], p.AreaID)
+	binary.BigEndian.PutUint16(b[12:14], p.Checksum) // TODO!
+	binary.BigEndian.PutUint16(b[14:16], p.AuthType)
+	binary.BigEndian.PutUint64(b[16:24], p.AuthData)
+
+	switch p.Type {
+	case TypeHello:
+		hello := p.Content.(Hello)
+		copy(b[24:28], hello.NetworkMask)
+		binary.BigEndian.PutUint16(b[28:30], hello.HelloInterval)
+		b[30] = hello.Options
+		b[31] = hello.RtrPriority
+		binary.BigEndian.PutUint32(b[32:36], hello.RtrDeadInterval)
+		copy(b[36:40], hello.DRouter)
+		copy(b[40:44], hello.BDRouter)
+		for i, neighbor := range hello.Neighbors {
+			copy(b[44+i*4:48+i*4], neighbor)
+		}
+	case TypeDatabaseDescription:
+		fallthrough
+	case TypeLinkStateRequest:
+		fallthrough
+	case TypeLinkStateUpdate:
+		fallthrough
+	case TypeLinkStateAcknowledgement:
+		return nil, fmt.Errorf("unsupported OSPF packet type %s", p.Type)
+	default:
+		return nil, fmt.Errorf("unknown OSPF packet type %d", p.Type)
+	}
+
+	return b, nil
+}
+
+func (p *Packet) String() string {
 	var b bytes.Buffer
 
 	fmt.Fprintf(&b, "OSPFv2 %s router=%s area=%s", p.Type, p.RouterID, p.AreaID)
