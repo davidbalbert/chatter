@@ -182,15 +182,9 @@ func checksum(data ...[]byte) uint16 {
 }
 
 func (p *Packet) encode() ([]byte, error) {
-	if p.data != nil {
-		return p.data, nil
-	}
-
 	if err := p.updateLength(); err != nil {
 		return nil, err
 	}
-
-	p.Checksum = checksum(p.data[0:16], p.data[24:])
 
 	b := make([]byte, p.Length)
 
@@ -227,6 +221,10 @@ func (p *Packet) encode() ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unknown OSPF packet type %d", p.Type)
 	}
+
+	p.data = b
+	p.Checksum = checksum(p.data[0:16], p.data[24:])
+	binary.BigEndian.PutUint16(b[12:14], p.Checksum)
 
 	return b, nil
 }
@@ -268,10 +266,28 @@ func listen(conn net.PacketConn, c chan *Packet) {
 	}
 }
 
-func send(conn net.PacketConn, c chan *Packet) {
+func send(conn *ipv4.RawConn, c chan *Packet) {
 	for {
 		p := <-c
 		fmt.Printf("Sending %s\n", p)
+
+		b, err := p.encode()
+		if err != nil {
+			fmt.Printf("Error encoding packet: %v\n", err)
+			continue
+		}
+
+		ip := &ipv4.Header{
+			Version:  ipv4.Version,
+			Len:      ipv4.HeaderLen,
+			TOS:      0xc0,
+			TotalLen: ipv4.HeaderLen + len(b),
+			TTL:      1,
+			Protocol: 89,
+			Dst:      allSPFRouters.IP.To4(),
+		}
+
+		conn.WriteTo(ip, b, nil)
 	}
 }
 
@@ -284,7 +300,10 @@ func main() {
 	}
 	defer conn.Close()
 
-	raw := ipv4.NewPacketConn(conn)
+	raw, err := ipv4.NewRawConn(conn)
+	if err != nil {
+		panic(err)
+	}
 
 	iface, err := net.InterfaceByName("bridge100")
 	if err != nil {
@@ -304,47 +323,37 @@ func main() {
 		panic(err)
 	}
 
-	// 0xc0 == DSCP CS6, No ECN
-	if err := raw.SetTOS(0xc0); err != nil {
-		panic(err)
-	}
-
-	// TODO: try SetTTL instead of SetMulticastTTL and see what happens
-	if err := raw.SetMulticastTTL(1); err != nil {
-		panic(err)
-	}
-
 	r := make(chan *Packet)
 	w := make(chan *Packet)
 	hello := time.Tick(helloInterval)
 
 	go listen(conn, r)
-	go send(conn, w)
+	go send(raw, w)
 
 	for {
 		select {
 		case p := <-r:
 			fmt.Println(p)
 		case <-hello:
-			var p Packet
-			p.Type = TypeHello
-			p.Length = 44
-			p.RouterID = []byte{192, 168, 1, 1}
-			p.AreaID = []byte{0, 0, 0, 0}
-			p.AuthType = 0
-			p.AuthData = 0
-
-			var hello Hello
-			hello.NetworkMask = []byte{255, 255, 255, 0}
-			hello.HelloInterval = 10
-			hello.Options = 0x2
-			hello.RtrPriority = 1
-			hello.RtrDeadInterval = 40
-			hello.DRouter = []byte{0, 0, 0, 0}
-			hello.BDRouter = []byte{0, 0, 0, 0}
-			p.Content = hello
-
-			w <- &p
+			w <- &Packet{
+				Header: Header{
+					Type:     TypeHello,
+					Length:   44,
+					RouterID: []byte{192, 168, 105, 1},
+					AreaID:   []byte{0, 0, 0, 0},
+					AuthType: 0,
+					AuthData: 0,
+				},
+				Content: Hello{
+					NetworkMask:     []byte{255, 255, 255, 0},
+					HelloInterval:   10,
+					Options:         0x2,
+					RtrPriority:     1,
+					RtrDeadInterval: 40,
+					DRouter:         []byte{0, 0, 0, 0},
+					BDRouter:        []byte{0, 0, 0, 0},
+				},
+			}
 		}
 	}
 
