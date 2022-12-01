@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"net/netip"
 	"os"
 	"time"
 
@@ -13,9 +14,12 @@ import (
 
 // https://www.rfc-editor.org/rfc/rfc2328.html
 
-var allSPFRouters = net.IPAddr{IP: net.ParseIP("224.0.0.5")}
-var allDRouters = net.IPAddr{IP: net.ParseIP("224.0.0.6")}
-var helloInterval = 10 * time.Second
+var allSPFRouters = netip.MustParseAddr("224.0.0.5")
+var allDRouters = netip.MustParseAddr("224.0.0.6")
+
+func toNetAddr(addr netip.Addr) net.Addr {
+	return &net.IPAddr{IP: addr.AsSlice()}
+}
 
 type messageType uint8
 
@@ -47,8 +51,8 @@ func (t messageType) String() string {
 type Header struct {
 	Type     messageType
 	Length   uint16
-	RouterID net.IP
-	AreaID   net.IP
+	RouterID netip.Addr
+	AreaID   netip.Addr
 	Checksum uint16
 	AuthType uint16
 	AuthData uint64
@@ -64,15 +68,28 @@ type Hello struct {
 	Options         uint8
 	RtrPriority     uint8
 	RtrDeadInterval uint32
-	DRouter         net.IP
-	BDRouter        net.IP
-	Neighbors       []net.IP
+	DRouter         netip.Addr
+	BDRouter        netip.Addr
+	Neighbors       []netip.Addr
 }
 
 type Packet struct {
 	Header
 	Content any
 	data    []byte
+}
+
+func mustAddrFromSlice(b []byte) netip.Addr {
+	addr, ok := netip.AddrFromSlice(b)
+	if !ok {
+		panic("mustAddrFromSlice: slice should be either 4 or 16 bytes, but got " + fmt.Sprint(len(b)))
+	}
+	return addr
+}
+
+func to4(addr netip.Addr) []byte {
+	b := addr.As4()
+	return b[:]
 }
 
 func decodePacket(data []byte) (*Packet, error) {
@@ -89,8 +106,8 @@ func decodePacket(data []byte) (*Packet, error) {
 
 	h.Type = messageType(data[1])
 	h.Length = binary.BigEndian.Uint16(data[2:4])
-	h.RouterID = data[4:8]
-	h.AreaID = data[8:12]
+	h.RouterID = mustAddrFromSlice(data[4:8])
+	h.AreaID = mustAddrFromSlice(data[8:12])
 	h.Checksum = binary.BigEndian.Uint16(data[12:14])
 	h.AuthType = binary.BigEndian.Uint16(data[14:16])
 	h.AuthData = binary.BigEndian.Uint64(data[16:24])
@@ -119,11 +136,11 @@ func decodePacket(data []byte) (*Packet, error) {
 		hello.Options = data[30]
 		hello.RtrPriority = data[31]
 		hello.RtrDeadInterval = binary.BigEndian.Uint32(data[32:36])
-		hello.DRouter = data[36:40]
-		hello.BDRouter = data[40:44]
+		hello.DRouter = mustAddrFromSlice(data[36:40])
+		hello.BDRouter = mustAddrFromSlice(data[40:44])
 
 		for i := 44; i < int(h.Length); i += 4 {
-			hello.Neighbors = append(hello.Neighbors, data[i:i+4])
+			hello.Neighbors = append(hello.Neighbors, mustAddrFromSlice(data[i:i+4]))
 		}
 
 		p.Content = hello
@@ -191,8 +208,8 @@ func (p *Packet) encode() ([]byte, error) {
 	b[0] = 2
 	b[1] = uint8(p.Type)
 	binary.BigEndian.PutUint16(b[2:4], p.Length)
-	copy(b[4:8], p.RouterID)
-	copy(b[8:12], p.AreaID)
+	copy(b[4:8], to4(p.RouterID))
+	copy(b[8:12], to4(p.AreaID))
 	binary.BigEndian.PutUint16(b[12:14], p.Checksum) // TODO!
 	binary.BigEndian.PutUint16(b[14:16], p.AuthType)
 	binary.BigEndian.PutUint64(b[16:24], p.AuthData)
@@ -205,10 +222,10 @@ func (p *Packet) encode() ([]byte, error) {
 		b[30] = hello.Options
 		b[31] = hello.RtrPriority
 		binary.BigEndian.PutUint32(b[32:36], hello.RtrDeadInterval)
-		copy(b[36:40], hello.DRouter)
-		copy(b[40:44], hello.BDRouter)
+		copy(b[36:40], to4(hello.DRouter))
+		copy(b[40:44], to4(hello.BDRouter))
 		for i, neighbor := range hello.Neighbors {
-			copy(b[44+i*4:48+i*4], neighbor)
+			copy(b[44+i*4:48+i*4], to4(neighbor))
 		}
 	case TypeDatabaseDescription:
 		fallthrough
@@ -248,15 +265,15 @@ func (p *Packet) String() string {
 	return b.String()
 }
 
-func listen(conn net.PacketConn, c chan *Packet) {
+func listen(conn *ipv4.RawConn, c chan *Packet) {
 	for {
 		buf := make([]byte, 1500)
-		n, _, err := conn.ReadFrom(buf)
+		_, payload, _, err := conn.ReadFrom(buf)
 		if err != nil {
 			panic(err)
 		}
 
-		p, err := decodePacket(buf[:n])
+		p, err := decodePacket(payload)
 		if err != nil {
 			fmt.Printf("Error decoding header: %v\n", err)
 			continue
@@ -284,15 +301,149 @@ func send(conn *ipv4.RawConn, c chan *Packet) {
 			TotalLen: ipv4.HeaderLen + len(b),
 			TTL:      1,
 			Protocol: 89,
-			Dst:      allSPFRouters.IP.To4(),
+			Dst:      to4(allSPFRouters),
 		}
 
 		conn.WriteTo(ip, b, nil)
 	}
 }
 
-func main() {
-	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
+type NetworkConfig struct {
+	Network netip.Prefix
+	AreaID  netip.Addr
+}
+
+type InterfaceConfig struct {
+	Name          string
+	HelloInterval uint16
+	DeadInterval  uint32
+}
+
+type Config struct {
+	RouterID   netip.Addr
+	Networks   []NetworkConfig
+	Interfaces []InterfaceConfig
+}
+
+func NewConfig(routerID string) (*Config, error) {
+	addr, err := netip.ParseAddr(routerID)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing router id: %w", err)
+	}
+
+	return &Config{
+		RouterID: addr,
+	}, nil
+}
+
+func (c *Config) AddNetwork(network, areaID string) error {
+	net, err := netip.ParsePrefix(network)
+	if err != nil {
+		return fmt.Errorf("error parsing network prefix: %w", err)
+	}
+
+	if net.Addr().Is6() {
+		return fmt.Errorf("ipv6 networks are not supported")
+	}
+
+	addr, err := netip.ParseAddr(areaID)
+	if err != nil {
+		return fmt.Errorf("error parsing area id: %w", err)
+	}
+
+	if addr.Is6() {
+		return fmt.Errorf("ipv6 area ids are not supported")
+	}
+
+	c.Networks = append(c.Networks, NetworkConfig{
+		Network: net,
+		AreaID:  addr,
+	})
+
+	return nil
+}
+
+func (c *Config) AddInterface(name string, helloInterval uint16, deadInterval uint32) {
+	c.Interfaces = append(c.Interfaces, InterfaceConfig{
+		Name:          name,
+		HelloInterval: helloInterval,
+		DeadInterval:  deadInterval,
+	})
+}
+
+type Interface struct {
+	Interface    *net.Interface
+	Address      netip.Addr
+	Prefix       netip.Prefix
+	AreaID       netip.Addr
+	HelloInteral uint16
+	DeadInterval uint32
+}
+
+func (iface *Interface) HelloDuration() time.Duration {
+	return time.Duration(iface.HelloInteral) * time.Second
+}
+
+type Neighbor struct {
+	RouterID  netip.Addr
+	IP        netip.Addr
+	Interface *Interface
+}
+
+type Instance struct {
+	RouterID   netip.Addr
+	Interfaces []Interface
+	Neighbors  map[string]Neighbor
+}
+
+func NewInstance(c *Config) (*Instance, error) {
+	i := &Instance{
+		RouterID:  c.RouterID,
+		Neighbors: make(map[string]Neighbor),
+	}
+
+	for _, iface := range c.Interfaces {
+		netif, err := net.InterfaceByName(iface.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		addrs, err := netif.Addrs()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, addr := range addrs {
+			prefix, err := netip.ParsePrefix(addr.String())
+			if err != nil {
+				return nil, fmt.Errorf("error parsing prefix for %s: %w", netif.Name, err)
+			}
+
+			for _, net := range c.Networks {
+				if net.Network == prefix.Masked() {
+					i.Interfaces = append(i.Interfaces, Interface{
+						Interface:    netif,
+						Address:      prefix.Addr(),
+						Prefix:       net.Network,
+						AreaID:       net.AreaID,
+						HelloInteral: iface.HelloInterval,
+						DeadInterval: iface.DeadInterval,
+					})
+				}
+			}
+		}
+	}
+
+	return i, nil
+}
+
+func (inst *Instance) Run() {
+	if len(inst.Interfaces) == 0 {
+		panic("no interfaces configured")
+	}
+
+	// TODO: listen on all interfaces
+	iface := inst.Interfaces[0]
 
 	conn, err := net.ListenPacket("ip4:ospf", "0.0.0.0")
 	if err != nil {
@@ -305,17 +456,12 @@ func main() {
 		panic(err)
 	}
 
-	iface, err := net.InterfaceByName("bridge100")
-	if err != nil {
+	if err := raw.JoinGroup(iface.Interface, toNetAddr(allSPFRouters)); err != nil {
 		panic(err)
 	}
+	defer raw.LeaveGroup(iface.Interface, toNetAddr(allSPFRouters))
 
-	if err := raw.JoinGroup(iface, &allSPFRouters); err != nil {
-		panic(err)
-	}
-	defer raw.LeaveGroup(iface, &allSPFRouters)
-
-	if err := raw.SetMulticastInterface(iface); err != nil {
+	if err := raw.SetMulticastInterface(iface.Interface); err != nil {
 		panic(err)
 	}
 
@@ -325,9 +471,9 @@ func main() {
 
 	r := make(chan *Packet)
 	w := make(chan *Packet)
-	hello := time.Tick(helloInterval)
+	hello := time.Tick(iface.HelloDuration())
 
-	go listen(conn, r)
+	go listen(raw, r)
 	go send(raw, w)
 
 	for {
@@ -339,39 +485,44 @@ func main() {
 				Header: Header{
 					Type:     TypeHello,
 					Length:   44,
-					RouterID: []byte{192, 168, 105, 1},
-					AreaID:   []byte{0, 0, 0, 0},
+					RouterID: inst.RouterID,
+					AreaID:   iface.AreaID,
 					AuthType: 0,
 					AuthData: 0,
 				},
 				Content: Hello{
-					NetworkMask:     []byte{255, 255, 255, 0},
+					NetworkMask:     net.CIDRMask(iface.Prefix.Bits(), 32),
 					HelloInterval:   10,
 					Options:         0x2,
 					RtrPriority:     1,
 					RtrDeadInterval: 40,
-					DRouter:         []byte{0, 0, 0, 0},
-					BDRouter:        []byte{0, 0, 0, 0},
+					DRouter:         netip.IPv4Unspecified(),
+					BDRouter:        netip.IPv4Unspecified(),
 				},
 			}
 		}
 	}
 
-	// allSPFRouters := net.IPAddr{IP: net.IPv4(224, 0, 0, 5)}
+}
 
-	// fmt.Println(iface.MulticastAddrs())
+func main() {
+	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
 
-	// conn, err := net.Dial("ip4:ospf", "127.0.0.1")
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// defer conn.Close()
+	config, err := NewConfig("192.168.105.1")
+	if err != nil {
+		panic(err)
+	}
 
-	// fmt.Println(conn.LocalAddr(), conn.RemoteAddr())
+	if err := config.AddNetwork("192.168.105.0/24", "0.0.0.0"); err != nil {
+		panic(err)
+	}
 
-	// n, err := conn.Write([]byte{1, 2, 3, 4})
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(n)
+	config.AddInterface("bridge100", 10, 40)
+
+	instance, err := NewInstance(config)
+	if err != nil {
+		panic(err)
+	}
+
+	instance.Run()
 }
