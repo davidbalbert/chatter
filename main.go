@@ -34,6 +34,19 @@ func mustAddrFromSlice(b []byte) netip.Addr {
 	return addr
 }
 
+func tickImmediately(d time.Duration) <-chan time.Time {
+	c := make(chan time.Time)
+
+	go func() {
+		c <- time.Now()
+		for t := range time.Tick(d) {
+			c <- t
+		}
+	}()
+
+	return c
+}
+
 type messageType uint8
 
 const (
@@ -471,7 +484,7 @@ func (inst *Instance) Run() {
 
 	r := make(chan *Packet)
 	w := make(chan *Packet)
-	hello := time.Tick(iface.HelloDuration())
+	hello := tickImmediately(iface.HelloDuration())
 
 	go listen(raw, r)
 	go send(raw, w)
