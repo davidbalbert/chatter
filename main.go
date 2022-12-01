@@ -391,73 +391,14 @@ type Interface struct {
 	AreaID       netip.Addr
 	HelloInteral uint16
 	DeadInterval uint32
+	instance     *Instance
 }
 
 func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
 }
 
-type Neighbor struct {
-	RouterID  netip.Addr
-	IP        netip.Addr
-	Interface *Interface
-}
-
-type Instance struct {
-	RouterID   netip.Addr
-	Interfaces []Interface
-	Neighbors  map[string]Neighbor
-}
-
-func NewInstance(c *Config) (*Instance, error) {
-	i := &Instance{
-		RouterID:  c.RouterID,
-		Neighbors: make(map[string]Neighbor),
-	}
-
-	for _, iface := range c.Interfaces {
-		netif, err := net.InterfaceByName(iface.Name)
-		if err != nil {
-			return nil, err
-		}
-
-		addrs, err := netif.Addrs()
-		if err != nil {
-			return nil, err
-		}
-
-		for _, addr := range addrs {
-			prefix, err := netip.ParsePrefix(addr.String())
-			if err != nil {
-				return nil, fmt.Errorf("error parsing prefix for %s: %w", netif.Name, err)
-			}
-
-			for _, net := range c.Networks {
-				if net.Network == prefix.Masked() {
-					i.Interfaces = append(i.Interfaces, Interface{
-						Interface:    netif,
-						Address:      prefix.Addr(),
-						Prefix:       net.Network,
-						AreaID:       net.AreaID,
-						HelloInteral: iface.HelloInterval,
-						DeadInterval: iface.DeadInterval,
-					})
-				}
-			}
-		}
-	}
-
-	return i, nil
-}
-
-func (inst *Instance) Run() {
-	if len(inst.Interfaces) == 0 {
-		panic("no interfaces configured")
-	}
-
-	// TODO: listen on all interfaces
-	iface := inst.Interfaces[0]
-
+func (iface *Interface) run() {
 	conn, err := net.ListenPacket("ip4:ospf", "0.0.0.0")
 	if err != nil {
 		panic(err)
@@ -493,12 +434,23 @@ func (inst *Instance) Run() {
 		select {
 		case p := <-r:
 			fmt.Println(p)
+			// inst.Neighbors[p.RouterID.String()] = Neighbor{
+			// 	RouterID:  p.RouterID,
+			// 	IP:        p.RouterID, // TODO: get from packet src addr
+			// 	Interface: &iface,
+			// }
 		case <-hello:
+			// TODO: this should be per interface, right?
+			// neighborAddrs := make([]netip.Addr, 0, len(inst.Neighbors))
+			// for _, n := range inst.Neighbors {
+			// 	neighborAddrs = append(neighborAddrs, n.IP)
+			// }
+
 			w <- &Packet{
 				Header: Header{
 					Type:     TypeHello,
 					Length:   44,
-					RouterID: inst.RouterID,
+					RouterID: iface.instance.RouterID,
 					AreaID:   iface.AreaID,
 					AuthType: 0,
 					AuthData: 0,
@@ -511,6 +463,7 @@ func (inst *Instance) Run() {
 					RtrDeadInterval: 40,
 					DRouter:         netip.IPv4Unspecified(),
 					BDRouter:        netip.IPv4Unspecified(),
+					// Neighbors:       neighborAddrs,
 				},
 			}
 		}
@@ -518,10 +471,78 @@ func (inst *Instance) Run() {
 
 }
 
+type Neighbor struct {
+	RouterID  netip.Addr
+	IP        netip.Addr
+	Interface *Interface
+}
+
+type Instance struct {
+	RouterID   netip.Addr
+	Interfaces []Interface
+	Neighbors  map[string]Neighbor
+}
+
+func NewInstance(c *Config) (*Instance, error) {
+	inst := &Instance{
+		RouterID:  c.RouterID,
+		Neighbors: make(map[string]Neighbor),
+	}
+
+	for _, iface := range c.Interfaces {
+		netif, err := net.InterfaceByName(iface.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		addrs, err := netif.Addrs()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, addr := range addrs {
+			prefix, err := netip.ParsePrefix(addr.String())
+			if err != nil {
+				return nil, fmt.Errorf("error parsing prefix for %s: %w", netif.Name, err)
+			}
+
+			for _, net := range c.Networks {
+				if net.Network == prefix.Masked() {
+					inst.Interfaces = append(inst.Interfaces, Interface{
+						Interface:    netif,
+						Address:      prefix.Addr(),
+						Prefix:       net.Network,
+						AreaID:       net.AreaID,
+						HelloInteral: iface.HelloInterval,
+						DeadInterval: iface.DeadInterval,
+						instance:     inst,
+					})
+				}
+			}
+		}
+	}
+
+	return inst, nil
+}
+
+func (inst *Instance) Run() {
+	// TODO: listen on all interfaces
+	// iface := inst.Interfaces[0]
+
+	for _, iface := range inst.Interfaces {
+		go iface.run()
+	}
+
+	// TODO: what goes here?
+	for {
+		time.Sleep(time.Second)
+	}
+}
+
 func main() {
 	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
 
-	config, err := NewConfig("192.168.105.1")
+	config, err := NewConfig("192.168.200.1")
 	if err != nil {
 		panic(err)
 	}
