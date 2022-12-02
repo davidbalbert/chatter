@@ -278,24 +278,6 @@ func (p *Packet) String() string {
 	return b.String()
 }
 
-func listen(conn *ipv4.RawConn, c chan *Packet) {
-	for {
-		buf := make([]byte, 1500)
-		_, payload, _, err := conn.ReadFrom(buf)
-		if err != nil {
-			panic(err)
-		}
-
-		p, err := decodePacket(payload)
-		if err != nil {
-			fmt.Printf("Error decoding header: %v\n", err)
-			continue
-		}
-
-		c <- p
-	}
-}
-
 func send(conn *ipv4.RawConn, c chan *Packet) {
 	for {
 		p := <-c
@@ -321,81 +303,49 @@ func send(conn *ipv4.RawConn, c chan *Packet) {
 	}
 }
 
-type NetworkConfig struct {
-	Network netip.Prefix
-	AreaID  netip.Addr
-}
-
-type InterfaceConfig struct {
-	Name          string
-	HelloInterval uint16
-	DeadInterval  uint32
-}
-
-type Config struct {
-	RouterID   netip.Addr
-	Networks   []NetworkConfig
-	Interfaces []InterfaceConfig
-}
-
-func NewConfig(routerID string) (*Config, error) {
-	addr, err := netip.ParseAddr(routerID)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing router id: %w", err)
-	}
-
-	return &Config{
-		RouterID: addr,
-	}, nil
-}
-
-func (c *Config) AddNetwork(network, areaID string) error {
-	net, err := netip.ParsePrefix(network)
-	if err != nil {
-		return fmt.Errorf("error parsing network prefix: %w", err)
-	}
-
-	if net.Addr().Is6() {
-		return fmt.Errorf("ipv6 networks are not supported")
-	}
-
-	addr, err := netip.ParseAddr(areaID)
-	if err != nil {
-		return fmt.Errorf("error parsing area id: %w", err)
-	}
-
-	if addr.Is6() {
-		return fmt.Errorf("ipv6 area ids are not supported")
-	}
-
-	c.Networks = append(c.Networks, NetworkConfig{
-		Network: net,
-		AreaID:  addr,
-	})
-
-	return nil
-}
-
-func (c *Config) AddInterface(name string, helloInterval uint16, deadInterval uint32) {
-	c.Interfaces = append(c.Interfaces, InterfaceConfig{
-		Name:          name,
-		HelloInterval: helloInterval,
-		DeadInterval:  deadInterval,
-	})
+type Neighbor struct {
+	RouterID netip.Addr
+	IP       netip.Addr
 }
 
 type Interface struct {
-	Interface    *net.Interface
+	netif        *net.Interface
 	Address      netip.Addr
 	Prefix       netip.Prefix
 	AreaID       netip.Addr
 	HelloInteral uint16
 	DeadInterval uint32
-	instance     *Instance
+	neighbors    map[netip.Addr]Neighbor
+
+	instance *Instance
+	conn     *ipv4.RawConn
 }
 
 func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
+}
+
+func (iface *Interface) receive(c chan *Packet) {
+	for {
+		buf := make([]byte, 1500)
+		_, payload, cm, err := iface.conn.ReadFrom(buf)
+		if err != nil {
+			panic(err)
+		}
+
+		// Ignore packets not on our interface
+		if cm.IfIndex != iface.netif.Index {
+			continue
+		}
+
+		p, err := decodePacket(payload)
+		if err != nil {
+			fmt.Printf("Error decoding header: %v\n", err)
+			continue
+		}
+
+		c <- p
+	}
 }
 
 func (iface *Interface) run() {
@@ -410,12 +360,12 @@ func (iface *Interface) run() {
 		panic(err)
 	}
 
-	if err := raw.JoinGroup(iface.Interface, toNetAddr(allSPFRouters)); err != nil {
+	if err := raw.JoinGroup(iface.netif, toNetAddr(allSPFRouters)); err != nil {
 		panic(err)
 	}
-	defer raw.LeaveGroup(iface.Interface, toNetAddr(allSPFRouters))
+	defer raw.LeaveGroup(iface.netif, toNetAddr(allSPFRouters))
 
-	if err := raw.SetMulticastInterface(iface.Interface); err != nil {
+	if err := raw.SetMulticastInterface(iface.netif); err != nil {
 		panic(err)
 	}
 
@@ -423,22 +373,28 @@ func (iface *Interface) run() {
 		panic(err)
 	}
 
+	if err := raw.SetControlMessage(ipv4.FlagInterface, true); err != nil {
+		panic(err)
+	}
+
+	iface.conn = raw
+
 	r := make(chan *Packet)
 	w := make(chan *Packet)
 	hello := tickImmediately(iface.HelloDuration())
 
-	go listen(raw, r)
+	go iface.receive(r)
+
+	// TODO: this doesn't actually make sending not block in this goroutine. w is unbuffered, which means that
+	// the write in case <-hello will block until send has a chance to write the packet.
+	//
+	// What should we do about this? I guess we have to buffer the channel if we want buffering. But how much should we buffer?
 	go send(raw, w)
 
 	for {
 		select {
 		case p := <-r:
 			fmt.Println(p)
-			// inst.Neighbors[p.RouterID.String()] = Neighbor{
-			// 	RouterID:  p.RouterID,
-			// 	IP:        p.RouterID, // TODO: get from packet src addr
-			// 	Interface: &iface,
-			// }
 		case <-hello:
 			// TODO: this should be per interface, right?
 			// neighborAddrs := make([]netip.Addr, 0, len(inst.Neighbors))
@@ -463,7 +419,6 @@ func (iface *Interface) run() {
 					RtrDeadInterval: 40,
 					DRouter:         netip.IPv4Unspecified(),
 					BDRouter:        netip.IPv4Unspecified(),
-					// Neighbors:       neighborAddrs,
 				},
 			}
 		}
@@ -471,22 +426,14 @@ func (iface *Interface) run() {
 
 }
 
-type Neighbor struct {
-	RouterID  netip.Addr
-	IP        netip.Addr
-	Interface *Interface
-}
-
 type Instance struct {
 	RouterID   netip.Addr
 	Interfaces []Interface
-	Neighbors  map[string]Neighbor
 }
 
 func NewInstance(c *Config) (*Instance, error) {
 	inst := &Instance{
-		RouterID:  c.RouterID,
-		Neighbors: make(map[string]Neighbor),
+		RouterID: c.RouterID,
 	}
 
 	for _, iface := range c.Interfaces {
@@ -501,20 +448,21 @@ func NewInstance(c *Config) (*Instance, error) {
 		}
 
 		for _, addr := range addrs {
-			prefix, err := netip.ParsePrefix(addr.String())
+			interfacePrefix, err := netip.ParsePrefix(addr.String())
 			if err != nil {
 				return nil, fmt.Errorf("error parsing prefix for %s: %w", netif.Name, err)
 			}
 
-			for _, net := range c.Networks {
-				if net.Network == prefix.Masked() {
+			for _, network := range c.Networks {
+				if interfacePrefix.Masked() == network.Network {
 					inst.Interfaces = append(inst.Interfaces, Interface{
-						Interface:    netif,
-						Address:      prefix.Addr(),
-						Prefix:       net.Network,
-						AreaID:       net.AreaID,
+						netif:        netif,
+						Address:      interfacePrefix.Addr(),
+						Prefix:       network.Network,
+						AreaID:       network.AreaID,
 						HelloInteral: iface.HelloInterval,
 						DeadInterval: iface.DeadInterval,
+						neighbors:    make(map[netip.Addr]Neighbor),
 						instance:     inst,
 					})
 				}
