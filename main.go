@@ -396,12 +396,6 @@ func (iface *Interface) run() {
 		case p := <-r:
 			fmt.Println(p)
 		case <-hello:
-			// TODO: this should be per interface, right?
-			// neighborAddrs := make([]netip.Addr, 0, len(inst.Neighbors))
-			// for _, n := range inst.Neighbors {
-			// 	neighborAddrs = append(neighborAddrs, n.IP)
-			// }
-
 			w <- &Packet{
 				Header: Header{
 					Type:     TypeHello,
