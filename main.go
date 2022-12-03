@@ -105,6 +105,7 @@ func (h *Header) String() string {
 
 type Packet interface {
 	encode() []byte
+	handle(*Interface) error
 }
 
 type Hello struct {
@@ -154,6 +155,12 @@ func (hello *Hello) encode() []byte {
 	binary.BigEndian.PutUint16(data[12:14], hello.Checksum)
 
 	return data
+}
+
+func (hello *Hello) handle(iface *Interface) error {
+	fmt.Println(hello)
+
+	return nil
 }
 
 func decodePacket(data []byte) (Packet, error) {
@@ -344,7 +351,8 @@ func (iface *Interface) run() {
 	for {
 		select {
 		case p := <-r:
-			fmt.Println(p)
+			p.handle(iface)
+
 		case <-hello:
 			// w <- &Packet{
 			// 	Header: Header{
