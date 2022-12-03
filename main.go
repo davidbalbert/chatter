@@ -278,31 +278,6 @@ func (p *Packet) String() string {
 	return b.String()
 }
 
-func send(conn *ipv4.RawConn, c chan *Packet) {
-	for {
-		p := <-c
-		fmt.Printf("Sending %s\n", p)
-
-		b, err := p.encode()
-		if err != nil {
-			fmt.Printf("Error encoding packet: %v\n", err)
-			continue
-		}
-
-		ip := &ipv4.Header{
-			Version:  ipv4.Version,
-			Len:      ipv4.HeaderLen,
-			TOS:      0xc0,
-			TotalLen: ipv4.HeaderLen + len(b),
-			TTL:      1,
-			Protocol: 89,
-			Dst:      to4(allSPFRouters),
-		}
-
-		conn.WriteTo(ip, b, nil)
-	}
-}
-
 type Neighbor struct {
 	RouterID netip.Addr
 	IP       netip.Addr
@@ -323,6 +298,31 @@ type Interface struct {
 
 func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
+}
+
+func (iface *Interface) send(c chan *Packet) {
+	for {
+		p := <-c
+		fmt.Printf("Sending %s\n", p)
+
+		b, err := p.encode()
+		if err != nil {
+			fmt.Printf("Error encoding packet: %v\n", err)
+			continue
+		}
+
+		ip := &ipv4.Header{
+			Version:  ipv4.Version,
+			Len:      ipv4.HeaderLen,
+			TOS:      0xc0,
+			TotalLen: ipv4.HeaderLen + len(b),
+			TTL:      1,
+			Protocol: 89,
+			Dst:      to4(allSPFRouters),
+		}
+
+		iface.conn.WriteTo(ip, b, nil)
+	}
 }
 
 func (iface *Interface) receive(c chan *Packet) {
@@ -384,12 +384,7 @@ func (iface *Interface) run() {
 	hello := tickImmediately(iface.HelloDuration())
 
 	go iface.receive(r)
-
-	// TODO: this doesn't actually make sending not block in this goroutine. w is unbuffered, which means that
-	// the write in case <-hello will block until send has a chance to write the packet.
-	//
-	// What should we do about this? I guess we have to buffer the channel if we want buffering. But how much should we buffer?
-	go send(raw, w)
+	go iface.send(w)
 
 	for {
 		select {
@@ -468,17 +463,11 @@ func NewInstance(c *Config) (*Instance, error) {
 }
 
 func (inst *Instance) Run() {
-	// TODO: listen on all interfaces
-	// iface := inst.Interfaces[0]
-
 	for _, iface := range inst.Interfaces {
 		go iface.run()
 	}
 
-	// TODO: what goes here?
-	for {
-		time.Sleep(time.Second)
-	}
+	select {}
 }
 
 func main() {
