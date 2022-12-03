@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
 	"net"
 	"net/netip"
@@ -47,216 +45,39 @@ func tickImmediately(d time.Duration) <-chan time.Time {
 	return c
 }
 
-type messageType uint8
+type networkType int
 
 const (
-	TypeHello messageType = iota + 1
-	TypeDatabaseDescription
-	TypeLinkStateRequest
-	TypeLinkStateUpdate
-	TypeLinkStateAcknowledgement
+	networkBroadcast networkType = iota
+	networkPointToPoint
+	networkPointToMultipoint
+	networkNonBroadcastMultipleAccess
 )
 
-func (t messageType) String() string {
+func (t networkType) String() string {
 	switch t {
-	case TypeHello:
-		return "Hello"
-	case TypeDatabaseDescription:
-		return "Database Description"
-	case TypeLinkStateRequest:
-		return "Link State Request"
-	case TypeLinkStateUpdate:
-		return "Link State Update"
-	case TypeLinkStateAcknowledgement:
-		return "Link State Acknowledgement"
+	case networkBroadcast:
+		return "broadcast"
+	case networkPointToPoint:
+		return "point-to-point"
+	case networkPointToMultipoint:
+		return "point-to-multipoint"
+	case networkNonBroadcastMultipleAccess:
+		return "NBMA"
 	default:
-		return "Unknown"
+		return "unknown"
 	}
-}
-
-type Header struct {
-	Type     messageType
-	Length   uint16
-	RouterID netip.Addr
-	AreaID   netip.Addr
-	Checksum uint16
-	AuthType uint16
-	AuthData uint64
-}
-
-func (header *Header) encodeTo(data []byte) ([]byte, error) {
-	data[0] = 2
-	data[1] = uint8(header.Type)
-	binary.BigEndian.PutUint16(data[2:4], header.Length)
-	copy(data[4:8], to4(header.RouterID))
-	copy(data[8:12], to4(header.AreaID))
-
-	// Skip CHecksum - data[12:14]
-
-	binary.BigEndian.PutUint16(data[14:16], header.AuthType)
-	binary.BigEndian.PutUint64(data[16:24], header.AuthData)
-
-	return data, nil
-}
-
-func (h *Header) String() string {
-	return fmt.Sprintf("OSPFv2 %s router=%s area=%s", h.Type, h.RouterID, h.AreaID)
-}
-
-type Packet interface {
-	encode() []byte
-	handle(*Interface) error
-}
-
-type Hello struct {
-	Header
-
-	NetworkMask     net.IPMask
-	HelloInterval   uint16
-	Options         uint8
-	RtrPriority     uint8
-	RtrDeadInterval uint32
-	DRouter         netip.Addr
-	BDRouter        netip.Addr
-	Neighbors       []netip.Addr
-}
-
-func (hello *Hello) String() string {
-	var b bytes.Buffer
-
-	fmt.Fprint(&b, hello.Header.String())
-	fmt.Fprintf(&b, " mask=%s interval=%d options=0x%x priority=%d dead=%d dr=%s bdr=%s", net.IP(hello.NetworkMask), hello.HelloInterval, hello.Options, hello.RtrPriority, hello.RtrDeadInterval, hello.DRouter, hello.BDRouter)
-
-	for _, n := range hello.Neighbors {
-		fmt.Fprintf(&b, "\n  neighbor=%s", n)
-	}
-
-	return b.String()
-}
-
-func (hello *Hello) encode() []byte {
-	hello.Length = 44 + uint16(len(hello.Neighbors)*4)
-
-	data := make([]byte, hello.Length)
-	hello.Header.encodeTo(data)
-
-	copy(data[24:28], hello.NetworkMask)
-	binary.BigEndian.PutUint16(data[28:30], hello.HelloInterval)
-	data[30] = hello.Options
-	data[31] = hello.RtrPriority
-	binary.BigEndian.PutUint32(data[32:36], hello.RtrDeadInterval)
-	copy(data[36:40], to4(hello.DRouter))
-	copy(data[40:44], to4(hello.BDRouter))
-	for i, neighbor := range hello.Neighbors {
-		copy(data[44+i*4:48+i*4], to4(neighbor))
-	}
-
-	hello.Checksum = checksum(data[0:16], data[24:])
-	binary.BigEndian.PutUint16(data[12:14], hello.Checksum)
-
-	return data
-}
-
-func (hello *Hello) handle(iface *Interface) error {
-	fmt.Println(hello)
-
-	return nil
-}
-
-func decodePacket(data []byte) (Packet, error) {
-	if len(data) < 24 {
-		return nil, fmt.Errorf("packet too short")
-	}
-
-	version := data[0]
-	if version != 2 {
-		return nil, fmt.Errorf("unsupported OSPF version %d", version)
-	}
-
-	var h Header
-
-	h.Type = messageType(data[1])
-	h.Length = binary.BigEndian.Uint16(data[2:4])
-	h.RouterID = mustAddrFromSlice(data[4:8])
-	h.AreaID = mustAddrFromSlice(data[8:12])
-	h.Checksum = binary.BigEndian.Uint16(data[12:14])
-	h.AuthType = binary.BigEndian.Uint16(data[14:16])
-	h.AuthData = binary.BigEndian.Uint64(data[16:24])
-
-	if len(data) != int(h.Length) {
-		return nil, fmt.Errorf("packet length mismatch")
-	}
-
-	if checksum(data) != 0 {
-		return nil, fmt.Errorf("packet checksum mismatch")
-	}
-
-	switch h.Type {
-	case TypeHello:
-		if h.Length < 44 {
-			return nil, fmt.Errorf("hello packet too short")
-		}
-
-		var hello Hello
-		hello.Header = h
-		hello.NetworkMask = data[24:28]
-		hello.HelloInterval = binary.BigEndian.Uint16(data[28:30])
-		hello.Options = data[30]
-		hello.RtrPriority = data[31]
-		hello.RtrDeadInterval = binary.BigEndian.Uint32(data[32:36])
-		hello.DRouter = mustAddrFromSlice(data[36:40])
-		hello.BDRouter = mustAddrFromSlice(data[40:44])
-
-		for i := 44; i < int(h.Length); i += 4 {
-			hello.Neighbors = append(hello.Neighbors, mustAddrFromSlice(data[i:i+4]))
-		}
-
-		return &hello, nil
-	case TypeDatabaseDescription:
-		fallthrough
-	case TypeLinkStateRequest:
-		fallthrough
-	case TypeLinkStateUpdate:
-		fallthrough
-	case TypeLinkStateAcknowledgement:
-		return nil, fmt.Errorf("unsupported OSPF packet type %s", h.Type)
-	default:
-		return nil, fmt.Errorf("unknown OSPF packet type %d", h.Type)
-	}
-}
-
-func checksum(data ...[]byte) uint16 {
-	var sum uint32
-	for _, d := range data {
-		l := len(d)
-		for i := 0; i < l; i += 2 {
-			if i+1 < l {
-				sum += uint32(d[i])<<8 | uint32(d[i+1])
-			} else {
-				sum += uint32(d[i]) << 8
-			}
-		}
-	}
-
-	sum = (sum >> 16) + (sum & 0xffff)
-	sum += sum >> 16
-
-	return ^uint16(sum)
-}
-
-type Neighbor struct {
-	RouterID netip.Addr
-	IP       netip.Addr
 }
 
 type Interface struct {
-	netif        *net.Interface
-	Address      netip.Addr
-	Prefix       netip.Prefix
-	AreaID       netip.Addr
-	HelloInteral uint16
-	DeadInterval uint32
-	neighbors    map[netip.Addr]Neighbor
+	networkType
+	netif              *net.Interface
+	Address            netip.Addr
+	Prefix             netip.Prefix
+	AreaID             netip.Addr
+	HelloInteral       uint16
+	RouterDeadInterval uint32
+	neighbors          map[netip.Addr]*Neighbor
 
 	instance *Instance
 	conn     *ipv4.RawConn
@@ -290,24 +111,125 @@ func (iface *Interface) send(c chan Packet) {
 func (iface *Interface) receive(c chan Packet) {
 	for {
 		buf := make([]byte, 1500)
-		_, payload, cm, err := iface.conn.ReadFrom(buf)
+		ip, payload, cm, err := iface.conn.ReadFrom(buf)
 		if err != nil {
-			panic(err)
+			fmt.Printf("Error reading from %s: %s\n", iface.netif.Name, err)
+			continue
 		}
 
-		// Ignore packets not on our interface
+		// Ignore packets not on our interface. Go makes us listen on 0.0.0.0 if we want
+		// to receive any multicast packets, so we need to filter out packets for
+		// other interfaces.
 		if cm.IfIndex != iface.netif.Index {
 			continue
 		}
 
-		p, err := decodePacket(payload)
+		// Ignore packets not on our subnet. We've eliminated other interfaces, but not
+		// other subnets.
+		if iface.networkType != networkPointToPoint && !iface.Prefix.Contains(mustAddrFromSlice(ip.Src).Unmap()) {
+			continue
+		}
+
+		p, err := decodePacket(ip, payload)
 		if err != nil {
 			fmt.Printf("Error decoding header: %v\n", err)
 			continue
 		}
 
+		if p.AreaID() != iface.AreaID {
+			continue
+		}
+
+		// RFC2328 section 8.2 says:
+		//   o   Packets whose IP destination is AllDRouters should only be
+		//       accepted if the state of the receiving interface is DR or
+		//       Backup (see Section 9.1).
+		//
+		// This should always be true because we only listen on AllDRouters when
+		// we're the DR or Backup.
+
+		// TODO: check authentication
+
 		c <- p
 	}
+}
+
+func (iface *Interface) source(h *Hello) netip.Addr {
+	// TODO: virtual links should also use routerID as the source
+	if iface.networkType == networkPointToPoint {
+		return h.routerID
+	} else {
+		return h.src
+	}
+}
+
+func (iface *Interface) handleHello(h *Hello) {
+	if iface.networkType != networkPointToPoint && h.netmaskBits() != iface.Prefix.Bits() {
+		return
+	}
+
+	if h.helloInterval != iface.HelloInteral || h.routerDeadInterval != iface.RouterDeadInterval {
+		return
+	}
+
+	// TODO: E-bit of interface should match E-bit of the hello packet.
+
+	src := iface.source(h)
+
+	neighbor, ok := iface.neighbors[src]
+	if !ok {
+		neighbor = NewNeighbor(iface, h)
+		go neighbor.run()
+		iface.neighbors[src] = neighbor
+	}
+
+	var routerPriorityChanged bool
+	// var dRouterChanged bool
+	// var bdRouterChanged bool
+	if iface.networkType == networkBroadcast || iface.networkType == networkPointToMultipoint || iface.networkType == networkNonBroadcastMultipleAccess {
+		if neighbor.routerPriority != h.routerPriority {
+			neighbor.routerPriority = h.routerPriority
+			routerPriorityChanged = true
+		}
+
+		if neighbor.dRouter != h.dRouter {
+			neighbor.dRouter = h.dRouter
+			// dRouterChanged = true
+		}
+
+		if neighbor.bdRouter != h.bdRouter {
+			neighbor.bdRouter = h.bdRouter
+			// bdRouterChanged = true
+		}
+	}
+
+	neighbor.executeEvent(neHelloReceived)
+
+	var found bool
+	for _, routerID := range h.neighbors {
+		if routerID == iface.instance.RouterID {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		neighbor.executeEvent(ne1WayReceived)
+		return
+	} else {
+		neighbor.executeEvent(ne2WayReceived)
+	}
+
+	if routerPriorityChanged {
+		// TODO: interface state machine
+		// iface.scheduleEvent(ieNeighborChange)
+	}
+
+	// TODO: "If the neighbor is both declaring itself to be Designated"
+	// in RFC 2328
+
+	// TODO: "If the neighbor is declaring itself to be Backup Designated"
+	// in RFC 2328
 }
 
 func (iface *Interface) run() {
@@ -351,7 +273,7 @@ func (iface *Interface) run() {
 	for {
 		select {
 		case p := <-r:
-			p.handle(iface)
+			p.handleOn(iface)
 
 		case <-hello:
 			// w <- &Packet{
@@ -387,8 +309,8 @@ func NewInstance(c *Config) (*Instance, error) {
 		RouterID: c.RouterID,
 	}
 
-	for _, iface := range c.Interfaces {
-		netif, err := net.InterfaceByName(iface.Name)
+	for _, ifconfig := range c.Interfaces {
+		netif, err := net.InterfaceByName(ifconfig.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -407,14 +329,15 @@ func NewInstance(c *Config) (*Instance, error) {
 			for _, network := range c.Networks {
 				if interfacePrefix.Masked() == network.Network {
 					inst.Interfaces = append(inst.Interfaces, Interface{
-						netif:        netif,
-						Address:      interfacePrefix.Addr(),
-						Prefix:       network.Network,
-						AreaID:       network.AreaID,
-						HelloInteral: iface.HelloInterval,
-						DeadInterval: iface.DeadInterval,
-						neighbors:    make(map[netip.Addr]Neighbor),
-						instance:     inst,
+						networkType:        ifconfig.NetworkType,
+						netif:              netif,
+						Address:            interfacePrefix.Addr(),
+						Prefix:             network.Network,
+						AreaID:             network.AreaID,
+						HelloInteral:       ifconfig.HelloInterval,
+						RouterDeadInterval: ifconfig.DeadInterval,
+						neighbors:          make(map[netip.Addr]*Neighbor),
+						instance:           inst,
 					})
 				}
 			}
@@ -444,7 +367,7 @@ func main() {
 		panic(err)
 	}
 
-	config.AddInterface("bridge100", 10, 40)
+	config.AddInterface("bridge100", networkPointToMultipoint, 10, 40)
 
 	instance, err := NewInstance(config)
 	if err != nil {

@@ -14,6 +14,7 @@ type InterfaceConfig struct {
 	Name          string
 	HelloInterval uint16
 	DeadInterval  uint32
+	NetworkType   networkType
 }
 
 type Config struct {
@@ -60,10 +61,12 @@ func (c *Config) AddNetwork(network, areaID string) error {
 	return nil
 }
 
-func (c *Config) AddInterface(name string, helloInterval uint16, deadInterval uint32) {
+// TODO: Go question – is networkType networkType kosher?
+func (c *Config) AddInterface(name string, networkType networkType, helloInterval uint16, deadInterval uint32) {
 	c.Interfaces = append(c.Interfaces, InterfaceConfig{
 		Name:          name,
 		HelloInterval: helloInterval,
 		DeadInterval:  deadInterval,
+		NetworkType:   networkType,
 	})
 }
