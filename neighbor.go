@@ -180,24 +180,28 @@ func neighborFull(n *Neighbor) neighborState {
 type Neighbor struct {
 	iface          *Interface
 	neighborID     netip.Addr
-	addr           netip.Addr
+	ip             netip.Addr
 	routerPriority uint8
 	dRouter        netip.Addr
 	bdRouter       netip.Addr
 	events         chan neighborEvent
 	stateName      string
+
+	source netip.Addr // the key of the neighbor in the interface's neighbor map
 }
 
-func NewNeighbor(iface *Interface, h *Hello) *Neighbor {
+func NewNeighbor(source netip.Addr, iface *Interface, h *Hello) *Neighbor {
 	return &Neighbor{
 		iface:          iface,
 		neighborID:     h.routerID,
-		addr:           h.src,
+		ip:             h.src,
 		routerPriority: h.routerPriority,
 		dRouter:        h.dRouter,
 		bdRouter:       h.bdRouter,
 		events:         make(chan neighborEvent),
 		stateName:      "Down",
+
+		source: source,
 	}
 }
 
@@ -228,13 +232,16 @@ func (n *Neighbor) handleCommonHelloEvents(event neighborEvent) neighborState {
 	case neKillNbr:
 		n.flushLSAs()
 		n.disableInactivityTimer()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	case neLLDown:
 		n.flushLSAs()
 		n.disableInactivityTimer()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	case neInactivityTimer:
 		n.flushLSAs()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	default:
 		return nil
@@ -269,13 +276,16 @@ func (n *Neighbor) handleCommonExchangeEvents(event neighborEvent) neighborState
 	case neKillNbr:
 		n.flushLSAs()
 		n.disableInactivityTimer()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	case neLLDown:
 		n.flushLSAs()
 		n.disableInactivityTimer()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	case neInactivityTimer:
 		n.flushLSAs()
+		n.iface.removeNeighbor(n)
 		return neighborDown
 	default:
 		return nil
@@ -289,6 +299,12 @@ func (n *Neighbor) run() {
 		n.stateName = stateName(state)
 		fmt.Printf("%v: neighbor state machine: %v -> %v\n", n.neighborID, oldStateName, n.stateName)
 	}
+
+	fmt.Printf("neighbor %v stopping\n", n.neighborID)
+}
+
+func (n *Neighbor) stop() {
+	close(n.events)
 }
 
 func (n *Neighbor) executeEvent(event neighborEvent) {

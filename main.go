@@ -81,6 +81,8 @@ type Interface struct {
 
 	instance *Instance
 	conn     *ipv4.RawConn
+
+	downNeighbors chan *Neighbor
 }
 
 func (iface *Interface) HelloDuration() time.Duration {
@@ -154,12 +156,12 @@ func (iface *Interface) receive(c chan Packet) {
 	}
 }
 
-func (iface *Interface) source(h *Hello) netip.Addr {
-	// TODO: virtual links should also use routerID as the source
-	if iface.networkType == networkPointToPoint {
-		return h.routerID
-	} else {
+func (iface *Interface) neighborId(h *Hello) netip.Addr {
+	t := iface.networkType
+	if t == networkBroadcast || t == networkPointToMultipoint || t == networkNonBroadcastMultipleAccess {
 		return h.src
+	} else {
+		return h.routerID
 	}
 }
 
@@ -174,13 +176,12 @@ func (iface *Interface) handleHello(h *Hello) {
 
 	// TODO: E-bit of interface should match E-bit of the hello packet.
 
-	src := iface.source(h)
-
-	neighbor, ok := iface.neighbors[src]
+	id := iface.neighborId(h)
+	neighbor, ok := iface.neighbors[id]
 	if !ok {
-		neighbor = NewNeighbor(iface, h)
+		neighbor = NewNeighbor(id, iface, h)
 		go neighbor.run()
-		iface.neighbors[src] = neighbor
+		iface.neighbors[id] = neighbor
 	}
 
 	var routerPriorityChanged bool
@@ -232,6 +233,10 @@ func (iface *Interface) handleHello(h *Hello) {
 	// in RFC 2328
 }
 
+func (iface *Interface) removeNeighbor(n *Neighbor) {
+	iface.downNeighbors <- n
+}
+
 func (iface *Interface) run() {
 	conn, err := net.ListenPacket("ip4:ospf", "0.0.0.0")
 	if err != nil {
@@ -274,6 +279,9 @@ func (iface *Interface) run() {
 		select {
 		case p := <-r:
 			p.handleOn(iface)
+		case neighbor := <-iface.downNeighbors:
+			neighbor.stop()
+			delete(iface.neighbors, neighbor.source)
 
 		case <-hello:
 			// w <- &Packet{
@@ -338,6 +346,7 @@ func NewInstance(c *Config) (*Instance, error) {
 						RouterDeadInterval: ifconfig.DeadInterval,
 						neighbors:          make(map[netip.Addr]*Neighbor),
 						instance:           inst,
+						downNeighbors:      make(chan *Neighbor),
 					})
 				}
 			}
