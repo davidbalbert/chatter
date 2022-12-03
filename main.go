@@ -84,11 +84,32 @@ type Header struct {
 	AuthData uint64
 }
 
+func (header *Header) encodeTo(data []byte) ([]byte, error) {
+	data[0] = 2
+	data[1] = uint8(header.Type)
+	binary.BigEndian.PutUint16(data[2:4], header.Length)
+	copy(data[4:8], to4(header.RouterID))
+	copy(data[8:12], to4(header.AreaID))
+
+	// Skip CHecksum - data[12:14]
+
+	binary.BigEndian.PutUint16(data[14:16], header.AuthType)
+	binary.BigEndian.PutUint64(data[16:24], header.AuthData)
+
+	return data, nil
+}
+
 func (h *Header) String() string {
-	return fmt.Sprintf("OSPFv2 %s len=%d router=%s area=%s checksum=0x%x authType=%d authData=%d", h.Type, h.Length, h.RouterID, h.AreaID, h.Checksum, h.AuthType, h.AuthData)
+	return fmt.Sprintf("OSPFv2 %s router=%s area=%s", h.Type, h.RouterID, h.AreaID)
+}
+
+type Packet interface {
+	encode() []byte
 }
 
 type Hello struct {
+	Header
+
 	NetworkMask     net.IPMask
 	HelloInterval   uint16
 	Options         uint8
@@ -99,13 +120,43 @@ type Hello struct {
 	Neighbors       []netip.Addr
 }
 
-type Packet struct {
-	Header
-	Content any
-	data    []byte
+func (hello *Hello) String() string {
+	var b bytes.Buffer
+
+	fmt.Fprint(&b, hello.Header.String())
+	fmt.Fprintf(&b, " mask=%s interval=%d options=0x%x priority=%d dead=%d dr=%s bdr=%s", net.IP(hello.NetworkMask), hello.HelloInterval, hello.Options, hello.RtrPriority, hello.RtrDeadInterval, hello.DRouter, hello.BDRouter)
+
+	for _, n := range hello.Neighbors {
+		fmt.Fprintf(&b, "\n  neighbor=%s", n)
+	}
+
+	return b.String()
 }
 
-func decodePacket(data []byte) (*Packet, error) {
+func (hello *Hello) encode() []byte {
+	hello.Length = 44 + uint16(len(hello.Neighbors)*4)
+
+	data := make([]byte, hello.Length)
+	hello.Header.encodeTo(data)
+
+	copy(data[24:28], hello.NetworkMask)
+	binary.BigEndian.PutUint16(data[28:30], hello.HelloInterval)
+	data[30] = hello.Options
+	data[31] = hello.RtrPriority
+	binary.BigEndian.PutUint32(data[32:36], hello.RtrDeadInterval)
+	copy(data[36:40], to4(hello.DRouter))
+	copy(data[40:44], to4(hello.BDRouter))
+	for i, neighbor := range hello.Neighbors {
+		copy(data[44+i*4:48+i*4], to4(neighbor))
+	}
+
+	hello.Checksum = checksum(data[0:16], data[24:])
+	binary.BigEndian.PutUint16(data[12:14], hello.Checksum)
+
+	return data
+}
+
+func decodePacket(data []byte) (Packet, error) {
 	if len(data) < 24 {
 		return nil, fmt.Errorf("packet too short")
 	}
@@ -133,10 +184,6 @@ func decodePacket(data []byte) (*Packet, error) {
 		return nil, fmt.Errorf("packet checksum mismatch")
 	}
 
-	var p Packet
-	p.Header = h
-	p.data = data
-
 	switch h.Type {
 	case TypeHello:
 		if h.Length < 44 {
@@ -144,6 +191,7 @@ func decodePacket(data []byte) (*Packet, error) {
 		}
 
 		var hello Hello
+		hello.Header = h
 		hello.NetworkMask = data[24:28]
 		hello.HelloInterval = binary.BigEndian.Uint16(data[28:30])
 		hello.Options = data[30]
@@ -156,7 +204,7 @@ func decodePacket(data []byte) (*Packet, error) {
 			hello.Neighbors = append(hello.Neighbors, mustAddrFromSlice(data[i:i+4]))
 		}
 
-		p.Content = hello
+		return &hello, nil
 	case TypeDatabaseDescription:
 		fallthrough
 	case TypeLinkStateRequest:
@@ -168,28 +216,6 @@ func decodePacket(data []byte) (*Packet, error) {
 	default:
 		return nil, fmt.Errorf("unknown OSPF packet type %d", h.Type)
 	}
-
-	return &p, nil
-}
-
-func (p *Packet) updateLength() error {
-	switch p.Type {
-	case TypeHello:
-		hello := p.Content.(Hello)
-		p.Length = 44 + uint16(len(hello.Neighbors)*4)
-	case TypeDatabaseDescription:
-		fallthrough
-	case TypeLinkStateRequest:
-		fallthrough
-	case TypeLinkStateUpdate:
-		fallthrough
-	case TypeLinkStateAcknowledgement:
-		return fmt.Errorf("unsupported OSPF packet type %s", p.Type)
-	default:
-		return fmt.Errorf("unknown OSPF packet type %d", p.Type)
-	}
-
-	return nil
 }
 
 func checksum(data ...[]byte) uint16 {
@@ -209,73 +235,6 @@ func checksum(data ...[]byte) uint16 {
 	sum += sum >> 16
 
 	return ^uint16(sum)
-}
-
-func (p *Packet) encode() ([]byte, error) {
-	if err := p.updateLength(); err != nil {
-		return nil, err
-	}
-
-	b := make([]byte, p.Length)
-
-	b[0] = 2
-	b[1] = uint8(p.Type)
-	binary.BigEndian.PutUint16(b[2:4], p.Length)
-	copy(b[4:8], to4(p.RouterID))
-	copy(b[8:12], to4(p.AreaID))
-	binary.BigEndian.PutUint16(b[12:14], p.Checksum) // TODO!
-	binary.BigEndian.PutUint16(b[14:16], p.AuthType)
-	binary.BigEndian.PutUint64(b[16:24], p.AuthData)
-
-	switch p.Type {
-	case TypeHello:
-		hello := p.Content.(Hello)
-		copy(b[24:28], hello.NetworkMask)
-		binary.BigEndian.PutUint16(b[28:30], hello.HelloInterval)
-		b[30] = hello.Options
-		b[31] = hello.RtrPriority
-		binary.BigEndian.PutUint32(b[32:36], hello.RtrDeadInterval)
-		copy(b[36:40], to4(hello.DRouter))
-		copy(b[40:44], to4(hello.BDRouter))
-		for i, neighbor := range hello.Neighbors {
-			copy(b[44+i*4:48+i*4], to4(neighbor))
-		}
-	case TypeDatabaseDescription:
-		fallthrough
-	case TypeLinkStateRequest:
-		fallthrough
-	case TypeLinkStateUpdate:
-		fallthrough
-	case TypeLinkStateAcknowledgement:
-		return nil, fmt.Errorf("unsupported OSPF packet type %s", p.Type)
-	default:
-		return nil, fmt.Errorf("unknown OSPF packet type %d", p.Type)
-	}
-
-	p.data = b
-	p.Checksum = checksum(p.data[0:16], p.data[24:])
-	binary.BigEndian.PutUint16(b[12:14], p.Checksum)
-
-	return b, nil
-}
-
-func (p *Packet) String() string {
-	var b bytes.Buffer
-
-	fmt.Fprintf(&b, "OSPFv2 %s router=%s area=%s", p.Type, p.RouterID, p.AreaID)
-
-	switch p.Type {
-	case TypeHello:
-		hello := p.Content.(Hello)
-		fmt.Fprintf(&b, " mask=%s interval=%d options=0x%x priority=%d dead=%d dr=%s bdr=%s", net.IP(hello.NetworkMask), hello.HelloInterval, hello.Options, hello.RtrPriority, hello.RtrDeadInterval, hello.DRouter, hello.BDRouter)
-		for _, n := range hello.Neighbors {
-			fmt.Fprintf(&b, "\n  neighbor=%s", n)
-		}
-	default:
-
-	}
-
-	return b.String()
 }
 
 type Neighbor struct {
@@ -300,16 +259,12 @@ func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
 }
 
-func (iface *Interface) send(c chan *Packet) {
+func (iface *Interface) send(c chan Packet) {
 	for {
 		p := <-c
 		fmt.Printf("Sending %s\n", p)
 
-		b, err := p.encode()
-		if err != nil {
-			fmt.Printf("Error encoding packet: %v\n", err)
-			continue
-		}
+		b := p.encode()
 
 		ip := &ipv4.Header{
 			Version:  ipv4.Version,
@@ -325,7 +280,7 @@ func (iface *Interface) send(c chan *Packet) {
 	}
 }
 
-func (iface *Interface) receive(c chan *Packet) {
+func (iface *Interface) receive(c chan Packet) {
 	for {
 		buf := make([]byte, 1500)
 		_, payload, cm, err := iface.conn.ReadFrom(buf)
@@ -379,8 +334,8 @@ func (iface *Interface) run() {
 
 	iface.conn = raw
 
-	r := make(chan *Packet)
-	w := make(chan *Packet)
+	r := make(chan Packet)
+	w := make(chan Packet)
 	hello := tickImmediately(iface.HelloDuration())
 
 	go iface.receive(r)
@@ -391,28 +346,27 @@ func (iface *Interface) run() {
 		case p := <-r:
 			fmt.Println(p)
 		case <-hello:
-			w <- &Packet{
-				Header: Header{
-					Type:     TypeHello,
-					Length:   44,
-					RouterID: iface.instance.RouterID,
-					AreaID:   iface.AreaID,
-					AuthType: 0,
-					AuthData: 0,
-				},
-				Content: Hello{
-					NetworkMask:     net.CIDRMask(iface.Prefix.Bits(), 32),
-					HelloInterval:   10,
-					Options:         0x2,
-					RtrPriority:     1,
-					RtrDeadInterval: 40,
-					DRouter:         netip.IPv4Unspecified(),
-					BDRouter:        netip.IPv4Unspecified(),
-				},
-			}
+			// w <- &Packet{
+			// 	Header: Header{
+			// 		Type:     TypeHello,
+			// 		Length:   44,
+			// 		RouterID: iface.instance.RouterID,
+			// 		AreaID:   iface.AreaID,
+			// 		AuthType: 0,
+			// 		AuthData: 0,
+			// 	},
+			// 	Content: Hello{
+			// 		NetworkMask:     net.CIDRMask(iface.Prefix.Bits(), 32),
+			// 		HelloInterval:   10,
+			// 		Options:         0x2,
+			// 		RtrPriority:     1,
+			// 		RtrDeadInterval: 40,
+			// 		DRouter:         netip.IPv4Unspecified(),
+			// 		BDRouter:        netip.IPv4Unspecified(),
+			// 	},
+			// }
 		}
 	}
-
 }
 
 type Instance struct {
