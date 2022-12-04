@@ -307,6 +307,23 @@ func (iface *Interface) run() {
 	}
 }
 
+func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifconfig *InterfaceConfig, netconfig *NetworkConfig) *Interface {
+	iface := &Interface{
+		networkType:        ifconfig.NetworkType,
+		netif:              netif,
+		Address:            addr.Addr(),
+		Prefix:             netconfig.Network,
+		AreaID:             netconfig.AreaID,
+		HelloInteral:       ifconfig.HelloInterval,
+		RouterDeadInterval: ifconfig.DeadInterval,
+		neighbors:          make(map[netip.Addr]*Neighbor),
+		instance:           inst,
+		downNeighbors:      make(chan *Neighbor),
+	}
+
+	return iface
+}
+
 type Instance struct {
 	RouterID   netip.Addr
 	Interfaces []Interface
@@ -329,25 +346,15 @@ func NewInstance(c *Config) (*Instance, error) {
 		}
 
 		for _, addr := range addrs {
-			interfacePrefix, err := netip.ParsePrefix(addr.String())
+			addr, err := netip.ParsePrefix(addr.String())
 			if err != nil {
 				return nil, fmt.Errorf("error parsing prefix for %s: %w", netif.Name, err)
 			}
 
-			for _, network := range c.Networks {
-				if interfacePrefix.Masked() == network.Network {
-					inst.Interfaces = append(inst.Interfaces, Interface{
-						networkType:        ifconfig.NetworkType,
-						netif:              netif,
-						Address:            interfacePrefix.Addr(),
-						Prefix:             network.Network,
-						AreaID:             network.AreaID,
-						HelloInteral:       ifconfig.HelloInterval,
-						RouterDeadInterval: ifconfig.DeadInterval,
-						neighbors:          make(map[netip.Addr]*Neighbor),
-						instance:           inst,
-						downNeighbors:      make(chan *Neighbor),
-					})
+			for _, netconfig := range c.Networks {
+				if addr.Masked() == netconfig.Network {
+					iface := NewInterface(inst, addr, netif, &ifconfig, &netconfig)
+					inst.Interfaces = append(inst.Interfaces, *iface)
 				}
 			}
 		}
