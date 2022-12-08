@@ -108,6 +108,33 @@ type Hello struct {
 	neighbors          []netip.Addr
 }
 
+func newHello(iface *Interface) *Hello {
+	hello := &Hello{
+		header: header{
+			messageType: TypeHello,
+			length:      44,
+			routerID:    iface.instance.RouterID,
+			areaID:      iface.AreaID,
+			authType:    0,
+			authData:    0,
+		},
+		networkMask:        net.CIDRMask(iface.Prefix.Bits(), 32),
+		helloInterval:      iface.HelloInteral,
+		options:            0x2, // TODO: set E-bit, save them on the area or interface?
+		routerPriority:     1,   // TODO
+		routerDeadInterval: iface.RouterDeadInterval,
+		dRouter:            netip.IPv4Unspecified(),
+		bdRouter:           netip.IPv4Unspecified(),
+		neighbors:          make([]netip.Addr, 0, len(iface.neighbors)),
+	}
+
+	for _, neighbor := range iface.neighbors {
+		hello.neighbors = append(hello.neighbors, neighbor.neighborID)
+	}
+
+	return hello
+}
+
 func (hello *Hello) String() string {
 	var b bytes.Buffer
 

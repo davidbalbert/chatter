@@ -282,27 +282,8 @@ func (iface *Interface) run() {
 		case neighbor := <-iface.downNeighbors:
 			neighbor.stop()
 			delete(iface.neighbors, neighbor.source)
-
 		case <-hello:
-			// w <- &Packet{
-			// 	Header: Header{
-			// 		Type:     TypeHello,
-			// 		Length:   44,
-			// 		RouterID: iface.instance.RouterID,
-			// 		AreaID:   iface.AreaID,
-			// 		AuthType: 0,
-			// 		AuthData: 0,
-			// 	},
-			// 	Content: Hello{
-			// 		NetworkMask:     net.CIDRMask(iface.Prefix.Bits(), 32),
-			// 		HelloInterval:   10,
-			// 		Options:         0x2,
-			// 		RtrPriority:     1,
-			// 		RtrDeadInterval: 40,
-			// 		DRouter:         netip.IPv4Unspecified(),
-			// 		BDRouter:        netip.IPv4Unspecified(),
-			// 	},
-			// }
+			w <- newHello(iface)
 		}
 	}
 }
