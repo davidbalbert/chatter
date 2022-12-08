@@ -144,6 +144,10 @@ func neighborInit(n *Neighbor) neighborState {
 }
 
 func neighbor2Way(n *Neighbor) neighborState {
+	for event := range n.events {
+		fmt.Printf("%v: event %v\n", n.neighborID, event)
+	}
+
 	return nil
 }
 
@@ -162,18 +166,34 @@ func neighborExStart(n *Neighbor) neighborState {
 	// at intervals of RxmtInterval until the next state is
 	// entered (see Section 10.8).
 
+	for event := range n.events {
+		fmt.Printf("%v: event %v\n", n.neighborID, event)
+	}
+
 	return nil
 }
 
 func neighborExchange(n *Neighbor) neighborState {
+	for event := range n.events {
+		fmt.Printf("%v: event %v\n", n.neighborID, event)
+	}
+
 	return nil
 }
 
 func neighborLoading(n *Neighbor) neighborState {
+	for event := range n.events {
+		fmt.Printf("%v: event %v\n", n.neighborID, event)
+	}
+
 	return nil
 }
 
 func neighborFull(n *Neighbor) neighborState {
+	for event := range n.events {
+		fmt.Printf("%v: event %v\n", n.neighborID, event)
+	}
+
 	return nil
 }
 
