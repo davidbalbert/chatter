@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"time"
 )
 
 type neighborEvent int
@@ -128,12 +129,11 @@ func neighborInit(n *Neighbor) neighborState {
 		case ne1WayReceived:
 			// do nothing
 		case ne2WayReceived:
-			// if adjacencyShouldBeEstablished {
-
-			// 	return neighborExStart
-			// } else {
-			return neighbor2Way
-			// }
+			if n.shouldBecomeAdjacent() {
+				return neighborExStart
+			} else {
+				return neighbor2Way
+			}
 		default:
 			fmt.Printf("neighbor state machine: unexpected event %v in state Init\n", event)
 		}
@@ -165,6 +165,13 @@ func neighborExStart(n *Neighbor) neighborState {
 	// Database Description Packet should be retransmitted
 	// at intervals of RxmtInterval until the next state is
 	// entered (see Section 10.8).
+
+	if !n.previouslyAdjacent {
+		n.ddSequenceNumber = uint32(time.Now().Unix())
+	}
+
+	n.ddSequenceNumber++
+	n.master = true
 
 	for event := range n.events {
 		fmt.Printf("%v: event %v\n", n.neighborID, event)
@@ -208,6 +215,10 @@ type Neighbor struct {
 	stateName      string
 
 	source netip.Addr // the key of the neighbor in the interface's neighbor map
+
+	previouslyAdjacent bool
+	ddSequenceNumber   uint32
+	master             bool
 }
 
 func NewNeighbor(source netip.Addr, iface *Interface, h *Hello) *Neighbor {
@@ -310,6 +321,13 @@ func (n *Neighbor) handleCommonExchangeEvents(event neighborEvent) neighborState
 	default:
 		return nil
 	}
+}
+
+func (n *Neighbor) shouldBecomeAdjacent() bool {
+	t := n.iface.networkType
+
+	// TODO: brodcast and nbma networks
+	return t == networkPointToPoint || t == networkPointToMultipoint || t == networkVirtualLink
 }
 
 func (n *Neighbor) run() {

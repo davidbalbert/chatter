@@ -52,6 +52,7 @@ const (
 	networkPointToPoint
 	networkPointToMultipoint
 	networkNonBroadcastMultipleAccess
+	networkVirtualLink
 )
 
 func (t networkType) String() string {
