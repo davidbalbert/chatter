@@ -166,6 +166,14 @@ func (iface *Interface) neighborId(h *Hello) netip.Addr {
 	}
 }
 
+func (iface *Interface) executeNeighborEvent(neighbor *Neighbor, event neighborEvent) {
+	neighbor.handleEvent(event)
+
+	if neighbor.state == nDown {
+		delete(iface.neighbors, neighbor.key)
+	}
+}
+
 func (iface *Interface) handleHello(h *Hello) {
 	if iface.networkType != networkPointToPoint && h.netmaskBits() != iface.Prefix.Bits() {
 		return
@@ -181,17 +189,16 @@ func (iface *Interface) handleHello(h *Hello) {
 	neighbor, ok := iface.neighbors[id]
 	if !ok {
 		neighbor = NewNeighbor(id, iface, h)
-		go neighbor.run()
 		iface.neighbors[id] = neighbor
 	}
 
-	var routerPriorityChanged bool
+	// var routerPriorityChanged bool
 	// var dRouterChanged bool
 	// var bdRouterChanged bool
 	if iface.networkType == networkBroadcast || iface.networkType == networkPointToMultipoint || iface.networkType == networkNonBroadcastMultipleAccess {
 		if neighbor.routerPriority != h.routerPriority {
 			neighbor.routerPriority = h.routerPriority
-			routerPriorityChanged = true
+			// routerPriorityChanged = true
 		}
 
 		if neighbor.dRouter != h.dRouter {
@@ -205,7 +212,7 @@ func (iface *Interface) handleHello(h *Hello) {
 		}
 	}
 
-	neighbor.executeEvent(neHelloReceived)
+	iface.executeNeighborEvent(neighbor, neHelloReceived)
 
 	var found bool
 	for _, routerID := range h.neighbors {
@@ -216,16 +223,16 @@ func (iface *Interface) handleHello(h *Hello) {
 	}
 
 	if !found {
-		neighbor.executeEvent(ne1WayReceived)
+		iface.executeNeighborEvent(neighbor, ne1WayReceived)
 		return
 	} else {
-		neighbor.executeEvent(ne2WayReceived)
+		iface.executeNeighborEvent(neighbor, ne2WayReceived)
 	}
 
-	if routerPriorityChanged {
-		// TODO: interface state machine
-		// iface.scheduleEvent(ieNeighborChange)
-	}
+	// if routerPriorityChanged {
+	// 	// TODO: interface state machine
+	// 	iface.scheduleEvent(ieNeighborChange)
+	// }
 
 	// TODO: "If the neighbor is both declaring itself to be Designated"
 	// in RFC 2328
@@ -280,9 +287,6 @@ func (iface *Interface) run() {
 		select {
 		case p := <-r:
 			p.handleOn(iface)
-		case neighbor := <-iface.downNeighbors:
-			neighbor.stop()
-			delete(iface.neighbors, neighbor.source)
 		case <-hello:
 			w <- newHello(iface)
 		}
