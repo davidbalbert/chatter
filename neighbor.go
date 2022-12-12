@@ -6,22 +6,6 @@ import (
 	"time"
 )
 
-type Neighbor struct {
-	iface          *Interface
-	neighborID     netip.Addr
-	ip             netip.Addr
-	routerPriority uint8
-	dRouter        netip.Addr
-	bdRouter       netip.Addr
-	state          neighborState
-
-	key netip.Addr // the key of the neighbor in the interface's neighbor map
-
-	previouslyAdjacent bool
-	ddSequenceNumber   uint32
-	master             bool
-}
-
 type neighborState int
 
 const (
@@ -109,9 +93,63 @@ func (e neighborEvent) String() string {
 	}
 }
 
+type Neighbor struct {
+	iface *Interface
+	state neighborState
+	// TODO: inactivityTimer
+	master           bool
+	ddSequenceNumber uint32
+	lastDD           *databaseDescriptionPacket
+	neighborID       netip.Addr
+	routerPriority   uint8
+	addr             netip.Addr
+	options          uint8
+	dRouter          netip.Addr
+	bdRouter         netip.Addr
+
+	firstAdjancencyAttempt bool
+
+	events  chan neighborEvent
+	packets chan Packet
+
+	done chan struct{}
+}
+
+func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
+	return &Neighbor{
+		iface:            iface,
+		state:            nDown,
+		master:           true,
+		ddSequenceNumber: 0,
+		lastDD:           nil,
+		neighborID:       h.routerID,
+		routerPriority:   h.routerPriority,
+		addr:             h.src,
+		options:          h.options,
+		dRouter:          h.dRouter,
+		bdRouter:         h.bdRouter,
+
+		firstAdjancencyAttempt: true,
+
+		events:  make(chan neighborEvent),
+		packets: make(chan Packet),
+
+		done: make(chan struct{}),
+	}
+}
+
 func (n *Neighbor) setState(state neighborState) {
+	if n.state == state {
+		return
+	}
+
 	fmt.Printf("%v: state %v -> %v\n", n.neighborID, n.state, state)
 	n.state = state
+
+	switch n.state {
+	case nDown:
+		n.iface.rm <- n
+	}
 }
 
 func (n *Neighbor) handleCommonEvents(event neighborEvent) (handled bool) {
@@ -119,18 +157,15 @@ func (n *Neighbor) handleCommonEvents(event neighborEvent) (handled bool) {
 	case neKillNbr:
 		n.flushLSAs()
 		n.disableInactivityTimer()
-		n.iface.removeNeighbor(n)
 		n.setState(nDown)
 		return true
 	case neLLDown:
 		n.flushLSAs()
 		n.disableInactivityTimer()
-		n.iface.removeNeighbor(n)
 		n.setState(nDown)
 		return true
 	case neInactivityTimer:
 		n.flushLSAs()
-		n.iface.removeNeighbor(n)
 		n.setState(nDown)
 		return true
 	default:
@@ -173,7 +208,7 @@ func (n *Neighbor) handleCommonExchangeEvents(event neighborEvent) (handled bool
 }
 
 func (n *Neighbor) handleEvent(event neighborEvent) {
-	fmt.Printf("%v: event %v\n", n.neighborID, event)
+	fmt.Printf("%v: event %v state %v\n", n.neighborID, event, n.state)
 
 	if n.handleCommonEvents(event) {
 		return
@@ -213,38 +248,41 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 		case ne1WayReceived:
 			// do nothing
 		case ne2WayReceived:
-			if n.shouldBecomeAdjacent() {
-				n.setState(nExStart)
-			} else {
+			if !n.shouldBecomeAdjacent() {
 				n.setState(n2Way)
+				return
 			}
+
+			n.setState(nExStart)
+
+			// Upon entering this state, the router increments the DD
+			// sequence number in the neighbor data structure.  If
+			// this is the first time that an adjacency has been
+			// attempted, the DD sequence number should be assigned
+			// some unique value (like the time of day clock).  It
+			// then declares itself master (sets the master/slave
+			// bit to master), and starts sending Database
+			// Description Packets, with the initialize (I), more
+			// (M) and master (MS) bits set.  This Database
+			// Description Packet should be otherwise empty.  This
+			// Database Description Packet should be retransmitted
+			// at intervals of RxmtInterval until the next state is
+			// entered (see Section 10.8).
+
+			if n.firstAdjancencyAttempt {
+				n.ddSequenceNumber = uint32(time.Now().Unix())
+				n.firstAdjancencyAttempt = false
+			}
+
+			n.ddSequenceNumber++
+			n.master = true
 		default:
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Init\n", n.neighborID, event)
 		}
 	case n2Way:
-		// TODO?
+		// TODO
 	case nExStart:
-		// Upon entering this state, the router increments the DD
-		// sequence number in the neighbor data structure.  If
-		// this is the first time that an adjacency has been
-		// attempted, the DD sequence number should be assigned
-		// some unique value (like the time of day clock).  It
-		// then declares itself master (sets the master/slave
-		// bit to master), and starts sending Database
-		// Description Packets, with the initialize (I), more
-		// (M) and master (MS) bits set.  This Database
-		// Description Packet should be otherwise empty.  This
-		// Database Description Packet should be retransmitted
-		// at intervals of RxmtInterval until the next state is
-		// entered (see Section 10.8).
-
-		if !n.previouslyAdjacent {
-			n.ddSequenceNumber = uint32(time.Now().Unix())
-		}
-
-		n.ddSequenceNumber++
-		n.master = true
-
+		// TODO
 	case nExchange:
 		// TODO
 	case nLoading:
@@ -256,17 +294,41 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 	}
 }
 
-func NewNeighbor(source netip.Addr, iface *Interface, h *Hello) *Neighbor {
-	return &Neighbor{
-		iface:          iface,
-		neighborID:     h.routerID,
-		ip:             h.src,
-		routerPriority: h.routerPriority,
-		dRouter:        h.dRouter,
-		bdRouter:       h.bdRouter,
-		state:          nDown,
+func (n *Neighbor) handleHello(h *helloPacket) {
+	// NOOP
+}
 
-		key: source,
+func (n *Neighbor) handleDatabaseDescriptionInExStart(dd *databaseDescriptionPacket) {
+	fmt.Printf("handleDatabaseDescriptionInExStart state=%v\n", n.state)
+	// TODO
+	// if dd.init && dd.more && dd.master && len(dd.lsaHeaders) == 0 {
+	// }
+}
+
+func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
+	switch n.state {
+	case nDown:
+		fmt.Printf("%v: neighbor state machine: unexpected database description packet in state Down\n", n.neighborID)
+	case nAttempt:
+		fmt.Printf("%v: neighbor state machine: unexpected database description packet in state Attempt\n", n.neighborID)
+	case nInit:
+		n.handleEvent(ne2WayReceived)
+
+		if n.state != nExStart {
+			return
+		}
+
+		n.handleDatabaseDescriptionInExStart(dd)
+	case n2Way:
+		fmt.Printf("%v: neighbor state machine: unexpected database description packet in state 2-Way\n", n.neighborID)
+	case nExStart:
+		n.handleDatabaseDescriptionInExStart(dd)
+	case nExchange:
+		// TODO
+	case nLoading, nFull:
+		// TODO
+	default:
+		fmt.Printf("handleDatabaseDescription: unexpected state %v\n", n.state)
 	}
 }
 
@@ -294,4 +356,30 @@ func (n *Neighbor) shouldBecomeAdjacent() bool {
 
 	// TODO: brodcast and nbma networks
 	return t == networkPointToPoint || t == networkPointToMultipoint || t == networkVirtualLink
+}
+
+func (n *Neighbor) sendEvent(event neighborEvent) {
+	n.events <- event
+}
+
+func (n *Neighbor) sendPacket(packet Packet) {
+	n.packets <- packet
+}
+
+func (n *Neighbor) run() {
+	for {
+		select {
+		case event := <-n.events:
+			n.handleEvent(event)
+		case packet := <-n.packets:
+			fmt.Printf("neighbor: received packet: %v\n", packet)
+			packet.handleOn(n)
+		case <-n.done:
+			return
+		}
+	}
+}
+
+func (n *Neighbor) shutdown() {
+	close(n.done)
 }

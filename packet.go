@@ -29,41 +29,46 @@ func checksum(data ...[]byte) uint16 {
 	return ^uint16(sum)
 }
 
-type messageType uint8
+type packetType uint8
 
 const (
-	TypeHello messageType = iota + 1
-	TypeDatabaseDescription
-	TypeLinkStateRequest
-	TypeLinkStateUpdate
-	TypeLinkStateAcknowledgement
+	pHello packetType = iota + 1
+	pDatabaseDescription
+	pLinkStateRequest
+	pLinkStateUpdate
+	pLinkStateAcknowledgement
 )
 
-func (t messageType) String() string {
+func (t packetType) String() string {
 	switch t {
-	case TypeHello:
+	case pHello:
 		return "Hello"
-	case TypeDatabaseDescription:
+	case pDatabaseDescription:
 		return "Database Description"
-	case TypeLinkStateRequest:
+	case pLinkStateRequest:
 		return "Link State Request"
-	case TypeLinkStateUpdate:
+	case pLinkStateUpdate:
 		return "Link State Update"
-	case TypeLinkStateAcknowledgement:
+	case pLinkStateAcknowledgement:
 		return "Link State Acknowledgement"
 	default:
 		return "Unknown"
 	}
 }
 
+type PacketHandler interface {
+	handleHello(*helloPacket)
+	handleDatabaseDescription(*databaseDescriptionPacket)
+}
+
 type Packet interface {
 	encode() []byte
 	AreaID() netip.Addr
-	handleOn(*Interface)
+	handleOn(PacketHandler)
 }
 
 type header struct {
-	messageType
+	packetType
 	length   uint16
 	routerID netip.Addr
 	areaID   netip.Addr
@@ -75,8 +80,12 @@ type header struct {
 }
 
 func (h *header) encodeTo(data []byte) {
+	if len(data) < 24 {
+		panic("header.encodeTo: data is too short")
+	}
+
 	data[0] = 2
-	data[1] = uint8(h.messageType)
+	data[1] = uint8(h.packetType)
 	binary.BigEndian.PutUint16(data[2:4], h.length)
 	copy(data[4:8], to4(h.routerID))
 	copy(data[8:12], to4(h.areaID))
@@ -88,14 +97,14 @@ func (h *header) encodeTo(data []byte) {
 }
 
 func (h *header) String() string {
-	return fmt.Sprintf("OSPFv2 %s router=%s area=%s", h.messageType, h.routerID, h.areaID)
+	return fmt.Sprintf("OSPFv2 %s router=%s area=%s", h.packetType, h.routerID, h.areaID)
 }
 
 func (h *header) AreaID() netip.Addr {
 	return h.areaID
 }
 
-type Hello struct {
+type helloPacket struct {
 	header
 
 	networkMask        net.IPMask
@@ -108,15 +117,15 @@ type Hello struct {
 	neighbors          []netip.Addr
 }
 
-func newHello(iface *Interface) *Hello {
-	hello := &Hello{
+func newHello(iface *Interface) *helloPacket {
+	hello := &helloPacket{
 		header: header{
-			messageType: TypeHello,
-			length:      44,
-			routerID:    iface.instance.RouterID,
-			areaID:      iface.AreaID,
-			authType:    0,
-			authData:    0,
+			packetType: pHello,
+			length:     44 + uint16(len(iface.neighbors)*4),
+			routerID:   iface.instance.RouterID,
+			areaID:     iface.AreaID,
+			authType:   0,
+			authData:   0,
 		},
 		networkMask:        net.CIDRMask(iface.Prefix.Bits(), 32),
 		helloInterval:      iface.HelloInteral,
@@ -135,7 +144,7 @@ func newHello(iface *Interface) *Hello {
 	return hello
 }
 
-func (hello *Hello) String() string {
+func (hello *helloPacket) String() string {
 	var b bytes.Buffer
 
 	fmt.Fprint(&b, hello.header.String())
@@ -148,13 +157,13 @@ func (hello *Hello) String() string {
 	return b.String()
 }
 
-func (hello *Hello) netmaskBits() int {
+func (hello *helloPacket) netmaskBits() int {
 	ones, _ := hello.networkMask.Size()
 
 	return ones
 }
 
-func (hello *Hello) encode() []byte {
+func (hello *helloPacket) encode() []byte {
 	hello.length = 44 + uint16(len(hello.neighbors)*4)
 
 	data := make([]byte, hello.length)
@@ -177,8 +186,122 @@ func (hello *Hello) encode() []byte {
 	return data
 }
 
-func (hello *Hello) handleOn(iface *Interface) {
-	iface.handleHello(hello)
+func (hello *helloPacket) handleOn(handler PacketHandler) {
+	handler.handleHello(hello)
+}
+
+func (hello *helloPacket) Header() *header {
+	return &hello.header
+}
+
+type lsType uint8
+
+const (
+	lsTypeRouter      lsType = 1
+	lsTypeNetwork     lsType = 2
+	lsTypeSummary     lsType = 3
+	lsTypeASBRSummary lsType = 4
+	lsTypeASExternal  lsType = 5
+)
+
+type lsaHeader struct {
+	age               uint16
+	options           uint8
+	lsaType           lsType
+	lsID              netip.Addr
+	advertisingRouter netip.Addr
+	seqNumber         uint32
+	lsaChecksum       uint16
+	length            uint16
+}
+
+const lsaHeaderSize = 20
+
+func decodeLSAHeader(data []byte) (*lsaHeader, error) {
+	if len(data) < lsaHeaderSize {
+		return nil, fmt.Errorf("lsa header too short")
+	}
+
+	return &lsaHeader{
+		age:               binary.BigEndian.Uint16(data[0:2]),
+		options:           data[2],
+		lsaType:           lsType(data[3]),
+		lsID:              mustAddrFromSlice(data[4:8]),
+		advertisingRouter: mustAddrFromSlice(data[8:12]),
+		seqNumber:         binary.BigEndian.Uint32(data[12:16]),
+		lsaChecksum:       binary.BigEndian.Uint16(data[16:18]),
+		length:            binary.BigEndian.Uint16(data[18:20]),
+	}, nil
+}
+
+func (lsa *lsaHeader) encodeTo(data []byte) {
+	if len(data) < lsaHeaderSize {
+		panic("lsaHeader.encodeTo: data is too short")
+	}
+
+	binary.BigEndian.PutUint16(data[0:2], lsa.age)
+	data[2] = lsa.options
+	data[3] = byte(lsa.lsaType)
+	copy(data[4:8], to4(lsa.lsID))
+	copy(data[8:12], to4(lsa.advertisingRouter))
+	binary.BigEndian.PutUint32(data[12:16], lsa.seqNumber)
+	binary.BigEndian.PutUint16(data[16:18], lsa.lsaChecksum)
+	binary.BigEndian.PutUint16(data[18:20], lsa.length)
+}
+
+type databaseDescriptionPacket struct {
+	header
+	interfaceMTU   uint16
+	options        uint8
+	init           bool
+	more           bool
+	master         bool
+	sequenceNumber uint32
+	lsaHeaders     []lsaHeader
+}
+
+const (
+	ddFlagMasterSlave byte = 1 << iota
+	ddFlagMore
+	ddFlagInit
+)
+
+func (dd *databaseDescriptionPacket) encode() []byte {
+	dd.length = 24 + uint16(len(dd.lsaHeaders)*lsaHeaderSize)
+
+	data := make([]byte, dd.length)
+	dd.header.encodeTo(data)
+
+	binary.BigEndian.PutUint16(data[24:26], dd.interfaceMTU)
+	data[26] = dd.options
+	data[27] = 0
+	if dd.master {
+		data[27] |= ddFlagMasterSlave
+	}
+	if dd.more {
+		data[27] |= ddFlagMore
+	}
+	if dd.init {
+		data[27] |= ddFlagInit
+	}
+	binary.BigEndian.PutUint32(data[28:32], dd.sequenceNumber)
+
+	for i, lsa := range dd.lsaHeaders {
+		lsa.encodeTo(data[32+i*lsaHeaderSize:])
+	}
+
+	dd.checksum = checksum(data[0:16], data[24:])
+	binary.BigEndian.PutUint16(data[12:14], dd.checksum)
+
+	return data
+}
+
+func (dd *databaseDescriptionPacket) handleOn(handler PacketHandler) {
+	handler.handleDatabaseDescription(dd)
+}
+
+func (dd *databaseDescriptionPacket) Header() *header {
+	return &dd.header
 }
 
 func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
@@ -191,17 +314,17 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 		return nil, fmt.Errorf("unsupported OSPF version %d", version)
 	}
 
-	var h header
+	h := header{
+		packetType: packetType(data[1]),
+		length:     binary.BigEndian.Uint16(data[2:4]),
+		routerID:   mustAddrFromSlice(data[4:8]),
+		areaID:     mustAddrFromSlice(data[8:12]),
+		checksum:   binary.BigEndian.Uint16(data[12:14]),
+		authType:   binary.BigEndian.Uint16(data[14:16]),
+		authData:   binary.BigEndian.Uint64(data[16:24]),
 
-	h.messageType = messageType(data[1])
-	h.length = binary.BigEndian.Uint16(data[2:4])
-	h.routerID = mustAddrFromSlice(data[4:8])
-	h.areaID = mustAddrFromSlice(data[8:12])
-	h.checksum = binary.BigEndian.Uint16(data[12:14])
-	h.authType = binary.BigEndian.Uint16(data[14:16])
-	h.authData = binary.BigEndian.Uint64(data[16:24])
-
-	h.src = mustAddrFromSlice(ip.Src)
+		src: mustAddrFromSlice(ip.Src),
+	}
 
 	if len(data) != int(h.length) {
 		return nil, fmt.Errorf("packet length mismatch")
@@ -211,36 +334,60 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 		return nil, fmt.Errorf("packet checksum mismatch")
 	}
 
-	switch h.messageType {
-	case TypeHello:
+	switch h.packetType {
+	case pHello:
 		if h.length < 44 {
 			return nil, fmt.Errorf("hello packet too short")
 		}
 
-		var hello Hello
-		hello.header = h
-		hello.networkMask = data[24:28]
-		hello.helloInterval = binary.BigEndian.Uint16(data[28:30])
-		hello.options = data[30]
-		hello.routerPriority = data[31]
-		hello.routerDeadInterval = binary.BigEndian.Uint32(data[32:36])
-		hello.dRouter = mustAddrFromSlice(data[36:40])
-		hello.bdRouter = mustAddrFromSlice(data[40:44])
+		hello := helloPacket{
+			header:             h,
+			networkMask:        data[24:28],
+			helloInterval:      binary.BigEndian.Uint16(data[28:30]),
+			options:            data[30],
+			routerPriority:     data[31],
+			routerDeadInterval: binary.BigEndian.Uint32(data[32:36]),
+			dRouter:            mustAddrFromSlice(data[36:40]),
+			bdRouter:           mustAddrFromSlice(data[40:44]),
+		}
 
 		for i := 44; i < int(h.length); i += 4 {
 			hello.neighbors = append(hello.neighbors, mustAddrFromSlice(data[i:i+4]))
 		}
 
 		return &hello, nil
-	case TypeDatabaseDescription:
+	case pDatabaseDescription:
+		if h.length < 32 {
+			return nil, fmt.Errorf("database description packet too short")
+		}
+
+		dd := databaseDescriptionPacket{
+			header:         h,
+			interfaceMTU:   binary.BigEndian.Uint16(data[24:26]),
+			options:        data[26],
+			init:           data[27]&ddFlagInit != 0,
+			more:           data[27]&ddFlagMore != 0,
+			master:         data[27]&ddFlagMasterSlave != 0,
+			sequenceNumber: binary.BigEndian.Uint32(data[28:32]),
+		}
+
+		for i := 32; i < int(h.length); i += lsaHeaderSize {
+			header, err := decodeLSAHeader(data[i : i+lsaHeaderSize])
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode LSA header: %v", err)
+			}
+
+			dd.lsaHeaders = append(dd.lsaHeaders, *header)
+		}
+
+		return &dd, nil
+	case pLinkStateRequest:
 		fallthrough
-	case TypeLinkStateRequest:
+	case pLinkStateUpdate:
 		fallthrough
-	case TypeLinkStateUpdate:
-		fallthrough
-	case TypeLinkStateAcknowledgement:
-		return nil, fmt.Errorf("unsupported OSPF packet type %s", h.messageType)
+	case pLinkStateAcknowledgement:
+		return nil, fmt.Errorf("unsupported OSPF packet type %s", h.packetType)
 	default:
-		return nil, fmt.Errorf("unknown OSPF packet type %d", h.messageType)
+		return nil, fmt.Errorf("unknown OSPF packet type %d", h.packetType)
 	}
 }

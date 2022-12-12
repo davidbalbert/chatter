@@ -83,32 +83,29 @@ type Interface struct {
 	instance *Instance
 	conn     *ipv4.RawConn
 
-	downNeighbors chan *Neighbor
+	rm chan *Neighbor
 }
 
 func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
 }
 
-func (iface *Interface) send(c chan Packet) {
-	for {
-		p := <-c
-		fmt.Printf("Sending %s\n", p)
+func (iface *Interface) send(p Packet) {
+	fmt.Printf("Sending %s\n", p)
 
-		b := p.encode()
+	b := p.encode()
 
-		ip := &ipv4.Header{
-			Version:  ipv4.Version,
-			Len:      ipv4.HeaderLen,
-			TOS:      0xc0,
-			TotalLen: ipv4.HeaderLen + len(b),
-			TTL:      1,
-			Protocol: 89,
-			Dst:      to4(allSPFRouters),
-		}
-
-		iface.conn.WriteTo(ip, b, nil)
+	ip := &ipv4.Header{
+		Version:  ipv4.Version,
+		Len:      ipv4.HeaderLen,
+		TOS:      0xc0,
+		TotalLen: ipv4.HeaderLen + len(b),
+		TTL:      1,
+		Protocol: 89,
+		Dst:      to4(allSPFRouters),
 	}
+
+	iface.conn.WriteTo(ip, b, nil)
 }
 
 func (iface *Interface) receive(c chan Packet) {
@@ -157,24 +154,23 @@ func (iface *Interface) receive(c chan Packet) {
 	}
 }
 
-func (iface *Interface) neighborId(h *Hello) netip.Addr {
+// TODO: can we come up with a good name for an interface with the following signature, and then replace
+// the two arguments to neighborKey with a single argument of this type?
+// type Hmm interface {
+// 	NeighborAddr() netip.Addr
+// 	NeighborID() netip.Addr
+// }
+
+func (iface *Interface) neighborKey(src, routerID netip.Addr) netip.Addr {
 	t := iface.networkType
 	if t == networkBroadcast || t == networkPointToMultipoint || t == networkNonBroadcastMultipleAccess {
-		return h.src
+		return src
 	} else {
-		return h.routerID
+		return routerID
 	}
 }
 
-func (iface *Interface) executeNeighborEvent(neighbor *Neighbor, event neighborEvent) {
-	neighbor.handleEvent(event)
-
-	if neighbor.state == nDown {
-		delete(iface.neighbors, neighbor.key)
-	}
-}
-
-func (iface *Interface) handleHello(h *Hello) {
+func (iface *Interface) handleHello(h *helloPacket) {
 	if iface.networkType != networkPointToPoint && h.netmaskBits() != iface.Prefix.Bits() {
 		return
 	}
@@ -185,11 +181,12 @@ func (iface *Interface) handleHello(h *Hello) {
 
 	// TODO: E-bit of interface should match E-bit of the hello packet.
 
-	id := iface.neighborId(h)
-	neighbor, ok := iface.neighbors[id]
+	key := iface.neighborKey(h.src, h.routerID)
+	neighbor, ok := iface.neighbors[key]
 	if !ok {
-		neighbor = NewNeighbor(id, iface, h)
-		iface.neighbors[id] = neighbor
+		neighbor = newNeighbor(iface, h)
+		go neighbor.run()
+		iface.neighbors[key] = neighbor
 	}
 
 	// var routerPriorityChanged bool
@@ -212,7 +209,7 @@ func (iface *Interface) handleHello(h *Hello) {
 		}
 	}
 
-	iface.executeNeighborEvent(neighbor, neHelloReceived)
+	neighbor.sendEvent(neHelloReceived)
 
 	var found bool
 	for _, routerID := range h.neighbors {
@@ -223,10 +220,10 @@ func (iface *Interface) handleHello(h *Hello) {
 	}
 
 	if !found {
-		iface.executeNeighborEvent(neighbor, ne1WayReceived)
+		neighbor.sendEvent(ne1WayReceived)
 		return
 	} else {
-		iface.executeNeighborEvent(neighbor, ne2WayReceived)
+		neighbor.sendEvent(ne2WayReceived)
 	}
 
 	// if routerPriorityChanged {
@@ -241,8 +238,20 @@ func (iface *Interface) handleHello(h *Hello) {
 	// in RFC 2328
 }
 
-func (iface *Interface) removeNeighbor(n *Neighbor) {
-	iface.downNeighbors <- n
+func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket) {
+	if int(dd.interfaceMTU) > iface.netif.MTU {
+		fmt.Printf("Received database description packet with MTU %v, but interface MTU is %v\n", dd.interfaceMTU, iface.netif.MTU)
+		return
+	}
+
+	key := iface.neighborKey(dd.src, dd.routerID)
+	neighbor, ok := iface.neighbors[key]
+	if !ok {
+		fmt.Printf("Received database description packet from unknown neighbor addr=%v router_id=%v\n", dd.src, dd.routerID)
+		return
+	}
+
+	neighbor.sendPacket(dd)
 }
 
 func (iface *Interface) run() {
@@ -277,18 +286,19 @@ func (iface *Interface) run() {
 	iface.conn = raw
 
 	r := make(chan Packet)
-	w := make(chan Packet)
-	hello := tickImmediately(iface.HelloDuration())
+	helloTick := tickImmediately(iface.HelloDuration())
 
 	go iface.receive(r)
-	go iface.send(w)
 
 	for {
 		select {
 		case p := <-r:
 			p.handleOn(iface)
-		case <-hello:
-			w <- newHello(iface)
+		case <-helloTick:
+			iface.send(newHello(iface))
+		case neighbor := <-iface.rm:
+			neighbor.shutdown()
+			delete(iface.neighbors, iface.neighborKey(neighbor.addr, neighbor.neighborID))
 		}
 	}
 }
@@ -304,7 +314,6 @@ func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifcon
 		RouterDeadInterval: ifconfig.DeadInterval,
 		neighbors:          make(map[netip.Addr]*Neighbor),
 		instance:           inst,
-		downNeighbors:      make(chan *Neighbor),
 	}
 
 	return iface
