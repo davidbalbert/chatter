@@ -113,10 +113,12 @@ type Neighbor struct {
 	packets chan Packet
 
 	done chan struct{}
+
+	rxmtTimer *time.Timer
 }
 
 func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
-	return &Neighbor{
+	n := Neighbor{
 		iface:            iface,
 		state:            nDown,
 		master:           true,
@@ -135,7 +137,13 @@ func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
 		packets: make(chan Packet),
 
 		done: make(chan struct{}),
+
+		rxmtTimer: time.NewTimer(iface.RxmtDuration()),
 	}
+
+	n.stopRxmtTimer()
+
+	return &n
 }
 
 func (n *Neighbor) setState(state neighborState) {
@@ -270,19 +278,32 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			// entered (see Section 10.8).
 
 			if n.firstAdjancencyAttempt {
-				n.ddSequenceNumber = uint32(time.Now().Unix())
+				now := time.Now()
+				h, m, s := now.Clock()
+				ns := now.Nanosecond()
+				ms := ns / 1_000_000
+				n.ddSequenceNumber = uint32(h*3600*1000 + m*60*1000 + s*1000 + ms)
+
 				n.firstAdjancencyAttempt = false
 			}
 
 			n.ddSequenceNumber++
 			n.master = true
+
+			n.sendExStartDatabaseDescriptionPacket()
+			n.startRxmtTimer()
 		default:
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Init\n", n.neighborID, event)
 		}
 	case n2Way:
 		// TODO
 	case nExStart:
-		// TODO
+		switch event {
+		case neNegotiationDone:
+			n.setState(nExchange)
+		default:
+			fmt.Printf("%v: neighbor state machine: unexpected event %v in state ExStart\n", n.neighborID, event)
+		}
 	case nExchange:
 		// TODO
 	case nLoading:
@@ -299,10 +320,29 @@ func (n *Neighbor) handleHello(h *helloPacket) {
 }
 
 func (n *Neighbor) handleDatabaseDescriptionInExStart(dd *databaseDescriptionPacket) {
-	fmt.Printf("handleDatabaseDescriptionInExStart state=%v\n", n.state)
-	// TODO
-	// if dd.init && dd.more && dd.master && len(dd.lsaHeaders) == 0 {
-	// }
+	if dd.init && dd.more && dd.master && len(dd.lsaHeaders) == 0 && n.iface.routerID().Less(n.neighborID) {
+
+		n.handleEvent(neNegotiationDone)
+		n.options = dd.options
+
+		n.master = false
+		n.ddSequenceNumber = dd.sequenceNumber
+
+		fmt.Printf("%v: ExStart became slave\n", n.neighborID)
+		n.stopRxmtTimer()
+
+		// TODO: send LSA headers in our acknowledgement
+		n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, false, false, false, nil))
+	} else if !dd.init && !dd.master && dd.sequenceNumber == n.ddSequenceNumber && n.neighborID.Less(n.iface.routerID()) {
+		fmt.Printf("%v: ExStart became master\n", n.neighborID)
+
+		n.handleEvent(neNegotiationDone)
+		n.options = dd.options
+
+		n.resetRxmtTimer()
+
+		// TODO: start polling for DD packets
+	}
 }
 
 func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
@@ -351,6 +391,48 @@ func (n *Neighbor) disableInactivityTimer() {
 	// TODO
 }
 
+func (n *Neighbor) stopRxmtTimer() {
+	fmt.Printf("%v: stopping rxmt timer\n", n.neighborID)
+	if !n.rxmtTimer.Stop() {
+		<-n.rxmtTimer.C
+	}
+}
+
+func (n *Neighbor) startRxmtTimer() {
+	fmt.Printf("%v: starting rxmt timer\n", n.neighborID)
+	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) resetRxmtTimer() {
+	if !n.rxmtTimer.Stop() {
+		<-n.rxmtTimer.C
+	}
+	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) handleRxmtTimer() {
+	fmt.Printf("%v: rxmt timer expired\n", n.neighborID)
+	switch n.state {
+	case nExStart:
+		n.sendExStartDatabaseDescriptionPacket()
+	case nExchange:
+		// TODO
+		fmt.Printf("%v: state=Exchange handleRxmtTimer: not implemented\n", n.neighborID)
+	default:
+		fmt.Printf("handleRxmtTimer: unexpected state %v\n", n.state)
+	}
+
+	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) sendExStartDatabaseDescriptionPacket() {
+	n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, true, true, n.master, nil))
+}
+
+func (n *Neighbor) send(p Packet) {
+	n.iface.send(n.addr, p)
+}
+
 func (n *Neighbor) shouldBecomeAdjacent() bool {
 	t := n.iface.networkType
 
@@ -374,6 +456,8 @@ func (n *Neighbor) run() {
 		case packet := <-n.packets:
 			fmt.Printf("neighbor: received packet: %v\n", packet)
 			packet.handleOn(n)
+		case <-n.rxmtTimer.C:
+			n.handleRxmtTimer()
 		case <-n.done:
 			return
 		}

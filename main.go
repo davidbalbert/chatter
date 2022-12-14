@@ -78,6 +78,7 @@ type Interface struct {
 	AreaID             netip.Addr
 	HelloInteral       uint16
 	RouterDeadInterval uint32
+	RxmtInterval       uint16
 	neighbors          map[netip.Addr]*Neighbor
 
 	instance *Instance
@@ -86,11 +87,32 @@ type Interface struct {
 	rm chan *Neighbor
 }
 
+func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifconfig *InterfaceConfig, netconfig *NetworkConfig) *Interface {
+	iface := &Interface{
+		networkType:        ifconfig.NetworkType,
+		netif:              netif,
+		Address:            addr.Addr(),
+		Prefix:             netconfig.Network,
+		AreaID:             netconfig.AreaID,
+		HelloInteral:       ifconfig.HelloInterval,
+		RouterDeadInterval: ifconfig.DeadInterval,
+		RxmtInterval:       ifconfig.RxmtInterval,
+		neighbors:          make(map[netip.Addr]*Neighbor),
+		instance:           inst,
+	}
+
+	return iface
+}
+
 func (iface *Interface) HelloDuration() time.Duration {
 	return time.Duration(iface.HelloInteral) * time.Second
 }
 
-func (iface *Interface) send(p Packet) {
+func (iface *Interface) RxmtDuration() time.Duration {
+	return time.Duration(iface.RxmtInterval) * time.Second
+}
+
+func (iface *Interface) send(dst netip.Addr, p Packet) {
 	fmt.Printf("Sending %s\n", p)
 
 	b := p.encode()
@@ -102,7 +124,7 @@ func (iface *Interface) send(p Packet) {
 		TotalLen: ipv4.HeaderLen + len(b),
 		TTL:      1,
 		Protocol: 89,
-		Dst:      to4(allSPFRouters),
+		Dst:      to4(dst),
 	}
 
 	iface.conn.WriteTo(ip, b, nil)
@@ -254,6 +276,10 @@ func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket)
 	neighbor.sendPacket(dd)
 }
 
+func (iface *Interface) routerID() netip.Addr {
+	return iface.instance.RouterID
+}
+
 func (iface *Interface) run() {
 	conn, err := net.ListenPacket("ip4:ospf", "0.0.0.0")
 	if err != nil {
@@ -295,28 +321,12 @@ func (iface *Interface) run() {
 		case p := <-r:
 			p.handleOn(iface)
 		case <-helloTick:
-			iface.send(newHello(iface))
+			iface.send(allSPFRouters, newHello(iface))
 		case neighbor := <-iface.rm:
 			neighbor.shutdown()
 			delete(iface.neighbors, iface.neighborKey(neighbor.addr, neighbor.neighborID))
 		}
 	}
-}
-
-func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifconfig *InterfaceConfig, netconfig *NetworkConfig) *Interface {
-	iface := &Interface{
-		networkType:        ifconfig.NetworkType,
-		netif:              netif,
-		Address:            addr.Addr(),
-		Prefix:             netconfig.Network,
-		AreaID:             netconfig.AreaID,
-		HelloInteral:       ifconfig.HelloInterval,
-		RouterDeadInterval: ifconfig.DeadInterval,
-		neighbors:          make(map[netip.Addr]*Neighbor),
-		instance:           inst,
-	}
-
-	return iface
 }
 
 type Instance struct {
@@ -378,7 +388,7 @@ func main() {
 		panic(err)
 	}
 
-	config.AddInterface("bridge100", networkPointToMultipoint, 10, 40)
+	config.AddInterface("bridge100", networkPointToMultipoint, 10, 40, 5)
 
 	instance, err := NewInstance(config)
 	if err != nil {

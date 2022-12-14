@@ -266,8 +266,30 @@ const (
 	ddFlagInit
 )
 
+func newDatabaseDescription(iface *Interface, sequenceNumber uint32, init, more, master bool, lsas []lsaHeader) *databaseDescriptionPacket {
+	dd := databaseDescriptionPacket{
+		header: header{
+			packetType: pDatabaseDescription,
+			length:     32 + uint16(len(lsas)*lsaHeaderSize),
+			routerID:   iface.instance.RouterID,
+			areaID:     iface.AreaID,
+			authType:   0,
+			authData:   0,
+		},
+		interfaceMTU:   uint16(iface.netif.MTU),
+		options:        0x2, // TODO
+		init:           init,
+		more:           more,
+		master:         master,
+		sequenceNumber: sequenceNumber,
+		lsaHeaders:     lsas,
+	}
+
+	return &dd
+}
+
 func (dd *databaseDescriptionPacket) encode() []byte {
-	dd.length = 24 + uint16(len(dd.lsaHeaders)*lsaHeaderSize)
+	dd.length = 32 + uint16(len(dd.lsaHeaders)*lsaHeaderSize)
 
 	data := make([]byte, dd.length)
 	dd.header.encodeTo(data)
