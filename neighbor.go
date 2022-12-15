@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/netip"
 	"time"
+
+	"golang.org/x/net/ipv4"
 )
 
 type neighborState int
@@ -99,13 +101,16 @@ type Neighbor struct {
 	// TODO: inactivityTimer
 	master           bool
 	ddSequenceNumber uint32
-	lastDD           *databaseDescriptionPacket
+	lastReceivedDD   *databaseDescriptionPacket
 	neighborID       netip.Addr
 	routerPriority   uint8
 	addr             netip.Addr
 	options          uint8
 	dRouter          netip.Addr
 	bdRouter         netip.Addr
+
+	databaseSummaryList  []lsaHeader
+	linkStateRequestList []lsaHeader
 
 	firstAdjancencyAttempt bool
 
@@ -123,7 +128,7 @@ func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
 		state:            nDown,
 		master:           true,
 		ddSequenceNumber: 0,
-		lastDD:           nil,
+		lastReceivedDD:   nil,
 		neighborID:       h.routerID,
 		routerPriority:   h.routerPriority,
 		addr:             h.src,
@@ -290,7 +295,7 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			n.ddSequenceNumber++
 			n.master = true
 
-			n.sendExStartDatabaseDescriptionPacket()
+			n.sendDatabaseDescription()
 			n.startRxmtTimer()
 		default:
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Init\n", n.neighborID, event)
@@ -305,7 +310,17 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state ExStart\n", n.neighborID, event)
 		}
 	case nExchange:
-		// TODO
+		switch event {
+		case neExchangeDone:
+			if len(n.linkStateRequestList) > 0 {
+				n.setState(nLoading)
+				// TODO: keep sending LSReq packets until the list is empty
+			} else {
+				n.setState(nFull)
+			}
+		default:
+			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Exchange\n", n.neighborID, event)
+		}
 	case nLoading:
 		// TODO
 	case nFull:
@@ -317,10 +332,12 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 
 func (n *Neighbor) handleHello(h *helloPacket) {
 	// NOOP
+	// TODO: maybe move some code from Interface.handleHello here.
 }
 
 func (n *Neighbor) handleDatabaseDescriptionInExStart(dd *databaseDescriptionPacket) {
 	if dd.init && dd.more && dd.master && len(dd.lsaHeaders) == 0 && n.iface.routerID().Less(n.neighborID) {
+		fmt.Printf("%v: ExStart became slave\n", n.neighborID)
 
 		n.handleEvent(neNegotiationDone)
 		n.options = dd.options
@@ -328,20 +345,126 @@ func (n *Neighbor) handleDatabaseDescriptionInExStart(dd *databaseDescriptionPac
 		n.master = false
 		n.ddSequenceNumber = dd.sequenceNumber
 
-		fmt.Printf("%v: ExStart became slave\n", n.neighborID)
 		n.stopRxmtTimer()
-
-		// TODO: send LSA headers in our acknowledgement
-		n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, false, false, false, nil))
+		n.sendDatabaseDescription()
 	} else if !dd.init && !dd.master && dd.sequenceNumber == n.ddSequenceNumber && n.neighborID.Less(n.iface.routerID()) {
 		fmt.Printf("%v: ExStart became master\n", n.neighborID)
 
 		n.handleEvent(neNegotiationDone)
 		n.options = dd.options
 
-		n.resetRxmtTimer()
+		n.handleDatabaseDescriptionInExchange(dd)
+	}
+}
 
-		// TODO: start polling for DD packets
+func (n *Neighbor) isDuplicateDatabaseDescription(dd *databaseDescriptionPacket) bool {
+	prev := n.lastReceivedDD
+
+	if prev == nil {
+		return false
+	}
+
+	return prev.init == dd.init && prev.more == dd.more && prev.master == dd.master && prev.options == dd.options && prev.sequenceNumber == dd.sequenceNumber
+}
+
+func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescriptionPacket) {
+	if n.isDuplicateDatabaseDescription(dd) {
+		fmt.Printf("%v: received duplicate database description packet, discarding\n", n.neighborID)
+		return
+	}
+
+	if dd.sequenceNumber != n.ddSequenceNumber {
+		fmt.Printf("%v: received database description packet with unexpected sequence number, discarding\n", n.neighborID)
+		n.handleEvent(neSeqNumberMismatch)
+		return
+	}
+
+	for _, h := range dd.lsaHeaders {
+		// TODO: also reject if it's a Type 5 LSA and we're in a stub area.
+		if h.lsaType < 1 || h.lsaType > 5 {
+			fmt.Printf("%v: received database description packet with invalid LSA header, discarding\n", n.neighborID)
+			n.handleEvent(neSeqNumberMismatch)
+			return
+		}
+
+		// TODO: only add h to the link state request list if it's not in the LSDB or if the copy in the LSDB is older than h.
+		n.linkStateRequestList = append(n.linkStateRequestList, h)
+	}
+
+	n.lastReceivedDD = dd
+	n.ddSequenceNumber++
+	nHeadersInLastPacket := len(n.lsaHeadersForDatabaseDescription())
+	n.databaseSummaryList = n.databaseSummaryList[nHeadersInLastPacket:]
+
+	if !dd.more && len(n.databaseSummaryList) == 0 {
+		n.stopRxmtTimer()
+		n.handleEvent(neExchangeDone)
+	} else {
+		n.resetRxmtTimer()
+		n.sendDatabaseDescription()
+	}
+}
+
+func (n *Neighbor) handleDatabaseDescriptionInExchangeSlave(dd *databaseDescriptionPacket) {
+	if n.isDuplicateDatabaseDescription(dd) {
+		fmt.Printf("%v: received duplicate database description packet, retransmitting\n", n.neighborID)
+		n.sendDatabaseDescription()
+		return
+	}
+
+	if dd.sequenceNumber != n.ddSequenceNumber+1 {
+		fmt.Printf("%v: received database description packet with unexpected sequence number, discarding\n", n.neighborID)
+		n.handleEvent(neSeqNumberMismatch)
+		return
+	}
+
+	for _, h := range dd.lsaHeaders {
+		// TODO: also reject if it's a Type 5 LSA and we're in a stub area.
+		if h.lsaType < 1 || h.lsaType > 5 {
+			fmt.Printf("%v: received database description packet with invalid LSA header, discarding\n", n.neighborID)
+			n.handleEvent(neSeqNumberMismatch)
+			return
+		}
+
+		// TODO: only add h to the link state request list if it's not in the LSDB or if the copy in the LSDB is older than h.
+		n.linkStateRequestList = append(n.linkStateRequestList, h)
+	}
+
+	n.lastReceivedDD = dd
+	n.ddSequenceNumber = dd.sequenceNumber
+	nHeadersInLastPacket := len(n.lsaHeadersForDatabaseDescription())
+	n.databaseSummaryList = n.databaseSummaryList[nHeadersInLastPacket:]
+
+	n.sendDatabaseDescription()
+
+	if !dd.more && len(n.databaseSummaryList) == 0 {
+		n.handleEvent(neExchangeDone)
+	}
+}
+
+func (n *Neighbor) handleDatabaseDescriptionInExchange(dd *databaseDescriptionPacket) {
+	if n.master == dd.master {
+		fmt.Printf("%v: received database description packet with unexpected master bit, discarding\n", n.neighborID)
+		n.handleEvent(neSeqNumberMismatch)
+		return
+	}
+
+	if dd.init {
+		fmt.Printf("%v: received database description packet with unexpected init bit, discarding\n", n.neighborID)
+		n.handleEvent(neSeqNumberMismatch)
+		return
+	}
+
+	if n.options != dd.options {
+		fmt.Printf("%v: received database description packet with unexpected options, discarding\n", n.neighborID)
+		n.handleEvent(neSeqNumberMismatch)
+		return
+	}
+
+	if n.master {
+		n.handleDatabaseDescriptionInExchangeMaster(dd)
+	} else {
+		n.handleDatabaseDescriptionInExchangeSlave(dd)
 	}
 }
 
@@ -364,7 +487,7 @@ func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
 	case nExStart:
 		n.handleDatabaseDescriptionInExStart(dd)
 	case nExchange:
-		// TODO
+		n.handleDatabaseDescriptionInExchange(dd)
 	case nLoading, nFull:
 		// TODO
 	default:
@@ -375,8 +498,8 @@ func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
 func (n *Neighbor) flushLSAs() {
 	// TODO:
 	// 1. Flush the retransmission list.
-	// 2. Flush the database summary list.
-	// 3. Flush the link state request list
+	n.databaseSummaryList = nil
+	n.linkStateRequestList = nil
 }
 
 func (n *Neighbor) startInactivityTimer() {
@@ -414,10 +537,14 @@ func (n *Neighbor) handleRxmtTimer() {
 	fmt.Printf("%v: rxmt timer expired\n", n.neighborID)
 	switch n.state {
 	case nExStart:
-		n.sendExStartDatabaseDescriptionPacket()
+		n.sendDatabaseDescription()
 	case nExchange:
-		// TODO
-		fmt.Printf("%v: state=Exchange handleRxmtTimer: not implemented\n", n.neighborID)
+		if !n.master {
+			fmt.Printf("%v: state=Exchange unexpected handleRxmtTimer for non-master\n", n.neighborID)
+			return
+		}
+
+		n.sendDatabaseDescription()
 	default:
 		fmt.Printf("handleRxmtTimer: unexpected state %v\n", n.state)
 	}
@@ -425,8 +552,26 @@ func (n *Neighbor) handleRxmtTimer() {
 	n.rxmtTimer.Reset(n.iface.RxmtDuration())
 }
 
-func (n *Neighbor) sendExStartDatabaseDescriptionPacket() {
-	n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, true, true, n.master, nil))
+func (n *Neighbor) lsaHeadersForDatabaseDescription() []lsaHeader {
+	mtu := n.iface.netif.MTU
+	maxHeaders := (mtu - ipv4.HeaderLen - minDDSize) / lsaHeaderSize
+	nHeaders := min(maxHeaders, len(n.databaseSummaryList))
+
+	return n.databaseSummaryList[:nHeaders]
+}
+
+func (n *Neighbor) sendDatabaseDescription() {
+	if n.state == nExStart {
+		n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, true, true, true, nil))
+	} else if n.state == nExchange {
+		headers := n.lsaHeadersForDatabaseDescription()
+		nHeaders := len(headers)
+		more := len(n.databaseSummaryList) > nHeaders
+
+		n.send(newDatabaseDescription(n.iface, n.ddSequenceNumber, false, more, n.master, n.databaseSummaryList[:nHeaders]))
+	} else {
+		fmt.Printf("sendDatabaseDescription: unexpected state %v\n", n.state)
+	}
 }
 
 func (n *Neighbor) send(p Packet) {

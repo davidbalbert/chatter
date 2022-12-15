@@ -117,11 +117,13 @@ type helloPacket struct {
 	neighbors          []netip.Addr
 }
 
+var minHelloSize = 44
+
 func newHello(iface *Interface) *helloPacket {
 	hello := &helloPacket{
 		header: header{
 			packetType: pHello,
-			length:     44 + uint16(len(iface.neighbors)*4),
+			length:     uint16(minHelloSize + len(iface.neighbors)*4),
 			routerID:   iface.instance.RouterID,
 			areaID:     iface.AreaID,
 			authType:   0,
@@ -164,7 +166,7 @@ func (hello *helloPacket) netmaskBits() int {
 }
 
 func (hello *helloPacket) encode() []byte {
-	hello.length = 44 + uint16(len(hello.neighbors)*4)
+	hello.length = uint16(minHelloSize + len(hello.neighbors)*4)
 
 	data := make([]byte, hello.length)
 	hello.header.encodeTo(data)
@@ -260,6 +262,8 @@ type databaseDescriptionPacket struct {
 	lsaHeaders     []lsaHeader
 }
 
+var minDDSize = 32
+
 const (
 	ddFlagMasterSlave byte = 1 << iota
 	ddFlagMore
@@ -270,7 +274,7 @@ func newDatabaseDescription(iface *Interface, sequenceNumber uint32, init, more,
 	dd := databaseDescriptionPacket{
 		header: header{
 			packetType: pDatabaseDescription,
-			length:     32 + uint16(len(lsas)*lsaHeaderSize),
+			length:     uint16(minDDSize + len(lsas)*lsaHeaderSize),
 			routerID:   iface.instance.RouterID,
 			areaID:     iface.AreaID,
 			authType:   0,
@@ -289,7 +293,7 @@ func newDatabaseDescription(iface *Interface, sequenceNumber uint32, init, more,
 }
 
 func (dd *databaseDescriptionPacket) encode() []byte {
-	dd.length = 32 + uint16(len(dd.lsaHeaders)*lsaHeaderSize)
+	dd.length = uint16(minDDSize + len(dd.lsaHeaders)*lsaHeaderSize)
 
 	data := make([]byte, dd.length)
 	dd.header.encodeTo(data)
@@ -358,7 +362,7 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 
 	switch h.packetType {
 	case pHello:
-		if h.length < 44 {
+		if int(h.length) < minHelloSize {
 			return nil, fmt.Errorf("hello packet too short")
 		}
 
@@ -379,7 +383,7 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 
 		return &hello, nil
 	case pDatabaseDescription:
-		if h.length < 32 {
+		if int(h.length) < minDDSize {
 			return nil, fmt.Errorf("database description packet too short")
 		}
 
