@@ -167,12 +167,7 @@ func (n *Neighbor) setState(state neighborState) {
 
 func (n *Neighbor) handleCommonEvents(event neighborEvent) (handled bool) {
 	switch event {
-	case neKillNbr:
-		n.flushLSAs()
-		n.disableInactivityTimer()
-		n.setState(nDown)
-		return true
-	case neLLDown:
+	case neKillNbr, neLLDown:
 		n.flushLSAs()
 		n.disableInactivityTimer()
 		n.setState(nDown)
@@ -188,28 +183,20 @@ func (n *Neighbor) handleCommonEvents(event neighborEvent) (handled bool) {
 
 func (n *Neighbor) handleCommonExchangeEvents(event neighborEvent) (handled bool) {
 	switch event {
-	case neSeqNumberMismatch:
+	case neSeqNumberMismatch, neBadLSReq:
 		n.flushLSAs()
-		// TODO:
-		// 4. Increment DD sequence number
-		// 5. Declare ourselves the master
-		// 6. Start sending DD packets with I, M and MS set.
+		n.ddSequenceNumber++
+		n.master = true
+
 		n.setState(nExStart)
-		return true
-	case neBadLSReq:
-		n.flushLSAs()
-		n.flushLSAs()
-		// TODO:
-		// 4. Increment DD sequence number
-		// 5. Declare ourselves the master
-		// 6. Start sending DD packets with I, M and MS set.
-		n.setState(nExStart)
+
+		n.sendDatabaseDescription()
+		n.startRxmtTimer()
+
 		return true
 	case ne1WayReceived:
 		n.flushLSAs()
-
-		// We should also do the above if we're in 2-Way too. Don't forget.
-		n.setState(nAttempt)
+		n.setState(nInit)
 		return true
 	case neAdjOK:
 		// Event AdjOK? leads to adjacency forming/breaking
@@ -301,7 +288,18 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Init\n", n.neighborID, event)
 		}
 	case n2Way:
-		// TODO
+		switch event {
+		case ne1WayReceived:
+			n.flushLSAs()
+			n.setState(nInit)
+		case ne2WayReceived:
+			// NOOP
+		case neAdjOK:
+			// TODO
+			fmt.Printf("%v: UNHANDLED neighbor state machine: AdjOK? in state 2Way\n", n.neighborID)
+		default:
+			fmt.Printf("%v: neighbor state machine: unexpected event %v in state 2Way\n", n.neighborID, event)
+		}
 	case nExStart:
 		switch event {
 		case neNegotiationDone:
