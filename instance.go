@@ -48,8 +48,6 @@ func NewInstance(c *Config) (*Instance, error) {
 
 					iface := NewInterface(inst, addr, netif, &ifconfig, &netconfig)
 
-					fmt.Println(area, iface)
-
 					area.interfaces = append(area.interfaces, iface)
 				}
 			}
@@ -62,9 +60,8 @@ func NewInstance(c *Config) (*Instance, error) {
 func (inst *Instance) Run() {
 	for _, area := range inst.Areas {
 		for _, iface := range area.interfaces {
+			// TODO, maybe make run spawn a goroutine and return?
 			go iface.run()
 		}
 	}
-
-	select {}
 }

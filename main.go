@@ -44,4 +44,6 @@ func main() {
 	}
 
 	instance.Run()
+
+	select {}
 }
