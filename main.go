@@ -8,10 +8,12 @@ import (
 
 // https://www.rfc-editor.org/rfc/rfc2328.html
 
+// TODO: where to put these? Maybe eventually ospf.go?
+
 var allSPFRouters = netip.MustParseAddr("224.0.0.5")
 var allDRouters = netip.MustParseAddr("224.0.0.6")
 
-// OSPF capabilities
+// capabilities
 const (
 	capE  = 1 << 1
 	capMC = 1 << 2
