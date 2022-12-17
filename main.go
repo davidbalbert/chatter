@@ -15,6 +15,15 @@ import (
 var allSPFRouters = netip.MustParseAddr("224.0.0.5")
 var allDRouters = netip.MustParseAddr("224.0.0.6")
 
+// OSPF capabilities
+const (
+	capE  = 1 << 1
+	capMC = 1 << 2
+	capNP = 1 << 3
+	capEA = 1 << 4
+	capDC = 1 << 5
+)
+
 func toNetAddr(addr netip.Addr) net.Addr {
 	return &net.IPAddr{IP: addr.AsSlice()}
 }
@@ -110,6 +119,40 @@ func (iface *Interface) HelloDuration() time.Duration {
 
 func (iface *Interface) RxmtDuration() time.Duration {
 	return time.Duration(iface.RxmtInterval) * time.Second
+}
+
+func (iface *Interface) links() []link {
+	switch iface.networkType {
+	case networkPointToPoint:
+		if len(iface.neighbors) == 0 {
+			return nil
+		} else {
+			for _, n := range iface.neighbors {
+				// There should be only one neighbor
+				return pointToPointLinks(iface, n)
+			}
+		}
+	case networkPointToMultipoint:
+		links := make([]link, 0)
+		for _, n := range iface.neighbors {
+			links = append(links, pointToPointLinks(iface, n)...)
+		}
+
+		return links
+	case networkBroadcast:
+		// TODO
+		fmt.Printf("TODO: Interface.Links: networkBroadcast\n")
+		return nil
+	case networkNonBroadcastMultipleAccess:
+		// TODO
+		fmt.Printf("TODO: Interface.Links: networkNonBroadcastMultipleAccess\n")
+		return nil
+	default:
+		fmt.Printf("Unknown network type %d\n", iface.networkType)
+		return nil
+	}
+
+	return nil
 }
 
 func (iface *Interface) send(dst netip.Addr, p Packet) {
@@ -330,13 +373,14 @@ func (iface *Interface) run() {
 }
 
 type Instance struct {
-	RouterID   netip.Addr
-	Interfaces []Interface
+	RouterID netip.Addr
+	Areas    map[netip.Addr]*area
 }
 
 func NewInstance(c *Config) (*Instance, error) {
 	inst := &Instance{
 		RouterID: c.RouterID,
+		Areas:    make(map[netip.Addr]*area),
 	}
 
 	for _, ifconfig := range c.Interfaces {
@@ -358,8 +402,21 @@ func NewInstance(c *Config) (*Instance, error) {
 
 			for _, netconfig := range c.Networks {
 				if addr.Masked() == netconfig.Network {
+					area, ok := inst.Areas[netconfig.AreaID]
+					if !ok {
+						area, err = newArea(inst, netconfig.AreaID, false)
+						if err != nil {
+							return nil, err
+						}
+
+						inst.Areas[netconfig.AreaID] = area
+					}
+
 					iface := NewInterface(inst, addr, netif, &ifconfig, &netconfig)
-					inst.Interfaces = append(inst.Interfaces, *iface)
+
+					fmt.Println(area, iface)
+
+					area.interfaces = append(area.interfaces, iface)
 				}
 			}
 		}
@@ -369,8 +426,10 @@ func NewInstance(c *Config) (*Instance, error) {
 }
 
 func (inst *Instance) Run() {
-	for _, iface := range inst.Interfaces {
-		go iface.run()
+	for _, area := range inst.Areas {
+		for _, iface := range area.interfaces {
+			go iface.run()
+		}
 	}
 
 	select {}
@@ -388,7 +447,9 @@ func main() {
 		panic(err)
 	}
 
-	config.AddInterface("bridge100", networkPointToMultipoint, 10, 40, 5)
+	if err := config.AddInterface("bridge100", "0.0.0.0", networkPointToMultipoint, 10, 40, 5); err != nil {
+		panic(err)
+	}
 
 	instance, err := NewInstance(config)
 	if err != nil {

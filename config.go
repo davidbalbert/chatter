@@ -12,10 +12,11 @@ type NetworkConfig struct {
 
 type InterfaceConfig struct {
 	Name          string
+	AreaID        netip.Addr
+	NetworkType   networkType
 	HelloInterval uint16
 	DeadInterval  uint32
 	RxmtInterval  uint16
-	NetworkType   networkType
 }
 
 type Config struct {
@@ -62,13 +63,20 @@ func (c *Config) AddNetwork(network, areaID string) error {
 	return nil
 }
 
-// TODO: Go question – is networkType networkType kosher?
-func (c *Config) AddInterface(name string, networkType networkType, helloInterval uint16, deadInterval uint32, rxmtInterval uint16) {
+func (c *Config) AddInterface(name string, area string, networkType networkType, helloInterval uint16, deadInterval uint32, rxmtInterval uint16) error {
+	areaID, err := netip.ParseAddr(area)
+	if err != nil {
+		return fmt.Errorf("error parsing area id: %w", err)
+	}
+
 	c.Interfaces = append(c.Interfaces, InterfaceConfig{
 		Name:          name,
+		AreaID:        areaID,
+		NetworkType:   networkType,
 		HelloInterval: helloInterval,
 		DeadInterval:  deadInterval,
 		RxmtInterval:  rxmtInterval,
-		NetworkType:   networkType,
 	})
+
+	return nil
 }

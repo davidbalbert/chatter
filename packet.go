@@ -131,8 +131,8 @@ func newHello(iface *Interface) *helloPacket {
 		},
 		networkMask:        net.CIDRMask(iface.Prefix.Bits(), 32),
 		helloInterval:      iface.HelloInteral,
-		options:            0x2, // TODO: set E-bit, save them on the area or interface?
-		routerPriority:     1,   // TODO
+		options:            capE, // TODO: don't set capE if we're in a stub area
+		routerPriority:     1,    // TODO
 		routerDeadInterval: iface.RouterDeadInterval,
 		dRouter:            netip.IPv4Unspecified(),
 		bdRouter:           netip.IPv4Unspecified(),
@@ -194,61 +194,6 @@ func (hello *helloPacket) handleOn(handler PacketHandler) {
 
 func (hello *helloPacket) Header() *header {
 	return &hello.header
-}
-
-type lsType uint8
-
-const (
-	lsTypeRouter      lsType = 1
-	lsTypeNetwork     lsType = 2
-	lsTypeSummary     lsType = 3
-	lsTypeASBRSummary lsType = 4
-	lsTypeASExternal  lsType = 5
-)
-
-type lsaHeader struct {
-	age               uint16
-	options           uint8
-	lsaType           lsType
-	lsID              netip.Addr
-	advertisingRouter netip.Addr
-	seqNumber         uint32
-	lsaChecksum       uint16
-	length            uint16
-}
-
-const lsaHeaderSize = 20
-
-func decodeLSAHeader(data []byte) (*lsaHeader, error) {
-	if len(data) < lsaHeaderSize {
-		return nil, fmt.Errorf("lsa header too short")
-	}
-
-	return &lsaHeader{
-		age:               binary.BigEndian.Uint16(data[0:2]),
-		options:           data[2],
-		lsaType:           lsType(data[3]),
-		lsID:              mustAddrFromSlice(data[4:8]),
-		advertisingRouter: mustAddrFromSlice(data[8:12]),
-		seqNumber:         binary.BigEndian.Uint32(data[12:16]),
-		lsaChecksum:       binary.BigEndian.Uint16(data[16:18]),
-		length:            binary.BigEndian.Uint16(data[18:20]),
-	}, nil
-}
-
-func (lsa *lsaHeader) encodeTo(data []byte) {
-	if len(data) < lsaHeaderSize {
-		panic("lsaHeader.encodeTo: data is too short")
-	}
-
-	binary.BigEndian.PutUint16(data[0:2], lsa.age)
-	data[2] = lsa.options
-	data[3] = byte(lsa.lsaType)
-	copy(data[4:8], to4(lsa.lsID))
-	copy(data[8:12], to4(lsa.advertisingRouter))
-	binary.BigEndian.PutUint32(data[12:16], lsa.seqNumber)
-	binary.BigEndian.PutUint16(data[16:18], lsa.lsaChecksum)
-	binary.BigEndian.PutUint16(data[18:20], lsa.length)
 }
 
 type databaseDescriptionPacket struct {
