@@ -190,9 +190,9 @@ func newRouterLSA(area *area) (*routerLSA, error) {
 		links:    nil,
 	}
 
-	for _, iface := range area.interfaces {
-		lsa.links = append(lsa.links, iface.links()...)
-	}
+	// for _, iface := range area.inst.interfaces {
+	// 	lsa.links = append(lsa.links, iface.links()...)
+	// }
 
 	return &lsa, nil
 }

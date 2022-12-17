@@ -17,11 +17,11 @@ type addressRange struct {
 type area struct {
 	inst *Instance
 
-	areaID        netip.Addr
-	addressRanges []addressRange
-	routerLSAs    []*routerLSA
-	networkLSAs   []*networkLSA
-	summaryLSAs   []*summaryLSA
+	areaID netip.Addr
+	// addressRanges []addressRange
+	// routerLSAs    []*routerLSA
+	// networkLSAs   []*networkLSA
+	// summaryLSAs   []*summaryLSA
 
 	// TODO: shortestPathTree
 	// TODO: transitCapability
@@ -29,8 +29,6 @@ type area struct {
 	externalRoutingCapability bool
 
 	// TODO: stubDefaultCost
-
-	interfaces []*Interface
 }
 
 func newArea(inst *Instance, areaID netip.Addr, stub bool) (*area, error) {
@@ -47,8 +45,4 @@ func newArea(inst *Instance, areaID netip.Addr, stub bool) (*area, error) {
 
 func (area *area) isStub() bool {
 	return !area.externalRoutingCapability
-}
-
-func (area *area) addInterface(iface *Interface) {
-	area.interfaces = append(area.interfaces, iface)
 }

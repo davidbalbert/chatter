@@ -7,8 +7,9 @@ import (
 )
 
 type Instance struct {
-	RouterID netip.Addr
-	Areas    map[netip.Addr]*area
+	RouterID   netip.Addr
+	Interfaces []*Interface
+	Areas      map[netip.Addr]*area
 }
 
 func NewInstance(c *Config) (*Instance, error) {
@@ -36,9 +37,9 @@ func NewInstance(c *Config) (*Instance, error) {
 
 			for _, netconfig := range c.Networks {
 				if addr.Masked() == netconfig.Network {
-					area, ok := inst.Areas[netconfig.AreaID]
+					_, ok := inst.Areas[netconfig.AreaID]
 					if !ok {
-						area, err = newArea(inst, netconfig.AreaID, false)
+						area, err := newArea(inst, netconfig.AreaID, false)
 						if err != nil {
 							return nil, err
 						}
@@ -47,8 +48,7 @@ func NewInstance(c *Config) (*Instance, error) {
 					}
 
 					iface := NewInterface(inst, addr, netif, &ifconfig, &netconfig)
-
-					area.interfaces = append(area.interfaces, iface)
+					inst.Interfaces = append(inst.Interfaces, iface)
 				}
 			}
 		}
@@ -58,10 +58,8 @@ func NewInstance(c *Config) (*Instance, error) {
 }
 
 func (inst *Instance) Run() {
-	for _, area := range inst.Areas {
-		for _, iface := range area.interfaces {
-			// TODO, maybe make run spawn a goroutine and return?
-			go iface.run()
-		}
+	for _, iface := range inst.Interfaces {
+		// TODO, maybe make run spawn a goroutine and return?
+		go iface.run()
 	}
 }
