@@ -17,7 +17,7 @@ type addressRange struct {
 type area struct {
 	inst *Instance
 
-	areaID netip.Addr
+	id netip.Addr
 	// addressRanges []addressRange
 	// routerLSAs    []*routerLSA
 	// networkLSAs   []*networkLSA
@@ -38,7 +38,7 @@ func newArea(inst *Instance, areaID netip.Addr, stub bool) (*area, error) {
 
 	return &area{
 		inst:                      inst,
-		areaID:                    areaID,
+		id:                        areaID,
 		externalRoutingCapability: !stub,
 	}, nil
 }

@@ -7,15 +7,17 @@ import (
 )
 
 type Instance struct {
-	RouterID   netip.Addr
-	Interfaces []*Interface
-	Areas      map[netip.Addr]*area
+	routerID   netip.Addr
+	interfaces []*Interface
+	areas      map[netip.Addr]*area
+	db         *lsdb
 }
 
 func NewInstance(c *Config) (*Instance, error) {
 	inst := &Instance{
-		RouterID: c.RouterID,
-		Areas:    make(map[netip.Addr]*area),
+		routerID: c.RouterID,
+		areas:    make(map[netip.Addr]*area),
+		db:       newLSDB(),
 	}
 
 	for _, ifconfig := range c.Interfaces {
@@ -37,28 +39,38 @@ func NewInstance(c *Config) (*Instance, error) {
 
 			for _, netconfig := range c.Networks {
 				if addr.Masked() == netconfig.Network {
-					_, ok := inst.Areas[netconfig.AreaID]
+					_, ok := inst.areas[netconfig.AreaID]
 					if !ok {
 						area, err := newArea(inst, netconfig.AreaID, false)
 						if err != nil {
 							return nil, err
 						}
 
-						inst.Areas[netconfig.AreaID] = area
+						inst.areas[netconfig.AreaID] = area
 					}
 
 					iface := NewInterface(inst, addr, netif, &ifconfig, &netconfig)
-					inst.Interfaces = append(inst.Interfaces, iface)
+					inst.interfaces = append(inst.interfaces, iface)
 				}
 			}
 		}
+	}
+
+	for _, area := range inst.areas {
+		lsa, err := newRouterLSA(inst, area)
+		fmt.Printf("new router lsa: %v\n", lsa)
+		if err != nil {
+			return nil, err
+		}
+
+		inst.db.set(area.id, lsa)
 	}
 
 	return inst, nil
 }
 
 func (inst *Instance) Run() {
-	for _, iface := range inst.Interfaces {
+	for _, iface := range inst.interfaces {
 		// TODO, maybe make run spawn a goroutine and return?
 		go iface.run()
 	}

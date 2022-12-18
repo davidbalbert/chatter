@@ -39,7 +39,7 @@ type Interface struct {
 	netif              *net.Interface
 	Address            netip.Addr
 	Prefix             netip.Prefix
-	AreaID             netip.Addr
+	areaID             netip.Addr
 	HelloInteral       uint16
 	RouterDeadInterval uint32
 	RxmtInterval       uint16
@@ -57,7 +57,7 @@ func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifcon
 		netif:              netif,
 		Address:            addr.Addr(),
 		Prefix:             netconfig.Network,
-		AreaID:             netconfig.AreaID,
+		areaID:             netconfig.AreaID,
 		HelloInteral:       ifconfig.HelloInterval,
 		RouterDeadInterval: ifconfig.DeadInterval,
 		RxmtInterval:       ifconfig.RxmtInterval,
@@ -74,40 +74,6 @@ func (iface *Interface) HelloDuration() time.Duration {
 
 func (iface *Interface) RxmtDuration() time.Duration {
 	return time.Duration(iface.RxmtInterval) * time.Second
-}
-
-func (iface *Interface) links() []link {
-	switch iface.networkType {
-	case networkPointToPoint:
-		if len(iface.neighbors) == 0 {
-			return nil
-		} else {
-			for _, n := range iface.neighbors {
-				// There should be only one neighbor
-				return pointToPointLinks(iface, n)
-			}
-		}
-	case networkPointToMultipoint:
-		links := make([]link, 0)
-		for _, n := range iface.neighbors {
-			links = append(links, pointToPointLinks(iface, n)...)
-		}
-
-		return links
-	case networkBroadcast:
-		// TODO
-		fmt.Printf("TODO: Interface.Links: networkBroadcast\n")
-		return nil
-	case networkNonBroadcastMultipleAccess:
-		// TODO
-		fmt.Printf("TODO: Interface.Links: networkNonBroadcastMultipleAccess\n")
-		return nil
-	default:
-		fmt.Printf("Unknown network type %d\n", iface.networkType)
-		return nil
-	}
-
-	return nil
 }
 
 func (iface *Interface) send(dst netip.Addr, p Packet) {
@@ -156,7 +122,7 @@ func (iface *Interface) receive(c chan Packet) {
 			continue
 		}
 
-		if p.AreaID() != iface.AreaID {
+		if p.AreaID() != iface.areaID {
 			continue
 		}
 
@@ -233,7 +199,7 @@ func (iface *Interface) handleHello(h *helloPacket) {
 
 	var found bool
 	for _, routerID := range h.neighbors {
-		if routerID == iface.instance.RouterID {
+		if routerID == iface.instance.routerID {
 			found = true
 			break
 		}
@@ -275,7 +241,7 @@ func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket)
 }
 
 func (iface *Interface) routerID() netip.Addr {
-	return iface.instance.RouterID
+	return iface.instance.routerID
 }
 
 func (iface *Interface) run() {

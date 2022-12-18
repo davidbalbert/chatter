@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math"
-	"net"
 	"net/netip"
 )
 
@@ -12,6 +11,97 @@ const (
 	initialSequenceNumber = math.MinInt32 + 1
 	maxSequenceNumber     = math.MaxInt32
 )
+
+type lsdbKey struct {
+	lsType lsType
+	lsID   netip.Addr
+	advRtr netip.Addr
+}
+
+type lsdb struct {
+	areas      map[netip.Addr]map[lsdbKey]lsa
+	externalDB map[lsdbKey]lsa
+}
+
+func newLSDB() *lsdb {
+	return &lsdb{
+		areas:      make(map[netip.Addr]map[lsdbKey]lsa),
+		externalDB: make(map[lsdbKey]lsa),
+	}
+}
+
+func (db *lsdb) set(areaID netip.Addr, l lsa) {
+	key := lsdbKey{
+		lsType: l.header().lsType,
+		lsID:   l.header().lsID,
+		advRtr: l.header().advertisingRouter,
+	}
+
+	if l.header().lsType == lsTypeASExternal {
+		db.externalDB[key] = l
+		return
+	}
+
+	if _, ok := db.areas[areaID]; !ok {
+		db.areas[areaID] = make(map[lsdbKey]lsa)
+	}
+
+	db.areas[areaID][key] = l
+}
+
+func (db *lsdb) get(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) lsa {
+	key := lsdbKey{
+		lsType: lsType,
+		lsID:   lsID,
+		advRtr: advRtr,
+	}
+
+	if lsType == lsTypeASExternal {
+		return db.externalDB[key]
+	}
+
+	areaDB, ok := db.areas[areaID]
+	if !ok {
+		return nil
+	}
+
+	return areaDB[key]
+}
+
+func (db *lsdb) delete(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) {
+	key := lsdbKey{
+		lsType: lsType,
+		lsID:   lsID,
+		advRtr: advRtr,
+	}
+
+	if lsType == lsTypeASExternal {
+		delete(db.externalDB, key)
+		return
+	}
+
+	areaDB, ok := db.areas[areaID]
+	if !ok {
+		return
+	}
+
+	delete(areaDB, key)
+}
+
+func (db *lsdb) copyHeaders(areaID netip.Addr) []lsaHeader {
+	var headers []lsaHeader
+
+	areaDB, ok := db.areas[areaID]
+	if !ok {
+		return headers
+	}
+
+	for _, lsa := range areaDB {
+		headers = append(headers, *lsa.header())
+	}
+
+	return headers
+}
 
 type lsa interface {
 	header() *lsaHeader
@@ -30,7 +120,7 @@ const (
 type lsaHeader struct {
 	age               uint16
 	options           uint8
-	lsaType           lsType
+	lsType            lsType
 	lsID              netip.Addr
 	advertisingRouter netip.Addr
 	seqNumber         int32
@@ -52,7 +142,7 @@ func decodeLSAHeader(data []byte) (*lsaHeader, error) {
 	return &lsaHeader{
 		age:               binary.BigEndian.Uint16(data[0:2]),
 		options:           data[2],
-		lsaType:           lsType(data[3]),
+		lsType:            lsType(data[3]),
 		lsID:              mustAddrFromSlice(data[4:8]),
 		advertisingRouter: mustAddrFromSlice(data[8:12]),
 		seqNumber:         int32(binary.BigEndian.Uint32(data[12:16])),
@@ -68,7 +158,7 @@ func (lsa *lsaHeader) encodeTo(data []byte) {
 
 	binary.BigEndian.PutUint16(data[0:2], lsa.age)
 	data[2] = lsa.options
-	data[3] = byte(lsa.lsaType)
+	data[3] = byte(lsa.lsType)
 	copy(data[4:8], to4(lsa.lsID))
 	copy(data[8:12], to4(lsa.advertisingRouter))
 	binary.BigEndian.PutUint32(data[12:16], uint32(lsa.seqNumber))
@@ -109,26 +199,14 @@ type link struct {
 	tos      []tosMetric
 }
 
-func pointToPointLinks(iface *Interface, n *Neighbor) []link {
-	links := make([]link, 0, 2)
-
-	links = append(links, link{
-		linkID:   n.neighborID,
-		linkData: binary.BigEndian.Uint32(to4(n.addr)), // TODO: handle unnumbered point to points, which should use the MIB-II ifIndex.
-		linkType: lPointToPoint,
-		metric:   1, // TODO: interface cost
+func newLink(linkType linkType, linkID netip.Addr, linkData uint32, metric uint16) *link {
+	return &link{
+		linkID:   linkID,
+		linkData: linkData,
+		linkType: linkType,
+		metric:   metric,
 		tos:      nil,
-	})
-
-	links = append(links, link{
-		linkID:   iface.Address,
-		linkData: binary.BigEndian.Uint32(net.CIDRMask(32, 32)),
-		linkType: lStub,
-		metric:   0,
-		tos:      nil,
-	})
-
-	return links
+	}
 }
 
 func decodeLink(data []byte) (*link, error) {
@@ -172,14 +250,16 @@ const (
 	rlfVirtual  = 1 << 2
 )
 
-func newRouterLSA(area *area) (*routerLSA, error) {
+// TODO: LSA checksum
+
+func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 	lsa := routerLSA{
 		lsaHeader: lsaHeader{
 			age:               0,
 			options:           capE, // TODO: don't set this in stub areas
-			lsaType:           lsTypeRouter,
-			lsID:              area.inst.RouterID,
-			advertisingRouter: area.inst.RouterID,
+			lsType:            lsTypeRouter,
+			lsID:              inst.routerID,
+			advertisingRouter: inst.routerID,
 			seqNumber:         initialSequenceNumber,
 			lsaChecksum:       0,
 			length:            0,
@@ -190,9 +270,39 @@ func newRouterLSA(area *area) (*routerLSA, error) {
 		links:    nil,
 	}
 
-	// for _, iface := range area.inst.interfaces {
-	// 	lsa.links = append(lsa.links, iface.links()...)
-	// }
+	for _, iface := range inst.interfaces {
+		if iface.areaID != area.id {
+			continue
+		}
+
+		switch iface.networkType {
+		case networkPointToPoint, networkPointToMultipoint:
+			for _, n := range iface.neighbors {
+				if n.state != nFull {
+					continue
+				}
+
+				// TODO: handle unnumbered point to points, which should use the MIB-II ifIndex.
+				link := newLink(lPointToPoint, n.neighborID, binary.BigEndian.Uint32(to4(n.addr)), 1)
+				lsa.links = append(lsa.links, *link)
+			}
+		default:
+			return nil, fmt.Errorf("unsupported interface type %v", iface.networkType)
+		}
+
+		// TODO: there are more states to handle here (ptp, address is a /32, iface.state == loopback)
+		// TODO: there's also an else case in bird, which I need to find in the spec.
+		if iface.networkType == networkPointToMultipoint {
+			lsa.links = append(lsa.links, *newLink(lStub, iface.Address, 0xffffffff, 0))
+		}
+	}
+
+	linksLen := 0
+	for _, link := range lsa.links {
+		linksLen += 12 + len(link.tos)*4
+	}
+
+	lsa.length = lsaHeaderSize + 4 + uint16(linksLen)
 
 	return &lsa, nil
 }
@@ -281,7 +391,7 @@ func decodeLSA(data []byte) (lsa, error) {
 		return nil, err
 	}
 
-	switch h.lsaType {
+	switch h.lsType {
 	case lsTypeRouter:
 		return decodeRouterLSA(h, data[:h.length])
 	case lsTypeNetwork:
@@ -294,5 +404,5 @@ func decodeLSA(data []byte) (lsa, error) {
 		return decodeASExternalLSA(h, data[:h.length])
 	}
 
-	return nil, fmt.Errorf("unknown LSA type %d", h.lsaType)
+	return nil, fmt.Errorf("unknown LSA type %d", h.lsType)
 }

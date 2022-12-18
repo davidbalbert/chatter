@@ -303,6 +303,7 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 	case nExStart:
 		switch event {
 		case neNegotiationDone:
+			n.databaseSummaryList = n.iface.instance.db.copyHeaders(n.iface.areaID)
 			n.setState(nExchange)
 		default:
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state ExStart\n", n.neighborID, event)
@@ -379,7 +380,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescrip
 
 	for _, h := range dd.lsaHeaders {
 		// TODO: also reject if it's a Type 5 LSA and we're in a stub area.
-		if h.lsaType < 1 || h.lsaType > 5 {
+		if h.lsType < 1 || h.lsType > 5 {
 			fmt.Printf("%v: received database description packet with invalid LSA header, discarding\n", n.neighborID)
 			n.handleEvent(neSeqNumberMismatch)
 			return
@@ -418,7 +419,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeSlave(dd *databaseDescript
 
 	for _, h := range dd.lsaHeaders {
 		// TODO: also reject if it's a Type 5 LSA and we're in a stub area.
-		if h.lsaType < 1 || h.lsaType > 5 {
+		if h.lsType < 1 || h.lsType > 5 {
 			fmt.Printf("%v: received database description packet with invalid LSA header, discarding\n", n.neighborID)
 			n.handleEvent(neSeqNumberMismatch)
 			return
