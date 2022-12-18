@@ -93,10 +93,11 @@ func (db *lsdb) copyHeaders(areaID netip.Addr) []lsaHeader {
 
 	areaDB, ok := db.areas[areaID]
 	if !ok {
-		return headers
+		return nil
 	}
 
 	for _, lsa := range areaDB {
+		_ = lsa.encode() // ensure checksum is in the header
 		headers = append(headers, *lsa.header())
 	}
 
@@ -105,6 +106,7 @@ func (db *lsdb) copyHeaders(areaID netip.Addr) []lsaHeader {
 
 type lsa interface {
 	header() *lsaHeader
+	encode() []byte
 }
 
 type lsType uint8
@@ -124,8 +126,10 @@ type lsaHeader struct {
 	lsID              netip.Addr
 	advertisingRouter netip.Addr
 	seqNumber         int32
-	lsaChecksum       uint16
+	lsChecksum        uint16
 	length            uint16
+
+	data []byte
 }
 
 const lsaHeaderSize = 20
@@ -139,6 +143,8 @@ func decodeLSAHeader(data []byte) (*lsaHeader, error) {
 		return nil, fmt.Errorf("unknown LSA type %d", data[3])
 	}
 
+	length := binary.BigEndian.Uint16(data[18:20])
+
 	return &lsaHeader{
 		age:               binary.BigEndian.Uint16(data[0:2]),
 		options:           data[2],
@@ -146,8 +152,9 @@ func decodeLSAHeader(data []byte) (*lsaHeader, error) {
 		lsID:              mustAddrFromSlice(data[4:8]),
 		advertisingRouter: mustAddrFromSlice(data[8:12]),
 		seqNumber:         int32(binary.BigEndian.Uint32(data[12:16])),
-		lsaChecksum:       binary.BigEndian.Uint16(data[16:18]),
-		length:            binary.BigEndian.Uint16(data[18:20]),
+		lsChecksum:        binary.BigEndian.Uint16(data[16:18]),
+		length:            length,
+		data:              data[:length],
 	}, nil
 }
 
@@ -162,14 +169,29 @@ func (lsa *lsaHeader) encodeTo(data []byte) {
 	copy(data[4:8], to4(lsa.lsID))
 	copy(data[8:12], to4(lsa.advertisingRouter))
 	binary.BigEndian.PutUint32(data[12:16], uint32(lsa.seqNumber))
-	binary.BigEndian.PutUint16(data[16:18], lsa.lsaChecksum)
+	binary.BigEndian.PutUint16(data[16:18], lsa.lsChecksum)
 	binary.BigEndian.PutUint16(data[18:20], lsa.length)
+}
+
+func fletcherChecksum(data ...[]byte) uint16 {
+	var c0, c1 byte
+
+	for _, d := range data {
+		for _, b := range d {
+			c0 += b
+			c1 += c0
+		}
+	}
+
+	return uint16(c1)<<8 | uint16(c0)
 }
 
 type tosMetric struct {
 	tos    uint8
 	metric uint16
 }
+
+const tosMetricSize = 4
 
 func decodeTosMetric(data []byte) (*tosMetric, error) {
 	if len(data) < 4 {
@@ -182,6 +204,15 @@ func decodeTosMetric(data []byte) (*tosMetric, error) {
 	}, nil
 }
 
+func (tm *tosMetric) encodeTo(data []byte) {
+	if len(data) < 4 {
+		panic("tosMetric.encodeTo: data is too short")
+	}
+
+	data[0] = tm.tos
+	binary.BigEndian.PutUint16(data[2:4], tm.metric)
+}
+
 type linkType uint8
 
 const (
@@ -192,25 +223,47 @@ const (
 )
 
 type link struct {
-	linkID   netip.Addr
-	linkData uint32 // TODO: for unnumbered interfaces, this is a MIB-II ifIndex. Otherwise it's an IP address.
-	linkType linkType
-	metric   uint16
-	tos      []tosMetric
+	linkID     netip.Addr
+	linkData   uint32 // TODO: for unnumbered interfaces, this is a MIB-II ifIndex. Otherwise it's an IP address.
+	linkType   linkType
+	metric     uint16
+	tosMetrics []tosMetric
 }
+
+const minLinkSize = 12
 
 func newLink(linkType linkType, linkID netip.Addr, linkData uint32, metric uint16) *link {
 	return &link{
-		linkID:   linkID,
-		linkData: linkData,
-		linkType: linkType,
-		metric:   metric,
-		tos:      nil,
+		linkID:     linkID,
+		linkData:   linkData,
+		linkType:   linkType,
+		metric:     metric,
+		tosMetrics: nil,
+	}
+}
+
+func (l *link) size() int {
+	return minLinkSize + len(l.tosMetrics)*4
+}
+
+func (l *link) encodeTo(data []byte) {
+	if len(data) < l.size() {
+		panic("link.encodeTo: data is too short")
+	}
+
+	copy(data[0:4], to4(l.linkID))
+	binary.BigEndian.PutUint32(data[4:8], l.linkData)
+	data[8] = byte(l.linkType)
+	data[9] = byte(len(l.tosMetrics))
+	binary.BigEndian.PutUint16(data[10:12], l.metric)
+
+	for i, tos := range l.tosMetrics {
+		tos.encodeTo(data[12+i*4:])
 	}
 }
 
 func decodeLink(data []byte) (*link, error) {
-	if len(data) < 12 {
+	if len(data) < minLinkSize {
 		return nil, fmt.Errorf("link too short")
 	}
 
@@ -223,13 +276,17 @@ func decodeLink(data []byte) (*link, error) {
 
 	nTOS := data[9]
 
+	if len(data) < minLinkSize+int(nTOS)*4 {
+		return nil, fmt.Errorf("link too short (TOS metrics)")
+	}
+
 	for i := 0; i < int(nTOS); i++ {
 		tos, err := decodeTosMetric(data[12+i*4:])
 		if err != nil {
 			return nil, err
 		}
 
-		l.tos = append(l.tos, *tos)
+		l.tosMetrics = append(l.tosMetrics, *tos)
 	}
 
 	return l, nil
@@ -250,6 +307,8 @@ const (
 	rlfVirtual  = 1 << 2
 )
 
+const minRouterLSASize = lsaHeaderSize + 4
+
 // TODO: LSA checksum
 
 func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
@@ -261,7 +320,7 @@ func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 			lsID:              inst.routerID,
 			advertisingRouter: inst.routerID,
 			seqNumber:         initialSequenceNumber,
-			lsaChecksum:       0,
+			lsChecksum:        0,
 			length:            0,
 		},
 		virtual:  false,
@@ -297,18 +356,18 @@ func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 		}
 	}
 
-	linksLen := 0
+	linksSize := 0
 	for _, link := range lsa.links {
-		linksLen += 12 + len(link.tos)*4
+		linksSize += link.size()
 	}
 
-	lsa.length = lsaHeaderSize + 4 + uint16(linksLen)
+	lsa.length = minRouterLSASize + uint16(linksSize)
 
 	return &lsa, nil
 }
 
 func decodeRouterLSA(header *lsaHeader, data []byte) (*routerLSA, error) {
-	if len(data) < lsaHeaderSize+4 {
+	if len(data) < minRouterLSASize {
 		return nil, fmt.Errorf("router LSA too short")
 	}
 
@@ -337,52 +396,107 @@ func (lsa *routerLSA) header() *lsaHeader {
 	return &lsa.lsaHeader
 }
 
-type networkLSA struct {
-	lsaHeader
+func (lsa *routerLSA) encode() []byte {
+	size := minRouterLSASize
+
+	for _, link := range lsa.links {
+		size += link.size()
+	}
+
+	buf := make([]byte, size)
+
+	lsa.lsaHeader.encodeTo(buf)
+
+	if lsa.virtual {
+		buf[20] |= rlfVirtual
+	}
+
+	if lsa.external {
+		buf[20] |= rlfExternal
+	}
+
+	if lsa.border {
+		buf[20] |= rlfBorder
+	}
+
+	binary.BigEndian.PutUint16(buf[22:24], uint16(len(lsa.links)))
+
+	i := 24
+	for _, link := range lsa.links {
+		link.encodeTo(buf[i:])
+		i += link.size()
+	}
+
+	lsa.lsChecksum = fletcherChecksum(buf[2:16], buf[18:])
+	binary.BigEndian.PutUint16(buf[16:18], lsa.lsChecksum)
+
+	lsa.lsaHeader.data = buf
+
+	return buf
 }
 
-func (lsa *networkLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
+type networkLSA struct {
+	lsaHeader
 }
 
 func decodeNetworkLSA(header *lsaHeader, data []byte) (*networkLSA, error) {
 	return nil, fmt.Errorf("network LSA not implemented")
 }
 
-type summaryLSA struct {
-	lsaHeader
+func (lsa *networkLSA) header() *lsaHeader {
+	return &lsa.lsaHeader
 }
 
-func (lsa *summaryLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
+func (lsa *networkLSA) encode() []byte {
+	return nil
+}
+
+type summaryLSA struct {
+	lsaHeader
 }
 
 func decodeSummaryLSA(header *lsaHeader, data []byte) (*summaryLSA, error) {
 	return nil, fmt.Errorf("summary LSA not implemented")
 }
 
-type asbrSummaryLSA struct {
-	lsaHeader
+func (lsa *summaryLSA) header() *lsaHeader {
+	return &lsa.lsaHeader
 }
 
-func (lsa *asbrSummaryLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
+func (lsa *summaryLSA) encode() []byte {
+	return nil
+}
+
+type asbrSummaryLSA struct {
+	lsaHeader
 }
 
 func decodeASBRSummaryLSA(header *lsaHeader, data []byte) (*asbrSummaryLSA, error) {
 	return nil, fmt.Errorf("ASBR summary LSA not implemented")
 }
 
+func (lsa *asbrSummaryLSA) header() *lsaHeader {
+	return &lsa.lsaHeader
+}
+
+func (lsa *asbrSummaryLSA) encode() []byte {
+	return nil
+}
+
 type asExternalLSA struct {
 	lsaHeader
+}
+
+func decodeASExternalLSA(header *lsaHeader, data []byte) (*asExternalLSA, error) {
+	return nil, fmt.Errorf("AS external LSA not implemented")
 }
 
 func (lsa *asExternalLSA) header() *lsaHeader {
 	return &lsa.lsaHeader
 }
 
-func decodeASExternalLSA(header *lsaHeader, data []byte) (*asExternalLSA, error) {
-	return nil, fmt.Errorf("AS external LSA not implemented")
+func (lsa *asExternalLSA) encode() []byte {
+	return nil
 }
 
 func decodeLSA(data []byte) (lsa, error) {

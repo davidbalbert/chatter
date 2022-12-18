@@ -10,7 +10,7 @@ import (
 	"golang.org/x/net/ipv4"
 )
 
-func checksum(data ...[]byte) uint16 {
+func ipChecksum(data ...[]byte) uint16 {
 	var sum uint32
 	for _, d := range data {
 		l := len(d)
@@ -182,7 +182,7 @@ func (hello *helloPacket) encode() []byte {
 		copy(data[44+i*4:48+i*4], to4(neighbor))
 	}
 
-	hello.checksum = checksum(data[0:16], data[24:])
+	hello.checksum = ipChecksum(data[0:16], data[24:])
 	binary.BigEndian.PutUint16(data[12:14], hello.checksum)
 
 	return data
@@ -261,7 +261,7 @@ func (dd *databaseDescriptionPacket) encode() []byte {
 		lsa.encodeTo(data[32+i*lsaHeaderSize:])
 	}
 
-	dd.checksum = checksum(data[0:16], data[24:])
+	dd.checksum = ipChecksum(data[0:16], data[24:])
 	binary.BigEndian.PutUint16(data[12:14], dd.checksum)
 
 	return data
@@ -301,7 +301,7 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 		return nil, fmt.Errorf("packet length mismatch")
 	}
 
-	if checksum(data) != 0 {
+	if ipChecksum(data) != 0 {
 		return nil, fmt.Errorf("packet checksum mismatch")
 	}
 
