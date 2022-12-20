@@ -173,17 +173,39 @@ func (lsa *lsaHeader) encodeTo(data []byte) {
 	binary.BigEndian.PutUint16(data[18:20], lsa.length)
 }
 
-func fletcherChecksum(data ...[]byte) uint16 {
-	var c0, c1 byte
+func fletcher16(data ...[]byte) (r0, r1 int) {
+	var c0, c1 int
 
 	for _, d := range data {
 		for _, b := range d {
-			c0 += b
-			c1 += c0
+			c0 = (c0 + int(b)) % 255
+			c1 = (c1 + c0) % 255
 		}
 	}
 
-	return uint16(c1)<<8 | uint16(c0)
+	return c0, c1
+}
+
+func fletcher16Checksum(data []byte) uint16 {
+	c0, c1 := fletcher16(data)
+	return uint16(c1<<8 | c0)
+}
+
+// offset is the offset of the checksum field in the data
+func fletcher16Checkbytes(data []byte, offset int) uint16 {
+	c0, c1 := fletcher16(data[:offset], []byte{0, 0}, data[offset+2:])
+
+	x := ((len(data)-offset-1)*c0 - c1) % 255
+	if x <= 0 {
+		x += 255
+	}
+
+	y := 510 - c0 - x
+	if y > 255 {
+		y -= 255
+	}
+
+	return uint16(x<<8 | y)
 }
 
 type tosMetric struct {
@@ -427,7 +449,9 @@ func (lsa *routerLSA) encode() []byte {
 		i += link.size()
 	}
 
-	lsa.lsChecksum = fletcherChecksum(buf[2:16], buf[18:])
+	// Checksum offset is 16, but we skip age (the first 2 bytes of the LSA),
+	// so we have to subtract 2.
+	lsa.lsChecksum = fletcher16Checkbytes(buf[2:], 14)
 	binary.BigEndian.PutUint16(buf[16:18], lsa.lsChecksum)
 
 	lsa.lsaHeader.data = buf
