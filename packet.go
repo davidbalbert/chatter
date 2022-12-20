@@ -36,7 +36,7 @@ const (
 	pDatabaseDescription
 	pLinkStateRequest
 	pLinkStateUpdate
-	pLinkStateAcknowledgement
+	pLinkStateAcknowledgment
 )
 
 func (t packetType) String() string {
@@ -49,7 +49,7 @@ func (t packetType) String() string {
 		return "Link State Request"
 	case pLinkStateUpdate:
 		return "Link State Update"
-	case pLinkStateAcknowledgement:
+	case pLinkStateAcknowledgment:
 		return "Link State Acknowledgement"
 	default:
 		return "Unknown"
@@ -59,6 +59,9 @@ func (t packetType) String() string {
 type PacketHandler interface {
 	handleHello(*helloPacket)
 	handleDatabaseDescription(*databaseDescriptionPacket)
+	handleLinkStateRequest(*linkStateRequestPacket)
+	handleLinkStateUpdate(*linkStateUpdatePacket)
+	handleLinkStateAcknowledgment(*linkStateAcknowledgmentPacket)
 }
 
 type Packet interface {
@@ -275,6 +278,157 @@ func (dd *databaseDescriptionPacket) Header() *header {
 	return &dd.header
 }
 
+type linkStateRequestPacket struct {
+	header
+	lsType lsType
+	lsID   netip.Addr
+	advRtr netip.Addr
+}
+
+var lsrSize = 36
+
+func newLinkStateRequest(iface *Interface, lsType lsType, lsID, advRtr netip.Addr) *linkStateRequestPacket {
+	lsr := linkStateRequestPacket{
+		header: header{
+			packetType: pLinkStateRequest,
+			length:     uint16(lsrSize),
+			routerID:   iface.instance.routerID,
+			areaID:     iface.areaID,
+			authType:   0,
+			authData:   0,
+		},
+		lsType: lsType,
+		lsID:   lsID,
+		advRtr: advRtr,
+	}
+
+	return &lsr
+}
+
+func (lsr *linkStateRequestPacket) encode() []byte {
+	lsr.length = uint16(lsrSize)
+
+	data := make([]byte, lsr.length)
+	lsr.header.encodeTo(data)
+
+	binary.BigEndian.PutUint32(data[24:28], uint32(lsr.lsType))
+	copy(data[28:32], to4(lsr.lsID))
+	copy(data[32:36], to4(lsr.advRtr))
+
+	lsr.checksum = ipChecksum(data[0:16], data[24:])
+	binary.BigEndian.PutUint16(data[12:14], lsr.checksum)
+
+	return data
+}
+
+func (lsr *linkStateRequestPacket) AreaID() netip.Addr {
+	return lsr.areaID
+}
+
+func (lsr *linkStateRequestPacket) handleOn(handler PacketHandler) {
+	handler.handleLinkStateRequest(lsr)
+}
+
+type linkStateUpdatePacket struct {
+	header
+	lsas []lsa
+}
+
+var minLSUSize = 28
+
+func newLinkStateUpdate(iface *Interface, lsas []lsa) *linkStateUpdatePacket {
+	size := minLSUSize
+	for _, lsa := range lsas {
+		size += lsaHeaderSize + lsa.size()
+	}
+
+	lsu := linkStateUpdatePacket{
+		header: header{
+			packetType: pLinkStateUpdate,
+			length:     uint16(size),
+			routerID:   iface.instance.routerID,
+			areaID:     iface.areaID,
+			authType:   0,
+			authData:   0,
+		},
+		lsas: lsas,
+	}
+
+	return &lsu
+}
+
+func (lsu *linkStateUpdatePacket) encode() []byte {
+	size := minLSUSize
+	for _, lsa := range lsu.lsas {
+		size += lsa.size()
+	}
+	lsu.length = uint16(size)
+
+	data := make([]byte, lsu.length)
+	lsu.header.encodeTo(data)
+
+	binary.BigEndian.PutUint32(data[24:28], uint32(len(lsu.lsas)))
+	offset := 28
+	for _, lsa := range lsu.lsas {
+		lsa.encodeTo(data[offset:])
+		offset += lsa.size()
+	}
+
+	lsu.checksum = ipChecksum(data[0:16], data[24:])
+	binary.BigEndian.PutUint16(data[12:14], lsu.checksum)
+
+	return data
+}
+
+func (lsu *linkStateUpdatePacket) handleOn(handler PacketHandler) {
+	handler.handleLinkStateUpdate(lsu)
+}
+
+type linkStateAcknowledgmentPacket struct {
+	header
+	lsaHeaders []lsaHeader
+}
+
+var minLSAckSize = 24
+
+func newLinkStateAcknowledgment(iface *Interface, lsaHeaders []lsaHeader) *linkStateAcknowledgmentPacket {
+	lsack := linkStateAcknowledgmentPacket{
+		header: header{
+			packetType: pLinkStateAcknowledgment,
+			length:     uint16(minLSAckSize + len(lsaHeaders)*lsaHeaderSize),
+			routerID:   iface.instance.routerID,
+			areaID:     iface.areaID,
+			authType:   0,
+			authData:   0,
+		},
+		lsaHeaders: lsaHeaders,
+	}
+
+	return &lsack
+}
+
+func (lsack *linkStateAcknowledgmentPacket) encode() []byte {
+	lsack.length = uint16(minLSAckSize + len(lsack.lsaHeaders)*lsaHeaderSize)
+
+	data := make([]byte, lsack.length)
+	lsack.header.encodeTo(data)
+
+	offset := 24
+	for _, lsaHeader := range lsack.lsaHeaders {
+		lsaHeader.encodeTo(data[offset:])
+		offset += lsaHeaderSize
+	}
+
+	lsack.checksum = ipChecksum(data[0:16], data[24:])
+	binary.BigEndian.PutUint16(data[12:14], lsack.checksum)
+
+	return data
+}
+
+func (lsack *linkStateAcknowledgmentPacket) handleOn(handler PacketHandler) {
+	handler.handleLinkStateAcknowledgment(lsack)
+}
+
 func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 	if len(data) < 24 {
 		return nil, fmt.Errorf("packet too short")
@@ -353,11 +507,60 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 
 		return &dd, nil
 	case pLinkStateRequest:
-		fallthrough
+		if int(h.length) < lsrSize {
+			return nil, fmt.Errorf("link state request packet too short")
+		}
+
+		lsr := linkStateRequestPacket{
+			header: h,
+			lsType: lsType(binary.BigEndian.Uint32(data[24:28])),
+			lsID:   mustAddrFromSlice(data[28:32]),
+			advRtr: mustAddrFromSlice(data[32:36]),
+		}
+
+		return &lsr, nil
 	case pLinkStateUpdate:
-		fallthrough
-	case pLinkStateAcknowledgement:
-		return nil, fmt.Errorf("unsupported OSPF packet type %s", h.packetType)
+		if int(h.length) < minLSUSize {
+			return nil, fmt.Errorf("link state update packet too short")
+		}
+
+		lsu := linkStateUpdatePacket{
+			header: h,
+		}
+
+		nLSAs := int(binary.BigEndian.Uint32(data[24:28]))
+
+		offset := 28
+		for i := 0; i < nLSAs; i++ {
+			lsa, err := decodeLSA(data[offset:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode LSA: %v", err)
+			}
+
+			lsu.lsas = append(lsu.lsas, lsa)
+			offset += lsa.size()
+		}
+
+		return &lsu, nil
+	case pLinkStateAcknowledgment:
+		if int(h.length) < minLSAckSize {
+			return nil, fmt.Errorf("link state acknowledgement packet too short")
+		}
+
+		lsack := linkStateAcknowledgmentPacket{
+			header: h,
+		}
+
+		for i := 24; i < int(h.length); i += lsaHeaderSize {
+			header, err := decodeLSAHeader(data[i:])
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode LSA header: %v", err)
+			}
+
+			lsack.lsaHeaders = append(lsack.lsaHeaders, *header)
+		}
+
+		return &lsack, nil
 	default:
 		return nil, fmt.Errorf("unknown OSPF packet type %d", h.packetType)
 	}

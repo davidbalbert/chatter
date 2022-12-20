@@ -240,6 +240,18 @@ func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket)
 	neighbor.sendPacket(dd)
 }
 
+func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
+	// noop
+}
+
+func (iface *Interface) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
+	// noop
+}
+
+func (iface *Interface) handleLinkStateAcknowledgment(lsack *linkStateAcknowledgmentPacket) {
+	// noop
+}
+
 func (iface *Interface) routerID() netip.Addr {
 	return iface.instance.routerID
 }

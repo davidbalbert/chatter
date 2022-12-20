@@ -107,6 +107,8 @@ func (db *lsdb) copyHeaders(areaID netip.Addr) []lsaHeader {
 type lsa interface {
 	header() *lsaHeader
 	encode() []byte
+	encodeTo([]byte)
+	size() int
 }
 
 type lsType uint8
@@ -419,13 +421,19 @@ func (lsa *routerLSA) header() *lsaHeader {
 }
 
 func (lsa *routerLSA) encode() []byte {
-	size := minRouterLSASize
+	buf := make([]byte, lsa.size())
 
-	for _, link := range lsa.links {
-		size += link.size()
+	lsa.encodeTo(buf)
+
+	lsa.lsaHeader.data = buf
+
+	return buf
+}
+
+func (lsa *routerLSA) encodeTo(buf []byte) {
+	if len(buf) < lsa.size() {
+		panic("routerLSA.encodeTo: buffer too small")
 	}
-
-	buf := make([]byte, size)
 
 	lsa.lsaHeader.encodeTo(buf)
 
@@ -453,10 +461,15 @@ func (lsa *routerLSA) encode() []byte {
 	// so we have to subtract 2.
 	lsa.lsChecksum = fletcher16Checkbytes(buf[2:], 14)
 	binary.BigEndian.PutUint16(buf[16:18], lsa.lsChecksum)
+}
 
-	lsa.lsaHeader.data = buf
+func (lsa *routerLSA) size() int {
+	size := minRouterLSASize
+	for _, link := range lsa.links {
+		size += link.size()
+	}
 
-	return buf
+	return size
 }
 
 type networkLSA struct {
@@ -475,6 +488,10 @@ func (lsa *networkLSA) encode() []byte {
 	return nil
 }
 
+func (lsa *networkLSA) size() int {
+	return 0
+}
+
 type summaryLSA struct {
 	lsaHeader
 }
@@ -489,6 +506,10 @@ func (lsa *summaryLSA) header() *lsaHeader {
 
 func (lsa *summaryLSA) encode() []byte {
 	return nil
+}
+
+func (lsa *summaryLSA) size() int {
+	return 0
 }
 
 type asbrSummaryLSA struct {
@@ -507,6 +528,10 @@ func (lsa *asbrSummaryLSA) encode() []byte {
 	return nil
 }
 
+func (lsa *asbrSummaryLSA) size() int {
+	return 0
+}
+
 type asExternalLSA struct {
 	lsaHeader
 }
@@ -521,6 +546,10 @@ func (lsa *asExternalLSA) header() *lsaHeader {
 
 func (lsa *asExternalLSA) encode() []byte {
 	return nil
+}
+
+func (lsa *asExternalLSA) size() int {
+	return 0
 }
 
 func decodeLSA(data []byte) (lsa, error) {

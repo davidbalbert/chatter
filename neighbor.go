@@ -494,6 +494,18 @@ func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
 	}
 }
 
+func (n *Neighbor) handleLinkStateRequest(req *linkStateRequestPacket) {
+	// noop
+}
+
+func (n *Neighbor) handleLinkStateUpdate(update *linkStateUpdatePacket) {
+	// noop
+}
+
+func (n *Neighbor) handleLinkStateAcknowledgment(lsack *linkStateAcknowledgmentPacket) {
+	// noop
+}
+
 func (n *Neighbor) flushLSAs() {
 	// TODO:
 	// 1. Flush the retransmission list.
