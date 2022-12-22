@@ -278,42 +278,60 @@ func (dd *databaseDescriptionPacket) Header() *header {
 	return &dd.header
 }
 
-type linkStateRequestPacket struct {
-	header
+type lsReq struct {
 	lsType lsType
 	lsID   netip.Addr
 	advRtr netip.Addr
 }
 
-var lsrSize = 36
+const lsReqSize = 12
 
-func newLinkStateRequest(iface *Interface, lsType lsType, lsID, advRtr netip.Addr) *linkStateRequestPacket {
+func decodeLSReq(data []byte) *lsReq {
+	return &lsReq{
+		lsType: lsType(binary.BigEndian.Uint32(data[0:4])),
+		lsID:   mustAddrFromSlice(data[4:8]),
+		advRtr: mustAddrFromSlice(data[8:12]),
+	}
+}
+
+func (req *lsReq) encodeTo(data []byte) {
+	binary.BigEndian.PutUint32(data[0:4], uint32(req.lsType))
+	copy(data[4:8], to4(req.lsID))
+	copy(data[8:12], to4(req.advRtr))
+}
+
+type linkStateRequestPacket struct {
+	header
+	reqs []lsReq
+}
+
+var minLsrSize = 24
+
+func newLinkStateRequest(iface *Interface, reqs []lsReq) *linkStateRequestPacket {
 	lsr := linkStateRequestPacket{
 		header: header{
 			packetType: pLinkStateRequest,
-			length:     uint16(lsrSize),
+			length:     uint16(minLsrSize),
 			routerID:   iface.instance.routerID,
 			areaID:     iface.areaID,
 			authType:   0,
 			authData:   0,
 		},
-		lsType: lsType,
-		lsID:   lsID,
-		advRtr: advRtr,
+		reqs: reqs,
 	}
 
 	return &lsr
 }
 
 func (lsr *linkStateRequestPacket) encode() []byte {
-	lsr.length = uint16(lsrSize)
+	lsr.length = uint16(minLsrSize + len(lsr.reqs)*12)
 
 	data := make([]byte, lsr.length)
 	lsr.header.encodeTo(data)
 
-	binary.BigEndian.PutUint32(data[24:28], uint32(lsr.lsType))
-	copy(data[28:32], to4(lsr.lsID))
-	copy(data[32:36], to4(lsr.advRtr))
+	for i, req := range lsr.reqs {
+		req.encodeTo(data[24+i*12:])
+	}
 
 	lsr.checksum = ipChecksum(data[0:16], data[24:])
 	binary.BigEndian.PutUint16(data[12:14], lsr.checksum)
@@ -507,15 +525,16 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 
 		return &dd, nil
 	case pLinkStateRequest:
-		if int(h.length) < lsrSize {
+		if int(h.length) < minLsrSize {
 			return nil, fmt.Errorf("link state request packet too short")
 		}
 
 		lsr := linkStateRequestPacket{
 			header: h,
-			lsType: lsType(binary.BigEndian.Uint32(data[24:28])),
-			lsID:   mustAddrFromSlice(data[28:32]),
-			advRtr: mustAddrFromSlice(data[32:36]),
+		}
+
+		for i := minLsrSize; i < int(h.length); i += lsReqSize {
+			lsr.reqs = append(lsr.reqs, *decodeLSReq(data[i:]))
 		}
 
 		return &lsr, nil
