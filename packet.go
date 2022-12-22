@@ -149,23 +149,27 @@ func newHello(iface *Interface) *helloPacket {
 	return hello
 }
 
-func (hello *helloPacket) String() string {
-	var b bytes.Buffer
-
-	fmt.Fprint(&b, hello.header.String())
-	fmt.Fprintf(&b, " mask=%s interval=%d options=0x%x priority=%d dead=%d dr=%s bdr=%s", net.IP(hello.networkMask), hello.helloInterval, hello.options, hello.routerPriority, hello.routerDeadInterval, hello.dRouter, hello.bdRouter)
-
-	for _, n := range hello.neighbors {
-		fmt.Fprintf(&b, "\n  neighbor=%s", n)
+func decodeHello(h *header, data []byte) (*helloPacket, error) {
+	if int(h.length) < minHelloSize {
+		return nil, fmt.Errorf("hello packet too short")
 	}
 
-	return b.String()
-}
+	hello := helloPacket{
+		header:             *h,
+		networkMask:        data[24:28],
+		helloInterval:      binary.BigEndian.Uint16(data[28:30]),
+		options:            data[30],
+		routerPriority:     data[31],
+		routerDeadInterval: binary.BigEndian.Uint32(data[32:36]),
+		dRouter:            mustAddrFromSlice(data[36:40]),
+		bdRouter:           mustAddrFromSlice(data[40:44]),
+	}
 
-func (hello *helloPacket) netmaskBits() int {
-	ones, _ := hello.networkMask.Size()
+	for i := 44; i < int(h.length); i += 4 {
+		hello.neighbors = append(hello.neighbors, mustAddrFromSlice(data[i:i+4]))
+	}
 
-	return ones
+	return &hello, nil
 }
 
 func (hello *helloPacket) encode() []byte {
@@ -189,6 +193,25 @@ func (hello *helloPacket) encode() []byte {
 	binary.BigEndian.PutUint16(data[12:14], hello.checksum)
 
 	return data
+}
+
+func (hello *helloPacket) String() string {
+	var b bytes.Buffer
+
+	fmt.Fprint(&b, hello.header.String())
+	fmt.Fprintf(&b, " mask=%s interval=%d options=0x%x priority=%d dead=%d dr=%s bdr=%s", net.IP(hello.networkMask), hello.helloInterval, hello.options, hello.routerPriority, hello.routerDeadInterval, hello.dRouter, hello.bdRouter)
+
+	for _, n := range hello.neighbors {
+		fmt.Fprintf(&b, "\n  neighbor=%s", n)
+	}
+
+	return b.String()
+}
+
+func (hello *helloPacket) netmaskBits() int {
+	ones, _ := hello.networkMask.Size()
+
+	return ones
 }
 
 func (hello *helloPacket) handleOn(handler PacketHandler) {
@@ -238,6 +261,33 @@ func newDatabaseDescription(iface *Interface, sequenceNumber uint32, init, more,
 	}
 
 	return &dd
+}
+
+func decodeDatabaseDescription(h *header, data []byte) (*databaseDescriptionPacket, error) {
+	if int(h.length) < minDDSize {
+		return nil, fmt.Errorf("database description packet too short")
+	}
+
+	dd := databaseDescriptionPacket{
+		header:         *h,
+		interfaceMTU:   binary.BigEndian.Uint16(data[24:26]),
+		options:        data[26],
+		init:           data[27]&ddFlagInit != 0,
+		more:           data[27]&ddFlagMore != 0,
+		master:         data[27]&ddFlagMasterSlave != 0,
+		sequenceNumber: binary.BigEndian.Uint32(data[28:32]),
+	}
+
+	for i := 32; i < int(h.length); i += lsaHeaderSize {
+		header, err := decodeLSAHeader(data[i : i+lsaHeaderSize])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode LSA header: %v", err)
+		}
+
+		dd.lsaHeaders = append(dd.lsaHeaders, *header)
+	}
+
+	return &dd, nil
 }
 
 func (dd *databaseDescriptionPacket) encode() []byte {
@@ -323,6 +373,22 @@ func newLinkStateRequest(iface *Interface, reqs []req) *linkStateRequestPacket {
 	return &lsr
 }
 
+func decodeLinkStateRequest(h *header, data []byte) (*linkStateRequestPacket, error) {
+	if int(h.length) < minLsrSize {
+		return nil, fmt.Errorf("link state request packet too short")
+	}
+
+	lsr := linkStateRequestPacket{
+		header: *h,
+	}
+
+	for i := minLsrSize; i < int(h.length); i += reqSize {
+		lsr.reqs = append(lsr.reqs, *decodeReq(data[i:]))
+	}
+
+	return &lsr, nil
+}
+
 func (lsr *linkStateRequestPacket) encode() []byte {
 	lsr.length = uint16(minLsrSize + len(lsr.reqs)*12)
 
@@ -375,6 +441,31 @@ func newLinkStateUpdate(iface *Interface, lsas []lsa) *linkStateUpdatePacket {
 	return &lsu
 }
 
+func decodeLinkStateUpdate(h *header, data []byte) (*linkStateUpdatePacket, error) {
+	if int(h.length) < minLSUSize {
+		return nil, fmt.Errorf("link state update packet too short")
+	}
+
+	lsu := linkStateUpdatePacket{
+		header: *h,
+	}
+
+	nLSAs := int(binary.BigEndian.Uint32(data[24:28]))
+
+	offset := 28
+	for i := 0; i < nLSAs; i++ {
+		lsa, err := decodeLSA(data[offset:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode LSA: %v", err)
+		}
+
+		lsu.lsas = append(lsu.lsas, lsa)
+		offset += lsa.size()
+	}
+
+	return &lsu, nil
+}
+
 func (lsu *linkStateUpdatePacket) encode() []byte {
 	size := minLSUSize
 	for _, lsa := range lsu.lsas {
@@ -423,6 +514,27 @@ func newLinkStateAcknowledgment(iface *Interface, lsaHeaders []lsaHeader) *linkS
 	}
 
 	return &lsack
+}
+
+func decodeLinkStateAcknowledgment(h *header, data []byte) (*linkStateAcknowledgmentPacket, error) {
+	if int(h.length) < minLSAckSize {
+		return nil, fmt.Errorf("link state acknowledgement packet too short")
+	}
+
+	lsack := linkStateAcknowledgmentPacket{
+		header: *h,
+	}
+
+	for i := 24; i < int(h.length); i += lsaHeaderSize {
+		header, err := decodeLSAHeader(data[i:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode LSA header: %v", err)
+		}
+
+		lsack.lsaHeaders = append(lsack.lsaHeaders, *header)
+	}
+
+	return &lsack, nil
 }
 
 func (lsack *linkStateAcknowledgmentPacket) encode() []byte {
@@ -479,107 +591,15 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 
 	switch h.packetType {
 	case pHello:
-		if int(h.length) < minHelloSize {
-			return nil, fmt.Errorf("hello packet too short")
-		}
-
-		hello := helloPacket{
-			header:             h,
-			networkMask:        data[24:28],
-			helloInterval:      binary.BigEndian.Uint16(data[28:30]),
-			options:            data[30],
-			routerPriority:     data[31],
-			routerDeadInterval: binary.BigEndian.Uint32(data[32:36]),
-			dRouter:            mustAddrFromSlice(data[36:40]),
-			bdRouter:           mustAddrFromSlice(data[40:44]),
-		}
-
-		for i := 44; i < int(h.length); i += 4 {
-			hello.neighbors = append(hello.neighbors, mustAddrFromSlice(data[i:i+4]))
-		}
-
-		return &hello, nil
+		return decodeHello(&h, data)
 	case pDatabaseDescription:
-		if int(h.length) < minDDSize {
-			return nil, fmt.Errorf("database description packet too short")
-		}
-
-		dd := databaseDescriptionPacket{
-			header:         h,
-			interfaceMTU:   binary.BigEndian.Uint16(data[24:26]),
-			options:        data[26],
-			init:           data[27]&ddFlagInit != 0,
-			more:           data[27]&ddFlagMore != 0,
-			master:         data[27]&ddFlagMasterSlave != 0,
-			sequenceNumber: binary.BigEndian.Uint32(data[28:32]),
-		}
-
-		for i := 32; i < int(h.length); i += lsaHeaderSize {
-			header, err := decodeLSAHeader(data[i : i+lsaHeaderSize])
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode LSA header: %v", err)
-			}
-
-			dd.lsaHeaders = append(dd.lsaHeaders, *header)
-		}
-
-		return &dd, nil
+		return decodeDatabaseDescription(&h, data)
 	case pLinkStateRequest:
-		if int(h.length) < minLsrSize {
-			return nil, fmt.Errorf("link state request packet too short")
-		}
-
-		lsr := linkStateRequestPacket{
-			header: h,
-		}
-
-		for i := minLsrSize; i < int(h.length); i += reqSize {
-			lsr.reqs = append(lsr.reqs, *decodeReq(data[i:]))
-		}
-
-		return &lsr, nil
+		return decodeLinkStateRequest(&h, data)
 	case pLinkStateUpdate:
-		if int(h.length) < minLSUSize {
-			return nil, fmt.Errorf("link state update packet too short")
-		}
-
-		lsu := linkStateUpdatePacket{
-			header: h,
-		}
-
-		nLSAs := int(binary.BigEndian.Uint32(data[24:28]))
-
-		offset := 28
-		for i := 0; i < nLSAs; i++ {
-			lsa, err := decodeLSA(data[offset:])
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode LSA: %v", err)
-			}
-
-			lsu.lsas = append(lsu.lsas, lsa)
-			offset += lsa.size()
-		}
-
-		return &lsu, nil
+		return decodeLinkStateUpdate(&h, data)
 	case pLinkStateAcknowledgment:
-		if int(h.length) < minLSAckSize {
-			return nil, fmt.Errorf("link state acknowledgement packet too short")
-		}
-
-		lsack := linkStateAcknowledgmentPacket{
-			header: h,
-		}
-
-		for i := 24; i < int(h.length); i += lsaHeaderSize {
-			header, err := decodeLSAHeader(data[i:])
-			if err != nil {
-				return nil, fmt.Errorf("failed to decode LSA header: %v", err)
-			}
-
-			lsack.lsaHeaders = append(lsack.lsaHeaders, *header)
-		}
-
-		return &lsack, nil
+		return decodeLinkStateAcknowledgment(&h, data)
 	default:
 		return nil, fmt.Errorf("unknown OSPF packet type %d", h.packetType)
 	}
