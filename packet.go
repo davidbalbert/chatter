@@ -278,36 +278,36 @@ func (dd *databaseDescriptionPacket) Header() *header {
 	return &dd.header
 }
 
-type lsReq struct {
+type req struct {
 	lsType lsType
 	lsID   netip.Addr
 	advRtr netip.Addr
 }
 
-const lsReqSize = 12
+const reqSize = 12
 
-func decodeLSReq(data []byte) *lsReq {
-	return &lsReq{
+func decodeReq(data []byte) *req {
+	return &req{
 		lsType: lsType(binary.BigEndian.Uint32(data[0:4])),
 		lsID:   mustAddrFromSlice(data[4:8]),
 		advRtr: mustAddrFromSlice(data[8:12]),
 	}
 }
 
-func (req *lsReq) encodeTo(data []byte) {
-	binary.BigEndian.PutUint32(data[0:4], uint32(req.lsType))
-	copy(data[4:8], to4(req.lsID))
-	copy(data[8:12], to4(req.advRtr))
+func (r *req) encodeTo(data []byte) {
+	binary.BigEndian.PutUint32(data[0:4], uint32(r.lsType))
+	copy(data[4:8], to4(r.lsID))
+	copy(data[8:12], to4(r.advRtr))
 }
 
 type linkStateRequestPacket struct {
 	header
-	reqs []lsReq
+	reqs []req
 }
 
 var minLsrSize = 24
 
-func newLinkStateRequest(iface *Interface, reqs []lsReq) *linkStateRequestPacket {
+func newLinkStateRequest(iface *Interface, reqs []req) *linkStateRequestPacket {
 	lsr := linkStateRequestPacket{
 		header: header{
 			packetType: pLinkStateRequest,
@@ -329,8 +329,8 @@ func (lsr *linkStateRequestPacket) encode() []byte {
 	data := make([]byte, lsr.length)
 	lsr.header.encodeTo(data)
 
-	for i, req := range lsr.reqs {
-		req.encodeTo(data[24+i*12:])
+	for i, r := range lsr.reqs {
+		r.encodeTo(data[24+i*12:])
 	}
 
 	lsr.checksum = ipChecksum(data[0:16], data[24:])
@@ -533,8 +533,8 @@ func decodePacket(ip *ipv4.Header, data []byte) (Packet, error) {
 			header: h,
 		}
 
-		for i := minLsrSize; i < int(h.length); i += lsReqSize {
-			lsr.reqs = append(lsr.reqs, *decodeLSReq(data[i:]))
+		for i := minLsrSize; i < int(h.length); i += reqSize {
+			lsr.reqs = append(lsr.reqs, *decodeReq(data[i:]))
 		}
 
 		return &lsr, nil
