@@ -494,8 +494,27 @@ func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
 	}
 }
 
-func (n *Neighbor) handleLinkStateRequest(req *linkStateRequestPacket) {
-	// noop
+func (n *Neighbor) handleLinkStateRequest(lsr *linkStateRequestPacket) {
+	if n.state < nExchange {
+		fmt.Printf("%v: neighbor state machine: unexpected link state request packet in state %v\n", n.neighborID, n.state)
+		return
+	}
+
+	db := n.iface.instance.db
+	lsas := make([]lsa, 0, len(lsr.reqs))
+
+	for _, req := range lsr.reqs {
+		lsa := db.get(n.iface.areaID, req.lsType, req.lsID, req.advRtr)
+		if lsa == nil {
+			n.handleEvent(neBadLSReq)
+			return
+		}
+		lsas = append(lsas, lsa)
+	}
+
+	lsu := newLinkStateUpdate(n.iface, lsas)
+
+	n.send(lsu)
 }
 
 func (n *Neighbor) handleLinkStateUpdate(update *linkStateUpdatePacket) {
@@ -610,7 +629,7 @@ func (n *Neighbor) run() {
 		case event := <-n.events:
 			n.handleEvent(event)
 		case packet := <-n.packets:
-			fmt.Printf("neighbor: received packet: %v\n", packet)
+			fmt.Printf("%v: received packet: %v\n", n.neighborID, packet)
 			packet.handleOn(n)
 		case <-n.rxmtTimer.C:
 			n.handleRxmtTimer()

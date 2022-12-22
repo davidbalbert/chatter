@@ -241,7 +241,14 @@ func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket)
 }
 
 func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
-	// noop
+	key := iface.neighborKey(lsr.src, lsr.routerID)
+	neighbor, ok := iface.neighbors[key]
+	if !ok {
+		fmt.Printf("Received link state request packet from unknown neighbor addr=%v router_id=%v\n", lsr.src, lsr.routerID)
+		return
+	}
+
+	neighbor.sendPacket(lsr)
 }
 
 func (iface *Interface) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
