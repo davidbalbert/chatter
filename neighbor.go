@@ -113,13 +113,15 @@ type Neighbor struct {
 	linkStateRequestList []lsaHeader
 
 	firstAdjancencyAttempt bool
+	outstandingLSReq       *linkStateRequestPacket
 
 	events  chan neighborEvent
 	packets chan Packet
 
 	done chan struct{}
 
-	rxmtTimer *time.Timer
+	ddRxmtTimer    *time.Timer
+	lsReqRxmtTimer *time.Timer
 }
 
 func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
@@ -143,10 +145,11 @@ func newNeighbor(iface *Interface, h *helloPacket) *Neighbor {
 
 		done: make(chan struct{}),
 
-		rxmtTimer: time.NewTimer(iface.RxmtDuration()),
+		ddRxmtTimer:    time.NewTimer(iface.RxmtDuration()),
+		lsReqRxmtTimer: time.NewTimer(iface.RxmtDuration()),
 	}
 
-	n.stopRxmtTimer()
+	n.stopDDRxmtTimer()
 
 	return &n
 }
@@ -191,7 +194,7 @@ func (n *Neighbor) handleCommonExchangeEvents(event neighborEvent) (handled bool
 		n.setState(nExStart)
 
 		n.sendDatabaseDescription()
-		n.startRxmtTimer()
+		n.startDDRxmtTimer()
 
 		return true
 	case ne1WayReceived:
@@ -283,7 +286,7 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			n.master = true
 
 			n.sendDatabaseDescription()
-			n.startRxmtTimer()
+			n.startDDRxmtTimer()
 		default:
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Init\n", n.neighborID, event)
 		}
@@ -344,7 +347,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExStart(dd *databaseDescriptionPac
 		n.master = false
 		n.ddSequenceNumber = dd.sequenceNumber
 
-		n.stopRxmtTimer()
+		n.stopDDRxmtTimer()
 		n.sendDatabaseDescription()
 	} else if !dd.init && !dd.master && dd.sequenceNumber == n.ddSequenceNumber && n.neighborID.Less(n.iface.routerID()) {
 		fmt.Printf("%v: ExStart became master\n", n.neighborID)
@@ -386,7 +389,12 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescrip
 			return
 		}
 
-		// TODO: only add h to the link state request list if it's not in the LSDB or if the copy in the LSDB is older than h.
+		db := n.iface.instance.db
+		existing := db.get(n.iface.areaID, h.lsType, h.lsID, h.advertisingRouter)
+		if existing != nil && existing.header().age >= h.age {
+			continue
+		}
+
 		n.linkStateRequestList = append(n.linkStateRequestList, h)
 	}
 
@@ -396,7 +404,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescrip
 	n.databaseSummaryList = n.databaseSummaryList[nHeadersInLastPacket:]
 
 	if !dd.more && len(n.databaseSummaryList) == 0 {
-		n.stopRxmtTimer()
+		n.stopDDRxmtTimer()
 		n.handleEvent(neExchangeDone)
 	} else {
 		n.resetRxmtTimer()
@@ -425,7 +433,12 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeSlave(dd *databaseDescript
 			return
 		}
 
-		// TODO: only add h to the link state request list if it's not in the LSDB or if the copy in the LSDB is older than h.
+		db := n.iface.instance.db
+		existing := db.get(n.iface.areaID, h.lsType, h.lsID, h.advertisingRouter)
+		if existing != nil && existing.header().age >= h.age {
+			continue
+		}
+
 		n.linkStateRequestList = append(n.linkStateRequestList, h)
 	}
 
@@ -441,6 +454,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeSlave(dd *databaseDescript
 	}
 }
 
+// TODO: merge Slave and Master handlers back into this function
 func (n *Neighbor) handleDatabaseDescriptionInExchange(dd *databaseDescriptionPacket) {
 	if n.master == dd.master {
 		fmt.Printf("%v: received database description packet with unexpected master bit, discarding\n", n.neighborID)
@@ -464,6 +478,10 @@ func (n *Neighbor) handleDatabaseDescriptionInExchange(dd *databaseDescriptionPa
 		n.handleDatabaseDescriptionInExchangeMaster(dd)
 	} else {
 		n.handleDatabaseDescriptionInExchangeSlave(dd)
+	}
+
+	if len(n.linkStateRequestList) > 0 && n.outstandingLSReq == nil {
+		n.sendLinkStateRequest()
 	}
 }
 
@@ -504,7 +522,7 @@ func (n *Neighbor) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 	lsas := make([]lsa, 0, len(lsr.reqs))
 
 	for _, req := range lsr.reqs {
-		lsa := db.get(n.iface.areaID, req.lsType, req.lsID, req.advRtr)
+		lsa := db.get(n.iface.areaID, req.lsType, req.lsID, req.advertisingRouter)
 		if lsa == nil {
 			n.handleEvent(neBadLSReq)
 			return
@@ -518,11 +536,11 @@ func (n *Neighbor) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 }
 
 func (n *Neighbor) handleLinkStateUpdate(update *linkStateUpdatePacket) {
-	// noop
+	// TODO
 }
 
 func (n *Neighbor) handleLinkStateAcknowledgment(lsack *linkStateAcknowledgmentPacket) {
-	// noop
+	// TODO
 }
 
 func (n *Neighbor) flushLSAs() {
@@ -544,27 +562,27 @@ func (n *Neighbor) disableInactivityTimer() {
 	// TODO
 }
 
-func (n *Neighbor) stopRxmtTimer() {
-	fmt.Printf("%v: stopping rxmt timer\n", n.neighborID)
-	if !n.rxmtTimer.Stop() {
-		<-n.rxmtTimer.C
-	}
+func (n *Neighbor) startDDRxmtTimer() {
+	fmt.Printf("%v: starting dd rxmt timer\n", n.neighborID)
+	n.ddRxmtTimer.Reset(n.iface.RxmtDuration())
 }
 
-func (n *Neighbor) startRxmtTimer() {
-	fmt.Printf("%v: starting rxmt timer\n", n.neighborID)
-	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+func (n *Neighbor) stopDDRxmtTimer() {
+	fmt.Printf("%v: stopping dd rxmt timer\n", n.neighborID)
+	if !n.ddRxmtTimer.Stop() {
+		<-n.ddRxmtTimer.C
+	}
 }
 
 func (n *Neighbor) resetRxmtTimer() {
-	if !n.rxmtTimer.Stop() {
-		<-n.rxmtTimer.C
+	if !n.ddRxmtTimer.Stop() {
+		<-n.ddRxmtTimer.C
 	}
-	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+	n.ddRxmtTimer.Reset(n.iface.RxmtDuration())
 }
 
-func (n *Neighbor) handleRxmtTimer() {
-	fmt.Printf("%v: rxmt timer expired\n", n.neighborID)
+func (n *Neighbor) handleDDRxmtTimer() {
+	fmt.Printf("%v: dd rxmt timer expired\n", n.neighborID)
 	switch n.state {
 	case nExStart:
 		n.sendDatabaseDescription()
@@ -579,7 +597,35 @@ func (n *Neighbor) handleRxmtTimer() {
 		fmt.Printf("handleRxmtTimer: unexpected state %v\n", n.state)
 	}
 
-	n.rxmtTimer.Reset(n.iface.RxmtDuration())
+	n.ddRxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) startLSReqRxmtTimer() {
+	fmt.Printf("%v: starting lsreq rxmt timer\n", n.neighborID)
+	n.lsReqRxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) stopLSReqRxmtTimer() {
+	fmt.Printf("%v: stopping lsreq rxmt timer\n", n.neighborID)
+	if !n.lsReqRxmtTimer.Stop() {
+		<-n.lsReqRxmtTimer.C
+	}
+}
+
+func (n *Neighbor) handleLSReqRxmtTimer() {
+	fmt.Printf("%v: lsreq rxmt timer expired\n", n.neighborID)
+	if n.state != nExchange && n.state != nLoading {
+		fmt.Printf("%v: state=%v unexpected handleRxmtTimer\n", n.neighborID, n.state)
+		return
+	}
+
+	if n.outstandingLSReq == nil {
+		fmt.Printf("%v: unexpected handleRxmtTimer with no outstanding lsreq\n", n.neighborID)
+		return
+	}
+
+	n.send(n.outstandingLSReq)
+	n.lsReqRxmtTimer.Reset(n.iface.RxmtDuration())
 }
 
 func (n *Neighbor) lsaHeadersForDatabaseDescription() []lsaHeader {
@@ -604,6 +650,28 @@ func (n *Neighbor) sendDatabaseDescription() {
 	}
 }
 
+func (n *Neighbor) sendLinkStateRequest() {
+	mtu := n.iface.netif.MTU
+	maxReqs := (mtu - ipv4.HeaderLen - minLsrSize) / reqSize
+	nReqs := min(maxReqs, len(n.linkStateRequestList))
+
+	reqs := make([]req, 0, nReqs)
+	for _, h := range n.linkStateRequestList[:nReqs] {
+		reqs = append(reqs, req{
+			lsType:            h.lsType,
+			lsID:              h.lsID,
+			advertisingRouter: h.advertisingRouter,
+		})
+	}
+
+	lsr := newLinkStateRequest(n.iface, reqs)
+	n.outstandingLSReq = lsr
+
+	n.startLSReqRxmtTimer()
+
+	n.send(lsr)
+}
+
 func (n *Neighbor) send(p Packet) {
 	n.iface.send(n.addr, p)
 }
@@ -615,11 +683,11 @@ func (n *Neighbor) shouldBecomeAdjacent() bool {
 	return t == networkPointToPoint || t == networkPointToMultipoint || t == networkVirtualLink
 }
 
-func (n *Neighbor) sendEvent(event neighborEvent) {
+func (n *Neighbor) dispatchEvent(event neighborEvent) {
 	n.events <- event
 }
 
-func (n *Neighbor) sendPacket(packet Packet) {
+func (n *Neighbor) dispatchPacket(packet Packet) {
 	n.packets <- packet
 }
 
@@ -631,8 +699,10 @@ func (n *Neighbor) run() {
 		case packet := <-n.packets:
 			fmt.Printf("%v: received packet: %v\n", n.neighborID, packet)
 			packet.handleOn(n)
-		case <-n.rxmtTimer.C:
-			n.handleRxmtTimer()
+		case <-n.ddRxmtTimer.C:
+			n.handleDDRxmtTimer()
+		case <-n.lsReqRxmtTimer.C:
+			n.handleLSReqRxmtTimer()
 		case <-n.done:
 			return
 		}

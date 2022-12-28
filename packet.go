@@ -329,25 +329,25 @@ func (dd *databaseDescriptionPacket) Header() *header {
 }
 
 type req struct {
-	lsType lsType
-	lsID   netip.Addr
-	advRtr netip.Addr
+	lsType            lsType
+	lsID              netip.Addr
+	advertisingRouter netip.Addr
 }
 
 const reqSize = 12
 
 func decodeReq(data []byte) *req {
 	return &req{
-		lsType: lsType(binary.BigEndian.Uint32(data[0:4])),
-		lsID:   mustAddrFromSlice(data[4:8]),
-		advRtr: mustAddrFromSlice(data[8:12]),
+		lsType:            lsType(binary.BigEndian.Uint32(data[0:4])),
+		lsID:              mustAddrFromSlice(data[4:8]),
+		advertisingRouter: mustAddrFromSlice(data[8:12]),
 	}
 }
 
 func (r *req) encodeTo(data []byte) {
 	binary.BigEndian.PutUint32(data[0:4], uint32(r.lsType))
 	copy(data[4:8], to4(r.lsID))
-	copy(data[8:12], to4(r.advRtr))
+	copy(data[8:12], to4(r.advertisingRouter))
 }
 
 type linkStateRequestPacket struct {

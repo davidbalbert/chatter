@@ -195,7 +195,7 @@ func (iface *Interface) handleHello(h *helloPacket) {
 		}
 	}
 
-	neighbor.sendEvent(neHelloReceived)
+	neighbor.dispatchEvent(neHelloReceived)
 
 	var found bool
 	for _, routerID := range h.neighbors {
@@ -206,10 +206,10 @@ func (iface *Interface) handleHello(h *helloPacket) {
 	}
 
 	if !found {
-		neighbor.sendEvent(ne1WayReceived)
+		neighbor.dispatchEvent(ne1WayReceived)
 		return
 	} else {
-		neighbor.sendEvent(ne2WayReceived)
+		neighbor.dispatchEvent(ne2WayReceived)
 	}
 
 	// if routerPriorityChanged {
@@ -237,7 +237,7 @@ func (iface *Interface) handleDatabaseDescription(dd *databaseDescriptionPacket)
 		return
 	}
 
-	neighbor.sendPacket(dd)
+	neighbor.dispatchPacket(dd)
 }
 
 func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
@@ -248,7 +248,7 @@ func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 		return
 	}
 
-	neighbor.sendPacket(lsr)
+	neighbor.dispatchPacket(lsr)
 }
 
 func (iface *Interface) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
