@@ -18,6 +18,12 @@ type lsdbKey struct {
 	advRtr netip.Addr
 }
 
+// TODO: we need to make the LSDB safe for use from multiple goroutines at the same time
+// Requirements:
+// - Many readers, one writer
+// - Do it in a go-like way: share memory by communicating
+// - Interface should be simple, blocking. Hide goroutines inside the implementation.
+// - Has to work with copyHeaders, which gets many goroutines
 type lsdb struct {
 	areas      map[netip.Addr]map[lsdbKey]lsa
 	externalDB map[lsdbKey]lsa
@@ -32,12 +38,12 @@ func newLSDB() *lsdb {
 
 func (db *lsdb) set(areaID netip.Addr, l lsa) {
 	key := lsdbKey{
-		lsType: l.header().lsType,
-		lsID:   l.header().lsID,
-		advRtr: l.header().advertisingRouter,
+		lsType: l.Type(),
+		lsID:   l.LSID(),
+		advRtr: l.AdvertisingRouter(),
 	}
 
-	if l.header().lsType == lsTypeASExternal {
+	if l.Type() == lsTypeASExternal {
 		db.externalDB[key] = l
 		return
 	}
@@ -97,82 +103,12 @@ func (db *lsdb) copyHeaders(areaID netip.Addr) []lsaHeader {
 	}
 
 	for _, lsa := range areaDB {
-		_ = lsa.encode() // ensure checksum is in the header
-		headers = append(headers, *lsa.header())
+		headers = append(headers, *lsa.copyHeader())
 	}
+
+	// TODO: I think we need to copy the external headers as well
 
 	return headers
-}
-
-type lsa interface {
-	header() *lsaHeader
-	encode() []byte
-	encodeTo([]byte)
-	size() int
-}
-
-type lsType uint8
-
-const (
-	lsTypeRouter      lsType = 1
-	lsTypeNetwork     lsType = 2
-	lsTypeSummary     lsType = 3
-	lsTypeASBRSummary lsType = 4
-	lsTypeASExternal  lsType = 5
-)
-
-type lsaHeader struct {
-	age               uint16
-	options           uint8
-	lsType            lsType
-	lsID              netip.Addr
-	advertisingRouter netip.Addr
-	seqNumber         int32
-	lsChecksum        uint16
-	length            uint16
-
-	data []byte
-}
-
-const lsaHeaderSize = 20
-
-func decodeLSAHeader(data []byte) (*lsaHeader, error) {
-	if len(data) < lsaHeaderSize {
-		return nil, fmt.Errorf("lsa header too short")
-	}
-
-	if data[3] < 1 || data[3] > 5 {
-		return nil, fmt.Errorf("unknown LSA type %d", data[3])
-	}
-
-	length := binary.BigEndian.Uint16(data[18:20])
-
-	return &lsaHeader{
-		age:               binary.BigEndian.Uint16(data[0:2]),
-		options:           data[2],
-		lsType:            lsType(data[3]),
-		lsID:              mustAddrFromSlice(data[4:8]),
-		advertisingRouter: mustAddrFromSlice(data[8:12]),
-		seqNumber:         int32(binary.BigEndian.Uint32(data[12:16])),
-		lsChecksum:        binary.BigEndian.Uint16(data[16:18]),
-		length:            length,
-		data:              data[:length],
-	}, nil
-}
-
-func (lsa *lsaHeader) encodeTo(data []byte) {
-	if len(data) < lsaHeaderSize {
-		panic("lsaHeader.encodeTo: data is too short")
-	}
-
-	binary.BigEndian.PutUint16(data[0:2], lsa.age)
-	data[2] = lsa.options
-	data[3] = byte(lsa.lsType)
-	copy(data[4:8], to4(lsa.lsID))
-	copy(data[8:12], to4(lsa.advertisingRouter))
-	binary.BigEndian.PutUint32(data[12:16], uint32(lsa.seqNumber))
-	binary.BigEndian.PutUint16(data[16:18], lsa.lsChecksum)
-	binary.BigEndian.PutUint16(data[18:20], lsa.length)
 }
 
 func fletcher16(data ...[]byte) (r0, r1 int) {
@@ -208,6 +144,123 @@ func fletcher16Checkbytes(data []byte, offset int) uint16 {
 	}
 
 	return uint16(x<<8 | y)
+}
+
+func lsaCheckbytes(data []byte) uint16 {
+	// Checksum offset is 16, but we skip age (the first 2 bytes of the LSA),
+	// so we have to subtract 2.
+	return fletcher16Checkbytes(data[2:], 14)
+}
+
+type lsa interface {
+	Type() lsType
+	Length() int
+	LSID() netip.Addr
+	AdvertisingRouter() netip.Addr
+	Bytes() []byte
+	Age() uint16
+	SetAge(age uint16)
+	copyHeader() *lsaHeader
+	checksumIsValid() bool
+}
+
+type lsType uint8
+
+const (
+	lsTypeUnknown lsType = 0
+
+	lsTypeRouter      lsType = 1
+	lsTypeNetwork     lsType = 2
+	lsTypeSummary     lsType = 3
+	lsTypeASBRSummary lsType = 4
+	lsTypeASExternal  lsType = 5
+)
+
+type lsaHeader struct {
+	age               uint16
+	options           uint8
+	lsType            lsType
+	lsID              netip.Addr
+	advertisingRouter netip.Addr
+	seqNumber         int32
+	lsChecksum        uint16
+	length            uint16
+
+	bytes []byte // the encoded header
+}
+
+const lsaHeaderSize = 20
+
+func decodeLSAHeader(data []byte) (*lsaHeader, error) {
+	if len(data) < lsaHeaderSize {
+		return nil, fmt.Errorf("lsa header too short")
+	}
+
+	var t lsType
+	if data[3] < 1 || data[3] > 5 {
+		t = lsTypeUnknown
+	} else {
+		t = lsType(data[3])
+	}
+
+	return &lsaHeader{
+		age:               binary.BigEndian.Uint16(data[0:2]),
+		options:           data[2],
+		lsType:            t,
+		lsID:              mustAddrFromSlice(data[4:8]),
+		advertisingRouter: mustAddrFromSlice(data[8:12]),
+		seqNumber:         int32(binary.BigEndian.Uint32(data[12:16])),
+		lsChecksum:        binary.BigEndian.Uint16(data[16:18]),
+		length:            binary.BigEndian.Uint16(data[18:20]),
+	}, nil
+}
+
+// Calculates the checksum, so it should always be called after the LSA body is encoded
+func (h *lsaHeader) encodeTo(data []byte) {
+	if len(data) < lsaHeaderSize {
+		panic("lsaHeader.encodeTo: data is too short")
+	}
+
+	binary.BigEndian.PutUint16(data[0:2], h.age)
+	data[2] = h.options
+	data[3] = byte(h.lsType)
+	copy(data[4:8], to4(h.lsID))
+	copy(data[8:12], to4(h.advertisingRouter))
+	binary.BigEndian.PutUint32(data[12:16], uint32(h.seqNumber))
+	// checksum is calculated after the full header is encoded
+	binary.BigEndian.PutUint16(data[18:20], h.length)
+
+	h.lsChecksum = lsaCheckbytes(data[:h.length])
+	binary.BigEndian.PutUint16(data[16:18], h.lsChecksum)
+}
+
+func (h *lsaHeader) Age() uint16 {
+	return h.age
+}
+
+func (h *lsaHeader) SetAge(age uint16) {
+	h.age = age
+	binary.BigEndian.PutUint16(h.bytes[0:2], age)
+}
+
+func (h *lsaHeader) Bytes() []byte {
+	return h.bytes
+}
+
+func (h *lsaHeader) Type() lsType {
+	return h.lsType
+}
+
+func (h *lsaHeader) Length() int {
+	return int(h.length)
+}
+
+func (h *lsaHeader) LSID() netip.Addr {
+	return h.lsID
+}
+
+func (h *lsaHeader) AdvertisingRouter() netip.Addr {
+	return h.advertisingRouter
 }
 
 type tosMetric struct {
@@ -316,8 +369,41 @@ func decodeLink(data []byte) (*link, error) {
 	return l, nil
 }
 
-type routerLSA struct {
+type lsaBase struct {
 	lsaHeader
+	bytes []byte // the entire LSA, including the header
+}
+
+func (base *lsaBase) Bytes() []byte {
+	return base.bytes
+}
+
+func (base *lsaBase) checksumIsValid() bool {
+	return fletcher16Checksum(base.bytes) == 0
+}
+
+func (base *lsaBase) copyHeader() *lsaHeader {
+	h := base.lsaHeader
+
+	bytes := make([]byte, len(h.bytes))
+	copy(bytes, h.bytes)
+
+	return &lsaHeader{
+		age:               h.age,
+		options:           h.options,
+		lsType:            h.lsType,
+		lsID:              h.lsID,
+		advertisingRouter: h.advertisingRouter,
+		seqNumber:         h.seqNumber,
+		lsChecksum:        h.lsChecksum,
+		length:            h.length,
+
+		bytes: bytes,
+	}
+}
+
+type routerLSA struct {
+	lsaBase
 	virtual  bool
 	external bool
 	border   bool
@@ -333,19 +419,19 @@ const (
 
 const minRouterLSASize = lsaHeaderSize + 4
 
-// TODO: LSA checksum
-
 func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 	lsa := routerLSA{
-		lsaHeader: lsaHeader{
-			age:               0,
-			options:           capE, // TODO: don't set this in stub areas
-			lsType:            lsTypeRouter,
-			lsID:              inst.routerID,
-			advertisingRouter: inst.routerID,
-			seqNumber:         initialSequenceNumber,
-			lsChecksum:        0,
-			length:            0,
+		lsaBase: lsaBase{
+			lsaHeader: lsaHeader{
+				age:               0,
+				options:           capE, // TODO: don't set this in stub areas
+				lsType:            lsTypeRouter,
+				lsID:              inst.routerID,
+				advertisingRouter: inst.routerID,
+				seqNumber:         initialSequenceNumber,
+				lsChecksum:        0,
+				length:            0,
+			},
 		},
 		virtual:  false,
 		external: false,
@@ -380,32 +466,34 @@ func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 		}
 	}
 
-	linksSize := 0
+	size := minRouterLSASize
 	for _, link := range lsa.links {
-		linksSize += link.size()
+		size += link.size()
 	}
 
-	lsa.length = minRouterLSASize + uint16(linksSize)
+	lsa.length = uint16(size)
+	lsa.bytes = lsa.encode()
+	lsa.lsaHeader.bytes = lsa.bytes[:lsaHeaderSize]
 
 	return &lsa, nil
 }
 
-func decodeRouterLSA(header *lsaHeader, data []byte) (*routerLSA, error) {
-	if len(data) < minRouterLSASize {
+func decodeRouterLSA(base *lsaBase) (*routerLSA, error) {
+	if len(base.bytes) < minRouterLSASize {
 		return nil, fmt.Errorf("router LSA too short")
 	}
 
 	lsa := &routerLSA{
-		lsaHeader: *header,
-		virtual:   data[20]&rlfVirtual != 0,
-		external:  data[20]&rlfExternal != 0,
-		border:    data[20]&rlfBorder != 0,
+		lsaBase:  *base,
+		virtual:  base.bytes[20]&rlfVirtual != 0,
+		external: base.bytes[20]&rlfExternal != 0,
+		border:   base.bytes[20]&rlfBorder != 0,
 	}
 
-	nLinks := binary.BigEndian.Uint16(data[22:24])
+	nLinks := binary.BigEndian.Uint16(base.bytes[22:24])
 
 	for i := 0; i < int(nLinks); i++ {
-		link, err := decodeLink(data[lsaHeaderSize+4+i*12:])
+		link, err := decodeLink(base.bytes[lsaHeaderSize+4+i*12:])
 		if err != nil {
 			return nil, err
 		}
@@ -421,21 +509,7 @@ func (lsa *routerLSA) header() *lsaHeader {
 }
 
 func (lsa *routerLSA) encode() []byte {
-	buf := make([]byte, lsa.size())
-
-	lsa.encodeTo(buf)
-
-	lsa.lsaHeader.data = buf
-
-	return buf
-}
-
-func (lsa *routerLSA) encodeTo(buf []byte) {
-	if len(buf) < lsa.size() {
-		panic("routerLSA.encodeTo: buffer too small")
-	}
-
-	lsa.lsaHeader.encodeTo(buf)
+	buf := make([]byte, lsa.length)
 
 	if lsa.virtual {
 		buf[20] |= rlfVirtual
@@ -457,26 +531,17 @@ func (lsa *routerLSA) encodeTo(buf []byte) {
 		i += link.size()
 	}
 
-	// Checksum offset is 16, but we skip age (the first 2 bytes of the LSA),
-	// so we have to subtract 2.
-	lsa.lsChecksum = fletcher16Checkbytes(buf[2:], 14)
-	binary.BigEndian.PutUint16(buf[16:18], lsa.lsChecksum)
-}
+	// encode header last, since it calculates the checksum of the whole LSA.
+	lsa.lsaHeader.encodeTo(buf)
 
-func (lsa *routerLSA) size() int {
-	size := minRouterLSASize
-	for _, link := range lsa.links {
-		size += link.size()
-	}
-
-	return size
+	return buf
 }
 
 type networkLSA struct {
-	lsaHeader
+	lsaBase
 }
 
-func decodeNetworkLSA(header *lsaHeader, data []byte) (*networkLSA, error) {
+func decodeNetworkLSA(base *lsaBase) (*networkLSA, error) {
 	return nil, fmt.Errorf("network LSA not implemented")
 }
 
@@ -488,15 +553,11 @@ func (lsa *networkLSA) encode() []byte {
 	return nil
 }
 
-func (lsa *networkLSA) size() int {
-	return 0
-}
-
 type summaryLSA struct {
-	lsaHeader
+	lsaBase
 }
 
-func decodeSummaryLSA(header *lsaHeader, data []byte) (*summaryLSA, error) {
+func decodeSummaryLSA(base *lsaBase) (*summaryLSA, error) {
 	return nil, fmt.Errorf("summary LSA not implemented")
 }
 
@@ -508,15 +569,11 @@ func (lsa *summaryLSA) encode() []byte {
 	return nil
 }
 
-func (lsa *summaryLSA) size() int {
-	return 0
-}
-
 type asbrSummaryLSA struct {
-	lsaHeader
+	lsaBase
 }
 
-func decodeASBRSummaryLSA(header *lsaHeader, data []byte) (*asbrSummaryLSA, error) {
+func decodeASBRSummaryLSA(base *lsaBase) (*asbrSummaryLSA, error) {
 	return nil, fmt.Errorf("ASBR summary LSA not implemented")
 }
 
@@ -528,15 +585,11 @@ func (lsa *asbrSummaryLSA) encode() []byte {
 	return nil
 }
 
-func (lsa *asbrSummaryLSA) size() int {
-	return 0
-}
-
 type asExternalLSA struct {
-	lsaHeader
+	lsaBase
 }
 
-func decodeASExternalLSA(header *lsaHeader, data []byte) (*asExternalLSA, error) {
+func decodeASExternalLSA(base *lsaBase) (*asExternalLSA, error) {
 	return nil, fmt.Errorf("AS external LSA not implemented")
 }
 
@@ -548,8 +601,16 @@ func (lsa *asExternalLSA) encode() []byte {
 	return nil
 }
 
-func (lsa *asExternalLSA) size() int {
-	return 0
+type unknownLSA struct {
+	lsaBase
+}
+
+func (lsa *unknownLSA) header() *lsaHeader {
+	return &lsa.lsaHeader
+}
+
+func (lsa *unknownLSA) encode() []byte {
+	return nil
 }
 
 func decodeLSA(data []byte) (lsa, error) {
@@ -558,17 +619,29 @@ func decodeLSA(data []byte) (lsa, error) {
 		return nil, err
 	}
 
+	bytes := make([]byte, h.length)
+	copy(bytes, data[:h.length])
+
+	base := &lsaBase{
+		lsaHeader: *h,
+		bytes:     bytes,
+	}
+
+	base.lsaHeader.bytes = bytes[:lsaHeaderSize]
+
 	switch h.lsType {
 	case lsTypeRouter:
-		return decodeRouterLSA(h, data[:h.length])
+		return decodeRouterLSA(base)
 	case lsTypeNetwork:
-		return decodeNetworkLSA(h, data[:h.length])
+		return decodeNetworkLSA(base)
 	case lsTypeSummary:
-		return decodeSummaryLSA(h, data[:h.length])
+		return decodeSummaryLSA(base)
 	case lsTypeASBRSummary:
-		return decodeASBRSummaryLSA(h, data[:h.length])
+		return decodeASBRSummaryLSA(base)
 	case lsTypeASExternal:
-		return decodeASExternalLSA(h, data[:h.length])
+		return decodeASExternalLSA(base)
+	case lsTypeUnknown:
+		return &unknownLSA{*base}, nil
 	}
 
 	return nil, fmt.Errorf("unknown LSA type %d", h.lsType)

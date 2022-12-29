@@ -244,7 +244,7 @@ func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 	key := iface.neighborKey(lsr.src, lsr.routerID)
 	neighbor, ok := iface.neighbors[key]
 	if !ok {
-		fmt.Printf("Received link state request packet from unknown neighbor addr=%v router_id=%v\n", lsr.src, lsr.routerID)
+		fmt.Printf("Received LSR packet from unknown neighbor addr=%v router_id=%v\n", lsr.src, lsr.routerID)
 		return
 	}
 
@@ -252,11 +252,25 @@ func (iface *Interface) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 }
 
 func (iface *Interface) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
-	// noop
+	key := iface.neighborKey(lsu.src, lsu.routerID)
+	neighbor, ok := iface.neighbors[key]
+	if !ok {
+		fmt.Printf("Received LSU from unknown neighbor addr=%v router_id=%v\n", lsu.src, lsu.routerID)
+		return
+	}
+
+	neighbor.dispatchPacket(lsu)
 }
 
 func (iface *Interface) handleLinkStateAcknowledgment(lsack *linkStateAcknowledgmentPacket) {
-	// noop
+	key := iface.neighborKey(lsack.src, lsack.routerID)
+	neighbor, ok := iface.neighbors[key]
+	if !ok {
+		fmt.Printf("Received LSAck from unknown neighbor addr=%v router_id=%v\n", lsack.src, lsack.routerID)
+		return
+	}
+
+	neighbor.dispatchPacket(lsack)
 }
 
 func (iface *Interface) routerID() netip.Addr {

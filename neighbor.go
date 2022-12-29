@@ -391,7 +391,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescrip
 
 		db := n.iface.instance.db
 		existing := db.get(n.iface.areaID, h.lsType, h.lsID, h.advertisingRouter)
-		if existing != nil && existing.header().age >= h.age {
+		if existing != nil && existing.Age() >= h.age {
 			continue
 		}
 
@@ -435,7 +435,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeSlave(dd *databaseDescript
 
 		db := n.iface.instance.db
 		existing := db.get(n.iface.areaID, h.lsType, h.lsID, h.advertisingRouter)
-		if existing != nil && existing.header().age >= h.age {
+		if existing != nil && existing.Age() >= h.age {
 			continue
 		}
 

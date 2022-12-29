@@ -310,8 +310,8 @@ func (dd *databaseDescriptionPacket) encode() []byte {
 	}
 	binary.BigEndian.PutUint32(data[28:32], dd.sequenceNumber)
 
-	for i, lsa := range dd.lsaHeaders {
-		lsa.encodeTo(data[32+i*lsaHeaderSize:])
+	for i, lsaHeader := range dd.lsaHeaders {
+		copy(data[32+i*lsaHeaderSize:], lsaHeader.Bytes())
 	}
 
 	dd.checksum = ipChecksum(data[0:16], data[24:])
@@ -345,6 +345,10 @@ func decodeReq(data []byte) *req {
 }
 
 func (r *req) encodeTo(data []byte) {
+	if len(data) < reqSize {
+		panic("req.encodeTo: data too short")
+	}
+
 	binary.BigEndian.PutUint32(data[0:4], uint32(r.lsType))
 	copy(data[4:8], to4(r.lsID))
 	copy(data[8:12], to4(r.advertisingRouter))
@@ -423,7 +427,7 @@ var minLSUSize = 28
 func newLinkStateUpdate(iface *Interface, lsas []lsa) *linkStateUpdatePacket {
 	size := minLSUSize
 	for _, lsa := range lsas {
-		size += lsaHeaderSize + lsa.size()
+		size += lsaHeaderSize + lsa.Length()
 	}
 
 	lsu := linkStateUpdatePacket{
@@ -460,7 +464,7 @@ func decodeLinkStateUpdate(h *header, data []byte) (*linkStateUpdatePacket, erro
 		}
 
 		lsu.lsas = append(lsu.lsas, lsa)
-		offset += lsa.size()
+		offset += lsa.Length()
 	}
 
 	return &lsu, nil
@@ -469,7 +473,7 @@ func decodeLinkStateUpdate(h *header, data []byte) (*linkStateUpdatePacket, erro
 func (lsu *linkStateUpdatePacket) encode() []byte {
 	size := minLSUSize
 	for _, lsa := range lsu.lsas {
-		size += lsa.size()
+		size += lsa.Length()
 	}
 	lsu.length = uint16(size)
 
@@ -479,8 +483,7 @@ func (lsu *linkStateUpdatePacket) encode() []byte {
 	binary.BigEndian.PutUint32(data[24:28], uint32(len(lsu.lsas)))
 	offset := 28
 	for _, lsa := range lsu.lsas {
-		lsa.encodeTo(data[offset:])
-		offset += lsa.size()
+		offset += copy(data[offset:], lsa.Bytes())
 	}
 
 	lsu.checksum = ipChecksum(data[0:16], data[24:])
@@ -545,8 +548,7 @@ func (lsack *linkStateAcknowledgmentPacket) encode() []byte {
 
 	offset := 24
 	for _, lsaHeader := range lsack.lsaHeaders {
-		lsaHeader.encodeTo(data[offset:])
-		offset += lsaHeaderSize
+		offset += copy(data[offset:], lsaHeader.Bytes())
 	}
 
 	lsack.checksum = ipChecksum(data[0:16], data[24:])
