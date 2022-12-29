@@ -394,7 +394,7 @@ func decodeLinkStateRequest(h *header, data []byte) (*linkStateRequestPacket, er
 }
 
 func (lsr *linkStateRequestPacket) encode() []byte {
-	lsr.length = uint16(minLsrSize + len(lsr.reqs)*12)
+	lsr.length = uint16(minLsrSize + len(lsr.reqs)*reqSize)
 
 	data := make([]byte, lsr.length)
 	lsr.header.encodeTo(data)
@@ -529,7 +529,7 @@ func decodeLinkStateAcknowledgment(h *header, data []byte) (*linkStateAcknowledg
 	}
 
 	for i := 24; i < int(h.length); i += lsaHeaderSize {
-		header, err := decodeLSAHeader(data[i:])
+		header, err := decodeLSAHeader(data[i : i+lsaHeaderSize])
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode LSA header: %v", err)
 		}

@@ -152,6 +152,18 @@ func lsaCheckbytes(data []byte) uint16 {
 	return fletcher16Checkbytes(data[2:], 14)
 }
 
+type lsType uint8
+
+const (
+	lsTypeUnknown lsType = 0
+
+	lsTypeRouter      lsType = 1
+	lsTypeNetwork     lsType = 2
+	lsTypeSummary     lsType = 3
+	lsTypeASBRSummary lsType = 4
+	lsTypeASExternal  lsType = 5
+)
+
 type lsa interface {
 	Type() lsType
 	Length() int
@@ -164,17 +176,11 @@ type lsa interface {
 	checksumIsValid() bool
 }
 
-type lsType uint8
-
-const (
-	lsTypeUnknown lsType = 0
-
-	lsTypeRouter      lsType = 1
-	lsTypeNetwork     lsType = 2
-	lsTypeSummary     lsType = 3
-	lsTypeASBRSummary lsType = 4
-	lsTypeASExternal  lsType = 5
-)
+// Rules of LSAs:
+//
+// - With the exception of age, all fields are immutable.
+// - Age must be changed using SetAge(), which will also update the encoded bytes.
+// - LsaBase.bytes and lsaHeader.bytes are never nil.
 
 type lsaHeader struct {
 	age               uint16
@@ -191,7 +197,27 @@ type lsaHeader struct {
 
 const lsaHeaderSize = 20
 
+type lsaBase struct {
+	lsaHeader
+	bytes []byte // the entire LSA, including the header
+}
+
+// Called when parsing DD and LSAck packets. Copies data so as to not retain the whole
+// packet longer than necessary. len(data) must be exactly lsaHeaderSize.
 func decodeLSAHeader(data []byte) (*lsaHeader, error) {
+	if len(data) != lsaHeaderSize {
+		return nil, fmt.Errorf("lsa header must be exactly %d bytes", lsaHeaderSize)
+	}
+
+	bytes := make([]byte, lsaHeaderSize)
+	copy(bytes, data)
+
+	return decodeLSAHeaderNoCopy(bytes)
+}
+
+// Called from decodeLSA and decodeLSAHeader, which both perform their own copies.
+// When called from decodeLSA, data contains the entire LSA, not just the header.
+func decodeLSAHeaderNoCopy(data []byte) (*lsaHeader, error) {
 	if len(data) < lsaHeaderSize {
 		return nil, fmt.Errorf("lsa header too short")
 	}
@@ -212,10 +238,12 @@ func decodeLSAHeader(data []byte) (*lsaHeader, error) {
 		seqNumber:         int32(binary.BigEndian.Uint32(data[12:16])),
 		lsChecksum:        binary.BigEndian.Uint16(data[16:18]),
 		length:            binary.BigEndian.Uint16(data[18:20]),
+		bytes:             data[:lsaHeaderSize],
 	}, nil
 }
 
-// Calculates the checksum, so it should always be called after the LSA body is encoded
+// Should only be called from within the new{type}LSA constructors. Calculates the
+// checksum, so it should always be called after the LSA body is encoded.
 func (h *lsaHeader) encodeTo(data []byte) {
 	if len(data) < lsaHeaderSize {
 		panic("lsaHeader.encodeTo: data is too short")
@@ -232,6 +260,8 @@ func (h *lsaHeader) encodeTo(data []byte) {
 
 	h.lsChecksum = lsaCheckbytes(data[:h.length])
 	binary.BigEndian.PutUint16(data[16:18], h.lsChecksum)
+
+	h.bytes = data[:lsaHeaderSize]
 }
 
 func (h *lsaHeader) Age() uint16 {
@@ -263,6 +293,34 @@ func (h *lsaHeader) AdvertisingRouter() netip.Addr {
 	return h.advertisingRouter
 }
 
+func (base *lsaBase) Bytes() []byte {
+	return base.bytes
+}
+
+func (base *lsaBase) checksumIsValid() bool {
+	return fletcher16Checksum(base.bytes) == 0
+}
+
+func (base *lsaBase) copyHeader() *lsaHeader {
+	h := base.lsaHeader
+
+	bytes := make([]byte, len(h.bytes))
+	copy(bytes, h.bytes)
+
+	return &lsaHeader{
+		age:               h.age,
+		options:           h.options,
+		lsType:            h.lsType,
+		lsID:              h.lsID,
+		advertisingRouter: h.advertisingRouter,
+		seqNumber:         h.seqNumber,
+		lsChecksum:        h.lsChecksum,
+		length:            h.length,
+
+		bytes: bytes,
+	}
+}
+
 type tosMetric struct {
 	tos    uint8
 	metric uint16
@@ -271,8 +329,8 @@ type tosMetric struct {
 const tosMetricSize = 4
 
 func decodeTosMetric(data []byte) (*tosMetric, error) {
-	if len(data) < 4 {
-		return nil, fmt.Errorf("tos metric too short")
+	if len(data) < tosMetricSize {
+		return nil, fmt.Errorf("decodeTosMetric: data is too short")
 	}
 
 	return &tosMetric{
@@ -282,7 +340,7 @@ func decodeTosMetric(data []byte) (*tosMetric, error) {
 }
 
 func (tm *tosMetric) encodeTo(data []byte) {
-	if len(data) < 4 {
+	if len(data) < tosMetricSize {
 		panic("tosMetric.encodeTo: data is too short")
 	}
 
@@ -369,39 +427,6 @@ func decodeLink(data []byte) (*link, error) {
 	return l, nil
 }
 
-type lsaBase struct {
-	lsaHeader
-	bytes []byte // the entire LSA, including the header
-}
-
-func (base *lsaBase) Bytes() []byte {
-	return base.bytes
-}
-
-func (base *lsaBase) checksumIsValid() bool {
-	return fletcher16Checksum(base.bytes) == 0
-}
-
-func (base *lsaBase) copyHeader() *lsaHeader {
-	h := base.lsaHeader
-
-	bytes := make([]byte, len(h.bytes))
-	copy(bytes, h.bytes)
-
-	return &lsaHeader{
-		age:               h.age,
-		options:           h.options,
-		lsType:            h.lsType,
-		lsID:              h.lsID,
-		advertisingRouter: h.advertisingRouter,
-		seqNumber:         h.seqNumber,
-		lsChecksum:        h.lsChecksum,
-		length:            h.length,
-
-		bytes: bytes,
-	}
-}
-
 type routerLSA struct {
 	lsaBase
 	virtual  bool
@@ -470,10 +495,9 @@ func newRouterLSA(inst *Instance, area *area) (*routerLSA, error) {
 	for _, link := range lsa.links {
 		size += link.size()
 	}
-
 	lsa.length = uint16(size)
-	lsa.bytes = lsa.encode()
-	lsa.lsaHeader.bytes = lsa.bytes[:lsaHeaderSize]
+
+	lsa.encode()
 
 	return &lsa, nil
 }
@@ -504,11 +528,7 @@ func decodeRouterLSA(base *lsaBase) (*routerLSA, error) {
 	return lsa, nil
 }
 
-func (lsa *routerLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *routerLSA) encode() []byte {
+func (lsa *routerLSA) encode() {
 	buf := make([]byte, lsa.length)
 
 	if lsa.virtual {
@@ -533,8 +553,7 @@ func (lsa *routerLSA) encode() []byte {
 
 	// encode header last, since it calculates the checksum of the whole LSA.
 	lsa.lsaHeader.encodeTo(buf)
-
-	return buf
+	lsa.bytes = buf
 }
 
 type networkLSA struct {
@@ -545,28 +564,12 @@ func decodeNetworkLSA(base *lsaBase) (*networkLSA, error) {
 	return nil, fmt.Errorf("network LSA not implemented")
 }
 
-func (lsa *networkLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *networkLSA) encode() []byte {
-	return nil
-}
-
 type summaryLSA struct {
 	lsaBase
 }
 
 func decodeSummaryLSA(base *lsaBase) (*summaryLSA, error) {
 	return nil, fmt.Errorf("summary LSA not implemented")
-}
-
-func (lsa *summaryLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *summaryLSA) encode() []byte {
-	return nil
 }
 
 type asbrSummaryLSA struct {
@@ -577,14 +580,6 @@ func decodeASBRSummaryLSA(base *lsaBase) (*asbrSummaryLSA, error) {
 	return nil, fmt.Errorf("ASBR summary LSA not implemented")
 }
 
-func (lsa *asbrSummaryLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *asbrSummaryLSA) encode() []byte {
-	return nil
-}
-
 type asExternalLSA struct {
 	lsaBase
 }
@@ -593,41 +588,29 @@ func decodeASExternalLSA(base *lsaBase) (*asExternalLSA, error) {
 	return nil, fmt.Errorf("AS external LSA not implemented")
 }
 
-func (lsa *asExternalLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *asExternalLSA) encode() []byte {
-	return nil
-}
-
 type unknownLSA struct {
 	lsaBase
 }
 
-func (lsa *unknownLSA) header() *lsaHeader {
-	return &lsa.lsaHeader
-}
-
-func (lsa *unknownLSA) encode() []byte {
-	return nil
-}
-
 func decodeLSA(data []byte) (lsa, error) {
-	h, err := decodeLSAHeader(data)
+	length := binary.BigEndian.Uint16(data[18:20])
+
+	if len(data) < int(length) {
+		return nil, fmt.Errorf("LSA too short")
+	}
+
+	bytes := make([]byte, length)
+	copy(bytes, data[:length])
+
+	h, err := decodeLSAHeaderNoCopy(data)
 	if err != nil {
 		return nil, err
 	}
-
-	bytes := make([]byte, h.length)
-	copy(bytes, data[:h.length])
 
 	base := &lsaBase{
 		lsaHeader: *h,
 		bytes:     bytes,
 	}
-
-	base.lsaHeader.bytes = bytes[:lsaHeaderSize]
 
 	switch h.lsType {
 	case lsTypeRouter:
