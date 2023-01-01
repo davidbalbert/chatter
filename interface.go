@@ -277,6 +277,10 @@ func (iface *Interface) routerID() netip.Addr {
 	return iface.instance.routerID
 }
 
+func (iface *Interface) area() *area {
+	return iface.instance.areas[iface.areaID]
+}
+
 func (iface *Interface) run() {
 	conn, err := net.ListenPacket("ip4:ospf", "0.0.0.0")
 	if err != nil {

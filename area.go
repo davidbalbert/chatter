@@ -46,3 +46,16 @@ func newArea(inst *Instance, areaID netip.Addr, stub bool) (*area, error) {
 func (area *area) isStub() bool {
 	return !area.externalRoutingCapability
 }
+
+func (area *area) neighbors() []*Neighbor {
+	neighbors := make([]*Neighbor, 0)
+	for _, iface := range area.inst.interfaces {
+		if iface.areaID == area.id {
+			for _, neighbor := range iface.neighbors {
+				neighbors = append(neighbors, neighbor)
+			}
+		}
+	}
+
+	return neighbors
+}

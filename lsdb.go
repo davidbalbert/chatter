@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
 	"net/netip"
+	"time"
 )
 
 const (
 	initialSequenceNumber = math.MinInt32 + 1
 	maxSequenceNumber     = math.MaxInt32
+	maxAge                = 3600 // 1 hour
+	maxAgeDiff            = 900  // 15 minutes
+	minLSArrival          = 1 * time.Second
 )
 
 type lsdbKey struct {
@@ -25,37 +30,63 @@ type lsdbKey struct {
 // - Interface should be simple, blocking. Hide goroutines inside the implementation.
 // - Has to work with copyHeaders, which gets many goroutines
 type lsdb struct {
-	areas      map[netip.Addr]map[lsdbKey]lsa
-	externalDB map[lsdbKey]lsa
+	areas      map[netip.Addr]map[lsdbKey]*installedLSA
+	externalDB map[lsdbKey]*installedLSA
 }
 
 func newLSDB() *lsdb {
 	return &lsdb{
-		areas:      make(map[netip.Addr]map[lsdbKey]lsa),
-		externalDB: make(map[lsdbKey]lsa),
+		areas:      make(map[netip.Addr]map[lsdbKey]*installedLSA),
+		externalDB: make(map[lsdbKey]*installedLSA),
 	}
 }
 
-func (db *lsdb) set(areaID netip.Addr, l lsa) {
-	key := lsdbKey{
-		lsType: l.Type(),
-		lsID:   l.LSID(),
-		advRtr: l.AdvertisingRouter(),
+func shouldRecalculateRoutingTable(old, new lsa) bool {
+	if old == nil {
+		return true
 	}
 
-	if l.Type() == lsTypeASExternal {
-		db.externalDB[key] = l
+	optionsChanged := old.Options() != new.Options()
+	maxAgeChanged := old.Age() == maxAge && new.Age() != maxAge || old.Age() != maxAge && new.Age() == maxAge
+	lengthChanged := old.Length() != new.Length()
+	bodyChanged := !bytes.Equal(old.Bytes()[lsaHeaderSize:], new.Bytes()[lsaHeaderSize:])
+
+	return optionsChanged || maxAgeChanged || lengthChanged || bodyChanged
+}
+
+func (db *lsdb) set(areaID netip.Addr, new lsa) {
+	key := lsdbKey{
+		lsType: new.Type(),
+		lsID:   new.LSID(),
+		advRtr: new.AdvertisingRouter(),
+	}
+
+	if new.Type() == lsTypeASExternal {
+		// old := db.externalDB[key]
+		db.externalDB[key] = &installedLSA{new, time.Now()}
+
+		// TODO: nil pointer derererence here
+		// if shouldRecalculateRoutingTable(old, new) {
+		// 	fmt.Println("TODO: recalculate routing table")
+		// }
+
 		return
 	}
 
 	if _, ok := db.areas[areaID]; !ok {
-		db.areas[areaID] = make(map[lsdbKey]lsa)
+		db.areas[areaID] = make(map[lsdbKey]*installedLSA)
 	}
 
-	db.areas[areaID][key] = l
+	// old := db.areas[areaID][key]
+	db.areas[areaID][key] = &installedLSA{new, time.Now()}
+
+	// TODO: nil pointer dereference here
+	// if shouldRecalculateRoutingTable(old, new) {
+	// 	fmt.Println("TODO: recalculate routing table")
+	// }
 }
 
-func (db *lsdb) get(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) lsa {
+func (db *lsdb) get(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) *installedLSA {
 	key := lsdbKey{
 		lsType: lsType,
 		lsID:   lsID,
@@ -171,9 +202,18 @@ type lsa interface {
 	AdvertisingRouter() netip.Addr
 	Bytes() []byte
 	Age() uint16
-	SetAge(age uint16)
+	SetAge(uint16)
+	SequenceNumber() int32
+	Checksum() uint16
+	Compare(lsa) int
+	Options() uint8
 	copyHeader() *lsaHeader
 	checksumIsValid() bool
+}
+
+type installedLSA struct {
+	lsa
+	installedAt time.Time
 }
 
 // Rules of LSAs:
@@ -293,12 +333,60 @@ func (h *lsaHeader) AdvertisingRouter() netip.Addr {
 	return h.advertisingRouter
 }
 
+func (h *lsaHeader) SequenceNumber() int32 {
+	return h.seqNumber
+}
+
+func (h *lsaHeader) Checksum() uint16 {
+	return h.lsChecksum
+}
+
+func (h *lsaHeader) Options() uint8 {
+	return h.options
+}
+
+func (h *lsaHeader) Compare(other lsa) int {
+	// lessRecent := -1
+	// moreRecent := 1
+
+	s1, s2 := h.SequenceNumber(), other.SequenceNumber()
+	if s1 < s2 {
+		return -1
+	} else if s1 > s2 {
+		return 1
+	}
+
+	c1, c2 := h.Checksum(), other.Checksum()
+	if c1 < c2 {
+		return -1
+	} else if c1 > c2 {
+		return 1
+	}
+
+	a1, a2 := int(h.Age()), int(other.Age())
+	if a1 != maxAge && a2 == maxAge {
+		return -1
+	} else if a1 == maxAge && a2 != maxAge {
+		return 1
+	}
+
+	diff := abs(a1 - a2)
+	if diff > maxAgeDiff && a1 < a2 {
+		return 1
+	} else if diff > maxAgeDiff && a1 > a2 {
+		return -1
+	}
+
+	return 0
+}
+
 func (base *lsaBase) Bytes() []byte {
 	return base.bytes
 }
 
 func (base *lsaBase) checksumIsValid() bool {
-	return fletcher16Checksum(base.bytes) == 0
+	// skip lsAge (first two bytes)
+	return fletcher16Checksum(base.bytes[2:]) == 0
 }
 
 func (base *lsaBase) copyHeader() *lsaHeader {

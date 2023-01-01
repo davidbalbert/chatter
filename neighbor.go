@@ -109,8 +109,12 @@ type Neighbor struct {
 	dRouter          netip.Addr
 	bdRouter         netip.Addr
 
-	databaseSummaryList  []lsaHeader
-	linkStateRequestList []lsaHeader
+	// TODO: make the other two lists pointers
+	databaseSummaryList         []lsaHeader
+	linkStateRequestList        []lsaHeader
+	linkStateRetransmissionList []*lsaHeader
+
+	delayedAckList []lsaHeader
 
 	firstAdjancencyAttempt bool
 	outstandingLSReq       *linkStateRequestPacket
@@ -514,7 +518,7 @@ func (n *Neighbor) handleDatabaseDescription(dd *databaseDescriptionPacket) {
 
 func (n *Neighbor) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 	if n.state < nExchange {
-		fmt.Printf("%v: neighbor state machine: unexpected link state request packet in state %v\n", n.neighborID, n.state)
+		fmt.Printf("%v: neighbor state machine: unexpected LSR in state %v\n", n.neighborID, n.state)
 		return
 	}
 
@@ -532,20 +536,171 @@ func (n *Neighbor) handleLinkStateRequest(lsr *linkStateRequestPacket) {
 
 	lsu := newLinkStateUpdate(n.iface, lsas)
 
-	n.send(lsu)
+	// TODO: allSPFRouters is only correct for PtMP Broadcast interfaces.
+	n.iface.send(allSPFRouters, lsu)
 }
 
-func (n *Neighbor) handleLinkStateUpdate(update *linkStateUpdatePacket) {
-	// TODO
+func (n *Neighbor) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
+	if n.state < nExchange {
+		fmt.Printf("%v: neighbor state machine: unexpected LSU in state %v\n", n.neighborID, n.state)
+		return
+	}
+
+	toAckNow := make([]lsaHeader, 0, len(lsu.lsas))
+
+	// Section 13
+	for _, lsa := range lsu.lsas {
+		// 1) Validate the LS checksum
+		// TODO: checksum validation is broken.
+		if !lsa.checksumIsValid() {
+			fmt.Printf("%v: received LSA with invalid checksum, discarding\n", n.neighborID)
+			continue
+		}
+
+		// 2) Discard LSAs with unknown types
+		if lsa.Type() == lsTypeUnknown {
+			fmt.Printf("%v: received unknown Type %d LSA, discarding\n", n.neighborID, lsa.Bytes()[3])
+			continue
+		}
+
+		// 3) Don't accept AS-External LSAs in stub areas
+		// TODO: not a good idea to reach into the area directly. Multi-threading issue.
+		inst := n.iface.instance
+		area := inst.areas[n.iface.areaID]
+		if lsa.Type() == lsTypeASExternal && area.isStub() {
+			fmt.Printf("%v: received AS-External LSA in stub area, discarding\n", n.neighborID)
+			continue
+		}
+
+		existing := inst.db.get(n.iface.areaID, lsa.Type(), lsa.LSID(), lsa.AdvertisingRouter())
+
+		// 4) If the LSA is being flushed, and we don't have a copy of it, and we don't have any
+		//    neighbors in the process of database exchange, we don't need to flood the flush.
+		if lsa.Age() == maxAge && existing == nil && inst.nPartialAdjacent() == 0 {
+			toAckNow = append(toAckNow, *lsa.copyHeader())
+			continue
+		}
+
+		var compResult int
+		if existing != nil {
+			compResult = lsa.Compare(existing)
+		} else {
+			compResult = 1
+		}
+
+		// 5) If the LSA is new or more recent than our copy, we need to flood it.
+		if compResult == 1 /* more recent */ {
+			// 5a) If we have an existing copy of the LSA, and it's less than 1 second old, ignore it.
+			if existing != nil && time.Since(existing.installedAt) < minLSArrival {
+				continue
+			}
+
+			// TODO:
+			// 5b) Flood out some subset of the router's interfaces.
+			//     Record this so we know when its ACK'd by each neighbor (Section 13.5).
+
+			// For now, assume we don't flood the packet out the receiving interface because
+			// we only have a single neighbor on the interface – obviously a bad assumption.
+			floodedOutReceivingInterface := false
+
+			// 5c) Remove the current copy from retranmission lists.
+			for _, neighbor := range n.iface.area().neighbors() {
+				neighbor.removeFromRetransmissionList(existing)
+			}
+
+			// 5d) Install into the LSDB.
+			inst.db.set(n.iface.areaID, lsa)
+
+			// 5e) Maybe add to the toAck list (Table 19, Section 13.5)
+
+			// Specifically, if our interface is in any state but Backup:
+			//   - Flooded out receiving interface? 				  No action.
+			//   - More recent; not flooded out receiving interface?  Delayed ACK.
+			//   - Duplicate LSA; treated as implied ACK?             No action.
+			//   - Duplicate LSA; not treated as implied ACK?         Direct ACK.
+			//   - Age is MaxAge, not in LSDB, no neighbors in        Direct ACK.
+			//     Exchange or Loading?
+			//
+			// TODO: when implementing Broadcast, implement behaviors for BDR.
+
+			if lsa.Age() == maxAge && existing == nil && inst.nPartialAdjacent() == 0 {
+				toAckNow = append(toAckNow, *lsa.copyHeader())
+			} else if !floodedOutReceivingInterface {
+				n.delayedAckList = append(n.delayedAckList, *lsa.copyHeader())
+			}
+
+			// 5f) Deal with self-originated LSAs (Section 13.4).
+			if lsa.AdvertisingRouter() == inst.routerID /* || networkLSA and the LSID is one of our interface IP addresses */ {
+				// TODO
+				fmt.Printf("TODO: deal with self originated LSAs")
+			}
+
+			continue
+		}
+
+		// 6) Else if it's on the LS request list, handle badLSReq event.
+		if n.requestListContains(lsa) {
+			n.handleEvent(neBadLSReq)
+			return
+		}
+
+		// 7) Else if neither is more recent
+		if compResult == 0 /* duplicate */ {
+			// a) If it's on this neighbor's retransmission list, treat as implied acknowledgment.
+			if n.retransmissionListContains(existing) {
+				n.removeFromRetransmissionList(existing)
+
+				// TODO: occurrence should be noted for later use by the acknowledgement process (Section 13.5).
+				// What does the above mean? It might mean that if we're a BDR we should add the LSA to delayedAckList.
+			} else {
+				// b) Otherwise, acknowledge explicitly.
+				toAckNow = append(toAckNow, *lsa.copyHeader())
+			}
+
+			continue
+		}
+
+		// 8) The database copy is less recent
+
+		// If the sequence number is wrapping, discard the LSA.
+		if existing.Age() == maxAge && existing.SequenceNumber() == maxSequenceNumber {
+			continue
+		}
+
+		// TODO: if we haven't sent an LSU with this LSA in the last MinLSArrival (1) seconds, send one back to the neighbor.
+		// Don't put the LSA on the LS retransmission list.
+	}
+
+	n.sendDirectLinkStateAcknowledgements(toAckNow)
+
+	// TODO: should be done from a timer
+	n.sendDelayedLinkStateAcknowledgements()
 }
 
 func (n *Neighbor) handleLinkStateAcknowledgment(lsack *linkStateAcknowledgmentPacket) {
-	// TODO
+	if n.state < nExchange {
+		return
+	}
+
+	for _, lsaHeader := range lsack.lsaHeaders {
+		i := n.retransmissionListIndexOf(&lsaHeader)
+
+		if i == -1 {
+			continue
+		}
+
+		// TODO
+		// if lsaHeader.Compare(n.linkStateRetransmissionList[i]) == 0 {
+		// 	n.removeFromRetransmissionListAtIndex(i)
+		// 	continue
+		// }
+
+		fmt.Printf("%v: received LSAck for LSA %v, but it's not on the retransmission list", n.neighborID, lsaHeader)
+	}
 }
 
 func (n *Neighbor) flushLSAs() {
-	// TODO:
-	// 1. Flush the retransmission list.
+	n.linkStateRetransmissionList = nil
 	n.databaseSummaryList = nil
 	n.linkStateRequestList = nil
 }
@@ -672,6 +827,32 @@ func (n *Neighbor) sendLinkStateRequest() {
 	n.send(lsr)
 }
 
+func (n *Neighbor) sendDirectLinkStateAcknowledgements(headers []lsaHeader) {
+	mtu := n.iface.netif.MTU
+
+	maxHeaders := (mtu - ipv4.HeaderLen - minLSAckSize) / lsaHeaderSize
+
+	for len(headers) > 0 {
+		nHeaders := min(maxHeaders, len(headers))
+		n.send(newLinkStateAcknowledgment(n.iface, headers[:nHeaders]))
+		headers = headers[nHeaders:]
+	}
+}
+
+func (n *Neighbor) sendDelayedLinkStateAcknowledgements() {
+	mtu := n.iface.netif.MTU
+
+	maxHeaders := (mtu - ipv4.HeaderLen - minLSAckSize) / lsaHeaderSize
+
+	for len(n.delayedAckList) > 0 {
+		nHeaders := min(maxHeaders, len(n.delayedAckList))
+
+		// TODO: address is hardcoded for PtMP Broadcast
+		n.iface.send(allSPFRouters, newLinkStateAcknowledgment(n.iface, n.delayedAckList[:nHeaders]))
+		n.delayedAckList = n.delayedAckList[nHeaders:]
+	}
+}
+
 func (n *Neighbor) send(p Packet) {
 	n.iface.send(n.addr, p)
 }
@@ -689,6 +870,50 @@ func (n *Neighbor) dispatchEvent(event neighborEvent) {
 
 func (n *Neighbor) dispatchPacket(packet Packet) {
 	n.packets <- packet
+}
+
+// TODO: not thread safe
+func (n *Neighbor) removeFromRetransmissionList(lsa lsa) {
+	for i, l := range n.linkStateRetransmissionList {
+		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
+			n.linkStateRetransmissionList = append(n.linkStateRetransmissionList[:i], n.linkStateRetransmissionList[i+1:]...)
+			return
+		}
+	}
+}
+
+func (n *Neighbor) removeFromRetransmissionListAtIndex(i int) {
+	n.linkStateRetransmissionList = append(n.linkStateRetransmissionList[:i], n.linkStateRetransmissionList[i+1:]...)
+}
+
+func (n *Neighbor) retransmissionListContains(lsa lsa) bool {
+	for _, l := range n.linkStateRetransmissionList {
+		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (n *Neighbor) retransmissionListIndexOf(lsa *lsaHeader) int {
+	for i, l := range n.linkStateRetransmissionList {
+		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
+			return i
+		}
+	}
+
+	return -1
+}
+
+func (n *Neighbor) requestListContains(lsa lsa) bool {
+	for _, l := range n.linkStateRequestList {
+		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (n *Neighbor) run() {

@@ -17,6 +17,14 @@ func min[T constraints.Ordered](a, b T) T {
 	}
 }
 
+func abs[T constraints.Signed](a T) T {
+	if a < 0 {
+		return -a
+	} else {
+		return a
+	}
+}
+
 func toNetAddr(addr netip.Addr) net.Addr {
 	return &net.IPAddr{IP: addr.AsSlice()}
 }

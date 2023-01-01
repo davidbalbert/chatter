@@ -58,7 +58,6 @@ func NewInstance(c *Config) (*Instance, error) {
 
 	for _, area := range inst.areas {
 		lsa, err := newRouterLSA(inst, area)
-		fmt.Printf("new router lsa: %v\n", lsa)
 		if err != nil {
 			return nil, err
 		}
@@ -74,4 +73,17 @@ func (inst *Instance) Run() {
 		// TODO, maybe make run spawn a goroutine and return?
 		go iface.run()
 	}
+}
+
+func (inst *Instance) nPartialAdjacent() int {
+	n := 0
+	for _, iface := range inst.interfaces {
+		for _, neigh := range iface.neighbors {
+			if neigh.state == nExchange || neigh.state == nLoading {
+				n++
+			}
+		}
+	}
+
+	return n
 }
