@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/davidbalbert/ospfd/config"
-	"gopkg.in/yaml.v3"
 )
 
 const s = `
@@ -44,12 +43,4 @@ func main() {
 	}
 
 	fmt.Printf("Config: %+v\n", c)
-
-	s2, err := yaml.Marshal(c)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("%s", s2)
 }
