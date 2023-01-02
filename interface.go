@@ -34,6 +34,16 @@ func (t networkType) String() string {
 	}
 }
 
+type DesignatedRouter struct {
+	RouterID      netip.Addr
+	InterfaceAddr netip.Addr
+}
+
+var noDesignatedRouter = DesignatedRouter{
+	RouterID:      netip.IPv4Unspecified(),
+	InterfaceAddr: netip.IPv4Unspecified(),
+}
+
 type Interface struct {
 	networkType
 	netif              *net.Interface
@@ -44,11 +54,14 @@ type Interface struct {
 	RouterDeadInterval uint32
 	RxmtInterval       uint16
 	neighbors          map[netip.Addr]*Neighbor
+	dRouter            DesignatedRouter
+	bdRouter           DesignatedRouter
 
 	instance *Instance
 	conn     *ipv4.RawConn
 
-	rm chan *Neighbor
+	rm        chan *Neighbor
+	floodList []lsa
 }
 
 func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifconfig *InterfaceConfig, netconfig *NetworkConfig) *Interface {
@@ -62,7 +75,10 @@ func NewInterface(inst *Instance, addr netip.Prefix, netif *net.Interface, ifcon
 		RouterDeadInterval: ifconfig.DeadInterval,
 		RxmtInterval:       ifconfig.RxmtInterval,
 		neighbors:          make(map[netip.Addr]*Neighbor),
+		dRouter:            noDesignatedRouter,
+		bdRouter:           noDesignatedRouter,
 		instance:           inst,
+		floodList:          make([]lsa, 0),
 	}
 
 	return iface
@@ -279,6 +295,30 @@ func (iface *Interface) routerID() netip.Addr {
 
 func (iface *Interface) area() *area {
 	return iface.instance.areas[iface.areaID]
+}
+
+func (iface *Interface) floodLinkStateUpdates() {
+	mtu := iface.netif.MTU
+	maxBytes := mtu - ipv4.HeaderLen - minLSUSize
+
+	for len(iface.floodList) > 0 {
+		lsas := make([]lsa, 0, len(iface.floodList))
+		n := 0
+
+		for _, lsa := range iface.floodList {
+			if n+lsa.Length() > maxBytes {
+				break
+			}
+
+			lsas = append(lsas, lsa)
+			n += lsa.Length()
+		}
+
+		// TODO: allSPFRouters is only valid for PtMP Broadcast
+		iface.send(allSPFRouters, newLinkStateUpdate(iface, lsas))
+
+		iface.floodList = iface.floodList[len(lsas):]
+	}
 }
 
 func (iface *Interface) run() {

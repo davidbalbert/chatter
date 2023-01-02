@@ -424,6 +424,7 @@ type linkStateUpdatePacket struct {
 
 var minLSUSize = 28
 
+// TODO: save InfTransDelay on the packet and increment in encode.
 func newLinkStateUpdate(iface *Interface, lsas []lsa) *linkStateUpdatePacket {
 	size := minLSUSize
 	for _, lsa := range lsas {

@@ -251,7 +251,6 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 		switch event {
 		case neHelloReceived:
 			n.restartInactivityTimer()
-			n.setState(nInit)
 		case ne1WayReceived:
 			// do nothing
 		case ne2WayReceived:
@@ -296,6 +295,8 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 		}
 	case n2Way:
 		switch event {
+		case neHelloReceived:
+			n.restartInactivityTimer()
 		case ne1WayReceived:
 			n.flushLSAs()
 			n.setState(nInit)
@@ -309,6 +310,10 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 		}
 	case nExStart:
 		switch event {
+		case neHelloReceived:
+			n.restartInactivityTimer()
+		case ne2WayReceived:
+			// NOOP
 		case neNegotiationDone:
 			n.databaseSummaryList = n.iface.instance.db.copyHeaders(n.iface.areaID)
 			n.setState(nExchange)
@@ -317,10 +322,13 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 		}
 	case nExchange:
 		switch event {
+		case neHelloReceived:
+			n.restartInactivityTimer()
+		case ne2WayReceived:
+			// NOOP
 		case neExchangeDone:
 			if len(n.linkStateRequestList) > 0 {
 				n.setState(nLoading)
-				// TODO: keep sending LSReq packets until the list is empty
 			} else {
 				n.setState(nFull)
 			}
@@ -328,9 +336,25 @@ func (n *Neighbor) handleEvent(event neighborEvent) {
 			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Exchange\n", n.neighborID, event)
 		}
 	case nLoading:
-		// TODO
+		switch event {
+		case neHelloReceived:
+			n.restartInactivityTimer()
+		case ne2WayReceived:
+			// NOOP
+		case neLoadingDone:
+			n.setState(nFull)
+		default:
+			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Loading\n", n.neighborID, event)
+		}
 	case nFull:
-		// TODO
+		switch event {
+		case neHelloReceived:
+			n.restartInactivityTimer()
+		case ne2WayReceived:
+			// NOOP
+		default:
+			fmt.Printf("%v: neighbor state machine: unexpected event %v in state Full\n", n.neighborID, event)
+		}
 	default:
 		fmt.Printf("neighbor state machine: unexpected state %v\n", n.state)
 	}
@@ -411,7 +435,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchangeMaster(dd *databaseDescrip
 		n.stopDDRxmtTimer()
 		n.handleEvent(neExchangeDone)
 	} else {
-		n.resetRxmtTimer()
+		n.resetDDRxmtTimer()
 		n.sendDatabaseDescription()
 	}
 }
@@ -486,6 +510,7 @@ func (n *Neighbor) handleDatabaseDescriptionInExchange(dd *databaseDescriptionPa
 
 	if len(n.linkStateRequestList) > 0 && n.outstandingLSReq == nil {
 		n.sendLinkStateRequest()
+		n.startLSReqRxmtTimer()
 	}
 }
 
@@ -551,7 +576,6 @@ func (n *Neighbor) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
 	// Section 13
 	for _, lsa := range lsu.lsas {
 		// 1) Validate the LS checksum
-		// TODO: checksum validation is broken.
 		if !lsa.checksumIsValid() {
 			fmt.Printf("%v: received LSA with invalid checksum, discarding\n", n.neighborID)
 			continue
@@ -599,9 +623,7 @@ func (n *Neighbor) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
 			// 5b) Flood out some subset of the router's interfaces.
 			//     Record this so we know when its ACK'd by each neighbor (Section 13.5).
 
-			// For now, assume we don't flood the packet out the receiving interface because
-			// we only have a single neighbor on the interface – obviously a bad assumption.
-			floodedOutReceivingInterface := false
+			floodedOutReceivingInterface := n.iface.instance.queueFlood(lsa, n)
 
 			// 5c) Remove the current copy from retranmission lists.
 			for _, neighbor := range n.iface.area().neighbors() {
@@ -640,6 +662,7 @@ func (n *Neighbor) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
 
 		// 6) Else if it's on the LS request list, handle badLSReq event.
 		if n.requestListContains(lsa) {
+			fmt.Printf("%v: received LSA on our request list, discarding\n", n.neighborID)
 			n.handleEvent(neBadLSReq)
 			return
 		}
@@ -668,10 +691,27 @@ func (n *Neighbor) handleLinkStateUpdate(lsu *linkStateUpdatePacket) {
 		}
 
 		// TODO: if we haven't sent an LSU with this LSA in the last MinLSArrival (1) seconds, send one back to the neighbor.
+		// I think this is an implied acknowledgment. We're telling the neighbor that we have a more recent copy.
 		// Don't put the LSA on the LS retransmission list.
 	}
 
+	n.iface.instance.flood()
+
 	n.sendDirectLinkStateAcknowledgements(toAckNow)
+
+	if len(n.linkStateRequestList) > 0 {
+		n.sendLinkStateRequest()
+		n.resetLSReqRxmtTimer()
+	} else {
+		if n.outstandingLSReq != nil {
+			n.stopLSReqRxmtTimer()
+			n.outstandingLSReq = nil
+		}
+
+		if n.state == nLoading {
+			n.handleEvent(neLoadingDone)
+		}
+	}
 
 	// TODO: should be done from a timer
 	n.sendDelayedLinkStateAcknowledgements()
@@ -729,7 +769,7 @@ func (n *Neighbor) stopDDRxmtTimer() {
 	}
 }
 
-func (n *Neighbor) resetRxmtTimer() {
+func (n *Neighbor) resetDDRxmtTimer() {
 	if !n.ddRxmtTimer.Stop() {
 		<-n.ddRxmtTimer.C
 	}
@@ -757,6 +797,13 @@ func (n *Neighbor) handleDDRxmtTimer() {
 
 func (n *Neighbor) startLSReqRxmtTimer() {
 	fmt.Printf("%v: starting lsreq rxmt timer\n", n.neighborID)
+	n.lsReqRxmtTimer.Reset(n.iface.RxmtDuration())
+}
+
+func (n *Neighbor) resetLSReqRxmtTimer() {
+	if !n.lsReqRxmtTimer.Stop() {
+		<-n.lsReqRxmtTimer.C
+	}
 	n.lsReqRxmtTimer.Reset(n.iface.RxmtDuration())
 }
 
@@ -822,8 +869,6 @@ func (n *Neighbor) sendLinkStateRequest() {
 	lsr := newLinkStateRequest(n.iface, reqs)
 	n.outstandingLSReq = lsr
 
-	n.startLSReqRxmtTimer()
-
 	n.send(lsr)
 }
 
@@ -873,30 +918,7 @@ func (n *Neighbor) dispatchPacket(packet Packet) {
 }
 
 // TODO: not thread safe
-func (n *Neighbor) removeFromRetransmissionList(lsa lsa) {
-	for i, l := range n.linkStateRetransmissionList {
-		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
-			n.linkStateRetransmissionList = append(n.linkStateRetransmissionList[:i], n.linkStateRetransmissionList[i+1:]...)
-			return
-		}
-	}
-}
-
-func (n *Neighbor) removeFromRetransmissionListAtIndex(i int) {
-	n.linkStateRetransmissionList = append(n.linkStateRetransmissionList[:i], n.linkStateRetransmissionList[i+1:]...)
-}
-
-func (n *Neighbor) retransmissionListContains(lsa lsa) bool {
-	for _, l := range n.linkStateRetransmissionList {
-		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (n *Neighbor) retransmissionListIndexOf(lsa *lsaHeader) int {
+func (n *Neighbor) retransmissionListIndexOf(lsa lsaMetadata) int {
 	for i, l := range n.linkStateRetransmissionList {
 		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
 			return i
@@ -906,14 +928,55 @@ func (n *Neighbor) retransmissionListIndexOf(lsa *lsaHeader) int {
 	return -1
 }
 
-func (n *Neighbor) requestListContains(lsa lsa) bool {
-	for _, l := range n.linkStateRequestList {
+func (n *Neighbor) removeFromRetransmissionList(lsa lsaMetadata) {
+	idx := n.retransmissionListIndexOf(lsa)
+	if idx != -1 {
+		n.removeFromRetransmissionListAtIndex(idx)
+	}
+}
+
+func (n *Neighbor) removeFromRetransmissionListAtIndex(i int) {
+	n.linkStateRetransmissionList = append(n.linkStateRetransmissionList[:i], n.linkStateRetransmissionList[i+1:]...)
+}
+
+func (n *Neighbor) retransmissionListContains(lsa lsaMetadata) bool {
+	return n.retransmissionListIndexOf(lsa) != -1
+}
+
+func (n *Neighbor) requestListIndexOf(lsa lsaMetadata) int {
+	for i, l := range n.linkStateRequestList {
 		if lsa.AdvertisingRouter() == l.advertisingRouter && lsa.LSID() == l.lsID && lsa.Type() == l.lsType {
-			return true
+			return i
 		}
 	}
 
-	return false
+	return -1
+}
+
+func (n *Neighbor) requestListContains(lsa lsa) bool {
+	return n.requestListIndexOf(lsa) != -1
+}
+
+func (n *Neighbor) requestListFind(lsa lsa) *lsaHeader {
+	idx := n.requestListIndexOf(lsa)
+
+	if idx != -1 {
+		return &n.linkStateRequestList[idx]
+	}
+
+	return nil
+}
+
+func (n *Neighbor) removeFromRequestListAtIndex(i int) {
+	n.linkStateRequestList = append(n.linkStateRequestList[:i], n.linkStateRequestList[i+1:]...)
+}
+
+func (n *Neighbor) isDR() bool {
+	return n.iface.dRouter != noDesignatedRouter && n.iface.dRouter.RouterID == n.neighborID
+}
+
+func (n *Neighbor) isBDR() bool {
+	return n.iface.bdRouter != noDesignatedRouter && n.iface.bdRouter.RouterID == n.neighborID
 }
 
 func (n *Neighbor) run() {

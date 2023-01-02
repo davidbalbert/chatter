@@ -18,9 +18,9 @@ const (
 )
 
 type lsdbKey struct {
-	lsType lsType
-	lsID   netip.Addr
-	advRtr netip.Addr
+	lsType            lsType
+	lsID              netip.Addr
+	advertisingRouter netip.Addr
 }
 
 // TODO: we need to make the LSDB safe for use from multiple goroutines at the same time
@@ -55,11 +55,7 @@ func shouldRecalculateRoutingTable(old, new lsa) bool {
 }
 
 func (db *lsdb) set(areaID netip.Addr, new lsa) {
-	key := lsdbKey{
-		lsType: new.Type(),
-		lsID:   new.LSID(),
-		advRtr: new.AdvertisingRouter(),
-	}
+	key := new.Key()
 
 	if new.Type() == lsTypeASExternal {
 		// old := db.externalDB[key]
@@ -88,9 +84,9 @@ func (db *lsdb) set(areaID netip.Addr, new lsa) {
 
 func (db *lsdb) get(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) *installedLSA {
 	key := lsdbKey{
-		lsType: lsType,
-		lsID:   lsID,
-		advRtr: advRtr,
+		lsType:            lsType,
+		lsID:              lsID,
+		advertisingRouter: advRtr,
 	}
 
 	if lsType == lsTypeASExternal {
@@ -107,9 +103,9 @@ func (db *lsdb) get(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr ne
 
 func (db *lsdb) delete(areaID netip.Addr, lsType lsType, lsID netip.Addr, advRtr netip.Addr) {
 	key := lsdbKey{
-		lsType: lsType,
-		lsID:   lsID,
-		advRtr: advRtr,
+		lsType:            lsType,
+		lsID:              lsID,
+		advertisingRouter: advRtr,
 	}
 
 	if lsType == lsTypeASExternal {
@@ -195,18 +191,23 @@ const (
 	lsTypeASExternal  lsType = 5
 )
 
-type lsa interface {
+type lsaMetadata interface {
 	Type() lsType
 	Length() int
 	LSID() netip.Addr
+	Key() lsdbKey
 	AdvertisingRouter() netip.Addr
-	Bytes() []byte
 	Age() uint16
-	SetAge(uint16)
 	SequenceNumber() int32
 	Checksum() uint16
-	Compare(lsa) int
 	Options() uint8
+	Compare(lsaMetadata) int
+}
+
+type lsa interface {
+	lsaMetadata
+	Bytes() []byte
+	SetAge(uint16)
 	copyHeader() *lsaHeader
 	checksumIsValid() bool
 }
@@ -333,6 +334,14 @@ func (h *lsaHeader) AdvertisingRouter() netip.Addr {
 	return h.advertisingRouter
 }
 
+func (h *lsaHeader) Key() lsdbKey {
+	return lsdbKey{
+		lsType:            h.lsType,
+		lsID:              h.lsID,
+		advertisingRouter: h.advertisingRouter,
+	}
+}
+
 func (h *lsaHeader) SequenceNumber() int32 {
 	return h.seqNumber
 }
@@ -345,7 +354,7 @@ func (h *lsaHeader) Options() uint8 {
 	return h.options
 }
 
-func (h *lsaHeader) Compare(other lsa) int {
+func (h *lsaHeader) Compare(other lsaMetadata) int {
 	// lessRecent := -1
 	// moreRecent := 1
 
