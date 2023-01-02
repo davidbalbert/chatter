@@ -3,259 +3,257 @@ package ospf
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"net/netip"
 	"strconv"
 	"strings"
-
-	"gopkg.in/yaml.v3"
 )
 
-type rawConfig struct {
-	RouterID      RouterID                 `yaml:"router-id"`
-	Cost          *uint16                  `yaml:"cost,omitempty"`
-	HelloInterval *uint16                  `yaml:"hello-interval,omitempty"`
-	DeadInterval  *uint32                  `yaml:"dead-interval,omitempty"`
-	Areas         map[string]rawAreaConfig `yaml:",inline,omitempty"`
-}
-
 type Config struct {
-	routerID      RouterID
-	cost          *uint16
-	helloInterval *uint16
-	deadInterval  *uint32
-	areas         map[AreaID]AreaConfig
+	RouterID      RouterID
+	Cost          uint16
+	HelloInterval uint16
+	DeadInterval  uint32
+	Areas         map[AreaID]AreaConfig
 }
 
-func (r *rawConfig) config() (*Config, error) {
+type AreaConfig struct {
+	Cost          uint16
+	HelloInterval uint16
+	DeadInterval  uint32
+	Interfaces    map[string]InterfaceConfig
+}
+
+type InterfaceConfig struct {
+	Cost uint16
+}
+
+func ParseConfig(data map[string]interface{}) (*Config, error) {
 	c := &Config{
-		routerID:      r.RouterID,
-		cost:          r.Cost,
-		helloInterval: r.HelloInterval,
-		deadInterval:  r.DeadInterval,
+		RouterID:      0,
+		Cost:          1,
+		HelloInterval: 10,
+		DeadInterval:  40,
+		Areas:         make(map[AreaID]AreaConfig),
 	}
 
-	areas := make(map[AreaID]AreaConfig, len(r.Areas))
+	for k, v := range data {
+		if k == "router-id" {
+			switch v := v.(type) {
+			case string:
+				id, err := parseID(v)
+				if err != nil {
+					return nil, fmt.Errorf("ospf: invalid router-id: %s", err)
+				}
 
-	for k, v := range r.Areas {
-		if !strings.HasPrefix(k, "area ") {
-			return nil, fmt.Errorf("invalid area key '%s'", k)
+				c.RouterID = RouterID(id)
+			case int:
+				if v < 0 {
+					return nil, fmt.Errorf("ospf: router-id must be positive: %d", v)
+				} else if v > math.MaxUint32 {
+					return nil, fmt.Errorf("ospf: router-id too big: %d", v)
+				}
+
+				c.RouterID = RouterID(v)
+			default:
+				return nil, fmt.Errorf("ospf: router-id must be an IPv4 address or an unsigned 32 bit integer")
+			}
+		} else if k == "cost" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf: cost must be an integer")
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf: cost too small: %d", v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf: cost too big: %d", v)
+			}
+
+			c.Cost = uint16(v)
+		} else if k == "hello-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf: hello-interval must be an integer")
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf: hello-interval too small: %d", v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf: hello-interval too big: %d", v)
+			}
+
+			c.HelloInterval = uint16(v)
+		} else if k == "dead-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf: dead-interval must be an integer")
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf: dead-interval too small: %d", v)
+			} else if v > math.MaxUint32 {
+				return nil, fmt.Errorf("ospf: dead-interval too big: %d", v)
+			}
+
+			c.DeadInterval = uint32(v)
+		} else if strings.HasPrefix(k, "area ") {
+			name := strings.TrimPrefix(k, "area ")
+
+			id, err := parseID(name)
+			if err != nil {
+				return nil, fmt.Errorf("ospf: invalid area id: %s", err)
+			}
+
+			area, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("ospf: area must be a map")
+			}
+
+			ac, err := parseAreaConfig(name, area)
+			if err != nil {
+				return nil, err
+			}
+
+			c.Areas[AreaID(id)] = *ac
+		} else {
+			return nil, fmt.Errorf("ospf: unknown key: %s", k)
 		}
-
-		areaID, err := parseID(strings.TrimPrefix(k, "area "))
-		if err != nil {
-			return nil, fmt.Errorf("area-id %w", err)
-		}
-
-		a, err := v.areaConfig()
-		if err != nil {
-			return nil, fmt.Errorf("area %s: %w", areaID, err)
-		}
-
-		a.config = c
-		areas[AreaID(areaID)] = *a
 	}
 
-	c.areas = areas
+	for k, ac := range c.Areas {
+		ac.setDefaults(c)
+		c.Areas[k] = ac
+	}
+
+	_, ok := c.Areas[AreaID(0)]
+	if !ok {
+		return nil, fmt.Errorf("ospf: backbone area must be configured")
+	}
 
 	return c, nil
 }
 
-func (c *Config) rawConfig() *rawConfig {
-	areas := make(map[string]rawAreaConfig, len(c.areas))
-
-	for k, v := range c.areas {
-		name := fmt.Sprintf("area %d", uint32(k))
-		areas[name] = *v.rawAreaConfig()
+func (ac *AreaConfig) setDefaults(c *Config) {
+	if ac.HelloInterval == 0 {
+		ac.HelloInterval = c.HelloInterval
 	}
 
-	return &rawConfig{
-		RouterID:      c.routerID,
-		Cost:          c.cost,
-		HelloInterval: c.helloInterval,
-		DeadInterval:  c.deadInterval,
-		Areas:         areas,
-	}
-}
-
-func (c Config) MarshalYAML() (interface{}, error) {
-	return c.rawConfig(), nil
-}
-
-func (c *Config) UnmarshalYAML(value *yaml.Node) error {
-	var raw rawConfig
-	if err := value.Decode(&raw); err != nil {
-		return err
+	if ac.DeadInterval == 0 {
+		ac.DeadInterval = c.DeadInterval
 	}
 
-	config, err := raw.config()
-	if err != nil {
-		return err
+	if ac.Cost == 0 {
+		ac.Cost = c.Cost
 	}
 
-	*c = *config
-
-	return nil
-}
-
-func (c *Config) RouterID() RouterID {
-	return c.routerID
-}
-
-func (c *Config) Cost() uint16 {
-	if c.cost != nil {
-		return *c.cost
-	} else {
-		return 1
+	for k, ic := range ac.Interfaces {
+		ic.setDefaults(ac)
+		ac.Interfaces[k] = ic
 	}
 }
 
-func (c *Config) HelloInterval() uint16 {
-	if c.helloInterval != nil {
-		return *c.helloInterval
-	} else {
-		return 10
+func (ic *InterfaceConfig) setDefaults(ac *AreaConfig) {
+	if ic.Cost == 0 {
+		ic.Cost = ac.Cost
 	}
 }
 
-func (c *Config) DeadInterval() uint32 {
-	if c.deadInterval != nil {
-		return *c.deadInterval
-	} else {
-		return 40
-	}
-}
-
-func (c *Config) Areas() map[AreaID]AreaConfig {
-	return c.areas
-}
-
-func (c Config) String() string {
-	return fmt.Sprintf("{RouterID: %s, Cost: %d, HelloInterval: %d, DeadInterval: %d, Areas: %v}", c.RouterID(), c.Cost(), c.HelloInterval(), c.DeadInterval(), c.Areas())
-}
-
-type rawAreaConfig struct {
-	Cost          *uint16                       `yaml:"cost,omitempty"`
-	HelloInterval *uint16                       `yaml:"hello-interval,omitempty"`
-	DeadInterval  *uint32                       `yaml:"dead-interval,omitempty"`
-	Interfaces    map[string]rawInterfaceConfig `yaml:",inline,omitempty"`
-}
-
-type AreaConfig struct {
-	cost          *uint16
-	helloInterval *uint16
-	deadInterval  *uint32
-	interfaces    map[string]InterfaceConfig
-
-	config *Config
-}
-
-func (r *rawAreaConfig) areaConfig() (*AreaConfig, error) {
-	a := &AreaConfig{
-		cost:          r.Cost,
-		helloInterval: r.HelloInterval,
-		deadInterval:  r.DeadInterval,
+func parseAreaConfig(areaID string, data map[string]interface{}) (*AreaConfig, error) {
+	ac := AreaConfig{
+		Cost:          0,
+		HelloInterval: 0,
+		DeadInterval:  0,
+		Interfaces:    make(map[string]InterfaceConfig),
 	}
 
-	interfaces := make(map[string]InterfaceConfig, len(r.Interfaces))
+	for k, v := range data {
+		if k == "cost" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf area %s: cost must be an integer", areaID)
+			}
 
-	for k, v := range r.Interfaces {
-		if !strings.HasPrefix(k, "interface ") {
-			return nil, fmt.Errorf("invalid interface key '%s'", k)
+			if v < 1 {
+				return nil, fmt.Errorf("ospf area %s: cost too small: %d", areaID, v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf area %s: cost too big: %d", areaID, v)
+			}
+
+			ac.Cost = uint16(v)
+		} else if k == "hello-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf area %s: hello-interval must be an integer", areaID)
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf area %s: hello-interval too small: %d", areaID, v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf area %s: hello-interval too big: %d", areaID, v)
+			}
+
+			ac.HelloInterval = uint16(v)
+		} else if k == "dead-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf area %s: dead-interval must be an integer", areaID)
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf area %s: dead-interval too small: %d", areaID, v)
+			} else if v > math.MaxUint32 {
+				return nil, fmt.Errorf("ospf area %s: dead-interval too big: %d", areaID, v)
+			}
+
+			ac.DeadInterval = uint32(v)
+		} else if strings.HasPrefix(k, "interface ") {
+			interfaceName := strings.TrimPrefix(k, "interface ")
+
+			i, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("ospf area %s: interface must be a map", interfaceName)
+			}
+
+			ic, err := parseInterfaceConfig(areaID, interfaceName, i)
+			if err != nil {
+				return nil, err
+			}
+
+			ac.Interfaces[interfaceName] = *ic
+		} else {
+			return nil, fmt.Errorf("ospf area %s: unknown key: %s", areaID, k)
 		}
-
-		i := v.interfaceConfig()
-		i.areaConfig = a
-		interfaces[strings.TrimPrefix(k, "interface ")] = *i
 	}
 
-	a.interfaces = interfaces
-
-	return a, nil
+	return &ac, nil
 }
 
-func (a *AreaConfig) rawAreaConfig() *rawAreaConfig {
-	r := &rawAreaConfig{
-		Cost:          a.cost,
-		HelloInterval: a.helloInterval,
-		DeadInterval:  a.deadInterval,
+func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*InterfaceConfig, error) {
+	ic := InterfaceConfig{
+		Cost: 0,
 	}
 
-	interfaces := make(map[string]rawInterfaceConfig, len(a.interfaces))
+	for k, v := range data {
+		if k == "cost" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf area %s interface %s: cost must be an integer", areaName, name)
+			}
 
-	for k, v := range a.interfaces {
-		name := fmt.Sprintf("interface %s", k)
-		interfaces[name] = *v.rawInterfaceConfig()
+			if v < 1 {
+				return nil, fmt.Errorf("ospf area %s interface %s: cost too small: %d", areaName, name, v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf area %s interface %s: cost too big: %d", areaName, name, v)
+			}
+
+			ic.Cost = uint16(v)
+		} else {
+			return nil, fmt.Errorf("ospf area %s interface %s: unknown key: %s", areaName, name, k)
+		}
 	}
 
-	r.Interfaces = interfaces
-
-	return r
-}
-
-func (a *AreaConfig) Cost() uint16 {
-	if a.cost != nil {
-		return *a.cost
-	} else {
-		return a.config.Cost()
-	}
-}
-
-func (a *AreaConfig) HelloInterval() uint16 {
-	if a.helloInterval != nil {
-		return *a.helloInterval
-	} else {
-		return a.config.HelloInterval()
-	}
-}
-
-func (a *AreaConfig) DeadInterval() uint32 {
-	if a.deadInterval != nil {
-		return *a.deadInterval
-	} else {
-		return a.config.DeadInterval()
-	}
-}
-
-func (a *AreaConfig) Interfaces() map[string]InterfaceConfig {
-	return a.interfaces
-}
-
-func (a AreaConfig) String() string {
-	return fmt.Sprintf("{Cost: %d, HelloInterval: %d, DeadInterval: %d, Interfaces: %v}", a.Cost(), a.HelloInterval(), a.DeadInterval(), a.Interfaces())
-}
-
-type rawInterfaceConfig struct {
-	Cost *uint16 `yaml:"cost,omitempty"`
-}
-
-type InterfaceConfig struct {
-	cost *uint16
-
-	areaConfig *AreaConfig
-}
-
-func (r *rawInterfaceConfig) interfaceConfig() *InterfaceConfig {
-	return &InterfaceConfig{
-		cost: r.Cost,
-	}
-}
-
-func (i *InterfaceConfig) rawInterfaceConfig() *rawInterfaceConfig {
-	return &rawInterfaceConfig{
-		Cost: i.cost,
-	}
-}
-
-func (i *InterfaceConfig) Cost() uint16 {
-	if i.cost != nil {
-		return *i.cost
-	} else {
-		return i.areaConfig.Cost()
-	}
-}
-
-func (i InterfaceConfig) String() string {
-	return fmt.Sprintf("{Cost: %d}", i.Cost())
+	return &ic, nil
 }
 
 type id uint32
@@ -285,36 +283,8 @@ func (i id) String() string {
 	return addr.String()
 }
 
-func (r *RouterID) UnmarshalText(text []byte) error {
-	id, err := parseID(string(text))
-	if err != nil {
-		return fmt.Errorf("router-id %w", err)
-	}
-
-	*r = RouterID(id)
-	return nil
-}
-
-func (r RouterID) MarshalText() ([]byte, error) {
-	return []byte(r.String()), nil
-}
-
 func (r RouterID) String() string {
 	return id(r).String()
-}
-
-func (a *AreaID) UnmarshalText(text []byte) error {
-	id, err := parseID(string(text))
-	if err != nil {
-		return fmt.Errorf("area-id %w", err)
-	}
-
-	*a = AreaID(id)
-	return nil
-}
-
-func (a AreaID) MarshalText() ([]byte, error) {
-	return []byte(a.String()), nil
 }
 
 func (a AreaID) String() string {

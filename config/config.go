@@ -1,7 +1,7 @@
 package config
 
 import (
-	"strings"
+	"fmt"
 
 	"gopkg.in/yaml.v3"
 
@@ -9,16 +9,36 @@ import (
 )
 
 type Config struct {
-	OSPF ospf.Config `yaml:"ospf"`
+	OSPF ospf.Config
 }
 
 func ParseConfig(s string) (*Config, error) {
-	var c Config
-	d := yaml.NewDecoder(strings.NewReader(s))
-	d.KnownFields(true)
+	var data map[string]interface{}
 
-	if err := d.Decode(&c); err != nil {
+	if err := yaml.Unmarshal([]byte(s), &data); err != nil {
 		return nil, err
 	}
+
+	c := Config{}
+
+	for k, v := range data {
+		switch k {
+		case "ospf":
+			v, ok := v.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("ospf must be a map")
+			}
+
+			ospfConfig, err := ospf.ParseConfig(v)
+			if err != nil {
+				return nil, err
+			}
+
+			c.OSPF = *ospfConfig
+		default:
+			return nil, fmt.Errorf("unknown top level key: %s", k)
+		}
+	}
+
 	return &c, nil
 }
