@@ -10,27 +10,9 @@ import (
 const s = `
 ospf:
   router-id: 192.168.200.1
-  cost: 10
-  hello-interval: 5
-  dead-interval: 15
 
   area 0:
-    cost: 20
-
-    interface eth0:
-      cost: 30
-    
-    interface eth1: {}
-
-  area 1:
-    hello-interval: 20
-    interface eth2:
-      cost: 40
-
-  area 1.1.1.1:
-    dead-interval: 30
-    interface eth3:
-      cost: 50
+    interface bridge100: {}
 `
 
 func main() {

@@ -1,11 +1,8 @@
 package ospf
 
 import (
-	"encoding/binary"
 	"fmt"
 	"math"
-	"net/netip"
-	"strconv"
 	"strings"
 )
 
@@ -254,39 +251,4 @@ func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*
 	}
 
 	return &ic, nil
-}
-
-type id uint32
-
-type RouterID id
-type AreaID id
-
-func parseID(s string) (id, error) {
-	n, err := strconv.ParseUint(s, 10, 32)
-	if err == nil {
-		return id(n), nil
-	}
-
-	addr, err := netip.ParseAddr(s)
-	if err != nil || !addr.Is4() {
-		return 0, fmt.Errorf("must be an IPv4 address or an unsigned 32 bit integer")
-	}
-
-	return id(binary.BigEndian.Uint32(addr.AsSlice())), nil
-}
-
-func (i id) String() string {
-	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], uint32(i))
-	addr := netip.AddrFrom4(b)
-
-	return addr.String()
-}
-
-func (r RouterID) String() string {
-	return id(r).String()
-}
-
-func (a AreaID) String() string {
-	return id(a).String()
 }
