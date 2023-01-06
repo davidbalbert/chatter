@@ -4,7 +4,13 @@ type Packet interface {
 }
 
 type PacketHeader struct {
-	type_ packetType
+	type_    packetType
+	length   uint16
+	routerID RouterID
+	areaID   AreaID
+	checksum uint16
+	authType uint16
+	authData uint64
 }
 
 type packetType uint8
