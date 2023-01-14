@@ -10,3 +10,11 @@ type Protocol struct {
 
 	Config Config
 }
+
+func NewProtocol(config *Config) *Protocol {
+	return &Protocol{
+		Areas: make(map[AreaID]Area),
+
+		Config: *config,
+	}
+}

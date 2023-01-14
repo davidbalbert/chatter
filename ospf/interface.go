@@ -5,7 +5,7 @@ import "net/netip"
 type Interface struct {
 	Type               interfaceType
 	State              interfaceState
-	Addr               netip.Prefix // IP address and mask
+	Prefix             netip.Prefix // IP interface address and IP interface mask
 	AreaID             AreaID
 	HelloInterval      uint16
 	RouterDeadInterval uint16
