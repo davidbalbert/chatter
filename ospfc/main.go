@@ -24,8 +24,6 @@ func autocomplete(line string) []string {
 }
 
 func main() {
-	fmt.Println("Hello, client!")
-
 	client, err := vty.Dial()
 	if err != nil {
 		fmt.Println(err)
