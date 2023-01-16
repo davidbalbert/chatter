@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"net"
@@ -54,28 +53,21 @@ type Server struct {
 	listener net.Listener
 	conns    []net.Conn
 	mu       sync.Mutex
-	done     chan struct{}
 	handler  func(io.Writer, string)
-}
-
-func NewServer() *Server {
-	return &Server{
-		done: make(chan struct{}),
-	}
 }
 
 func (s *Server) HandleFunc(f func(io.Writer, string)) {
 	s.handler = f
 }
 
-func (s *Server) handle(conn *framedConn) error {
+func (s *Server) handle(ctx context.Context, conn *framedConn) error {
 	defer conn.Close()
 
 	for {
 		frame, err := conn.ReadFrame()
 		if err != nil {
 			select {
-			case <-s.done:
+			case <-ctx.Done():
 				return nil
 			default:
 			}
@@ -90,38 +82,53 @@ func (s *Server) handle(conn *framedConn) error {
 		var b bytes.Buffer
 		s.handler(&b, string(frame))
 
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		if err := conn.WriteFrame(b.Bytes()); err != nil {
-			return err
+			select {
+			case <-ctx.Done():
+				return nil
+			default:
+				return err
+			}
 		}
 	}
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
-	listener, err := net.Listen("unix", socketPath)
+	var err error
+	s.listener, err = net.Listen("unix", socketPath)
 	if err != nil {
 		return err
 	}
 
 	g, ctx := errgroup.WithContext(ctx)
-	s.listener = listener
+
+	g.Go(func() error {
+		<-ctx.Done()
+		s.listener.Close()
+
+		s.mu.Lock()
+		for _, conn := range s.conns {
+			conn.Close()
+		}
+		s.mu.Unlock()
+		return nil
+	})
 
 	for {
-		select {
-		case <-ctx.Done():
-			g.Wait()
-			return ctx.Err()
-		default:
-		}
-
 		conn, err := s.listener.Accept()
 		if err != nil {
 			select {
-			case <-s.done:
+			case <-ctx.Done():
 				g.Wait()
 				return nil
 			default:
-				g.Wait()
-				return err
+				return g.Wait()
 			}
 		}
 
@@ -130,26 +137,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.mu.Unlock()
 
 		g.Go(func() error {
-			return s.handle(&framedConn{conn})
+			return s.handle(ctx, &framedConn{conn})
 		})
 	}
-}
-
-func (s *Server) Shutdown() error {
-	close(s.done)
-	ferr := s.listener.Close()
-
-	s.mu.Lock()
-	for _, conn := range s.conns {
-		fmt.Printf("closing conn: %v\n", conn)
-		err := conn.Close()
-		if err != nil {
-			ferr = err
-		}
-	}
-	s.mu.Unlock()
-
-	return ferr
 }
 
 type Client struct {

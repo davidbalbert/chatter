@@ -44,16 +44,11 @@ func main() {
 		w.Write([]byte(cmd))
 	}
 
-	server := vty.NewServer()
+	server := &vty.Server{}
 	server.HandleFunc(handle)
 
 	g.Go(func() error {
 		return server.ListenAndServe(ctx)
-	})
-
-	g.Go(func() error {
-		<-ctx.Done()
-		return server.Shutdown()
 	})
 
 	err = g.Wait()

@@ -1,26 +1,24 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
 	"github.com/davidbalbert/ospfd/vty"
-	"github.com/peterh/liner"
 )
 
-var commands = []string{"show version", "show interfaces", "exit"}
-
-func autocomplete(line string) []string {
-	options := []string{}
-
-	for _, cmd := range commands {
-		if strings.HasPrefix(cmd, line) {
-			options = append(options, cmd)
-		}
+func ReadLine(prompt string) (string, error) {
+	fmt.Print(prompt)
+	scanner := bufio.NewReader(os.Stdin)
+	line, err := scanner.ReadString('\n')
+	if err != nil {
+		return "", err
 	}
 
-	return options
+	return strings.TrimSpace(line), nil
 }
 
 func main() {
@@ -31,51 +29,29 @@ func main() {
 	}
 	defer client.Close()
 
-	line := liner.NewLiner()
-	defer line.Close()
-
-	if f, err := os.Open(".ospfc_history"); err == nil {
-		line.ReadHistory(f)
-		f.Close()
-	}
-
-	line.SetCompleter(autocomplete)
-	line.SetTabCompletionStyle(liner.TabPrints)
-
 	for {
-		cmd, err := line.Prompt("ospfd# ")
-		if err != nil {
-			break
-		}
-
-		if cmd == "" {
-			continue
-		}
-
-		line.AppendHistory(cmd)
-
-		if strings.TrimSpace(cmd) == "exit" {
-			break
-		}
-
-		resp, err := client.Send(cmd)
+		req, err := ReadLine("ospfd# ")
 		if err != nil {
 			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		if req == "" {
 			continue
 		}
 
-		// Server only sends an empty response when the connection is closed.
-		if resp == "" {
+		if req == "exit" {
 			break
+		}
+
+		resp, err := client.Send(req)
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
 		}
 
 		fmt.Println(resp)
-	}
-
-	if f, err := os.Create(".ospfc_history"); err != nil {
-		fmt.Println(err)
-	} else {
-		line.WriteHistory(f)
-		f.Close()
 	}
 }
