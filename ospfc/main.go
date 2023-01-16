@@ -10,9 +10,9 @@ import (
 	"github.com/davidbalbert/ospfd/vty"
 )
 
-func ReadLine() (string, error) {
-	scanner := bufio.NewReader(os.Stdin)
-	line, err := scanner.ReadString('\n')
+func readLine() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
@@ -34,7 +34,7 @@ func main() {
 
 	go func() {
 		for {
-			line, err := ReadLine()
+			line, err := readLine()
 			if err != nil {
 				select {
 				case <-done:
