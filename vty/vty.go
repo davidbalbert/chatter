@@ -15,11 +15,11 @@ import (
 
 const socketPath = "/tmp/ospfd.sock"
 
-type framedConn struct {
+type FramedConn struct {
 	net.Conn
 }
 
-func (c *framedConn) ReadFrame() ([]byte, error) {
+func (c *FramedConn) ReadFrame() ([]byte, error) {
 	var length uint16
 	if err := binary.Read(c.Conn, binary.BigEndian, &length); err != nil {
 		return nil, err
@@ -33,7 +33,7 @@ func (c *framedConn) ReadFrame() ([]byte, error) {
 	return b, nil
 }
 
-func (c *framedConn) WriteFrame(b []byte) error {
+func (c *FramedConn) WriteFrame(b []byte) error {
 	if len(b) > math.MaxUint16 {
 		return errors.New("frame too large")
 	}
@@ -60,7 +60,7 @@ func (s *Server) HandleFunc(f func(io.Writer, string)) {
 	s.handler = f
 }
 
-func (s *Server) handle(ctx context.Context, conn *framedConn) error {
+func (s *Server) handle(ctx context.Context, conn *FramedConn) error {
 	defer conn.Close()
 
 	for {
@@ -137,39 +137,16 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 		s.mu.Unlock()
 
 		g.Go(func() error {
-			return s.handle(ctx, &framedConn{conn})
+			return s.handle(ctx, &FramedConn{conn})
 		})
 	}
 }
 
-type Client struct {
-	conn framedConn
-}
-
-func Dial() (*Client, error) {
+func Dial() (*FramedConn, error) {
 	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Client{
-		conn: framedConn{conn},
-	}, nil
-}
-
-func (c *Client) Send(cmd string) (string, error) {
-	if err := c.conn.WriteFrame([]byte(cmd)); err != nil {
-		return "", err
-	}
-
-	frame, err := c.conn.ReadFrame()
-	if err != nil {
-		return "", err
-	}
-
-	return string(frame), nil
-}
-
-func (c *Client) Close() error {
-	return c.conn.Close()
+	return &FramedConn{conn}, nil
 }
