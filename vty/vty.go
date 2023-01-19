@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
@@ -80,7 +81,7 @@ func (s *Server) handle(ctx context.Context, conn *FramedConn) error {
 		}
 
 		var b bytes.Buffer
-		s.handler(&b, string(frame))
+		s.handler(&b, strings.TrimSpace(string(frame)))
 
 		select {
 		case <-ctx.Done():
