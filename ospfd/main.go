@@ -66,6 +66,9 @@ func (p *RandProtocol) RegisterCommands(a *api.API) error {
 	a.RegisterCommand("show rand", "show a random number", &err, func() string {
 		return p.executeCommand((*RandProtocol).randInt)
 	})
+	a.RegisterCommand("show rand int", "show a random number", &err, func() string {
+		return p.executeCommand((*RandProtocol).randInt)
+	})
 	a.RegisterCommand("show rand string", "show a random string", &err, func() string {
 		return p.executeCommand((*RandProtocol).randString)
 	})
