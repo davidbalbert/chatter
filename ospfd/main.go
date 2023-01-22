@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/rand"
 	"os"
+	"reflect"
 
 	"github.com/davidbalbert/ospfd/api"
 	"github.com/davidbalbert/ospfd/config"
@@ -21,18 +22,19 @@ ospf:
     interface bridge100: {}
 `
 
-type invocation struct {
-	f func(*RandProtocol) string
-	c chan string
+type Invocation struct {
+	Func reflect.Value
+	Args []reflect.Value
+	C    chan reflect.Value
 }
 
 type RandProtocol struct {
-	invocations chan invocation
+	invocations chan Invocation
 }
 
 func NewRandProtocol() *RandProtocol {
 	return &RandProtocol{
-		invocations: make(chan invocation),
+		invocations: make(chan Invocation),
 	}
 }
 
@@ -42,35 +44,54 @@ func (p *RandProtocol) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case inv := <-p.invocations:
-			inv.c <- inv.f(p)
+			inv.C <- inv.Func.Call(inv.Args)[0]
 		}
 	}
 }
 
-func (p *RandProtocol) randInt() string {
-	return fmt.Sprintf("%d", rand.Intn(100))
+func (p *RandProtocol) Invoke(f any, argv ...any) any {
+	args := make([]reflect.Value, len(argv))
+	for i, arg := range argv {
+		args[i] = reflect.ValueOf(arg)
+	}
+
+	c := make(chan reflect.Value)
+	p.invocations <- Invocation{
+		Func: reflect.ValueOf(f),
+		Args: args,
+		C:    c,
+	}
+
+	ret := <-c
+	return ret.Interface()
 }
 
-func (p *RandProtocol) randString() string {
+func (p *RandProtocol) DoGetRandInt(n int) int {
+	return rand.Intn(n)
+}
+
+func (p *RandProtocol) GetRandInt(n int) int {
+	return p.Invoke(p.DoGetRandInt, n).(int)
+}
+
+func (p *RandProtocol) DoGetRandString() string {
 	return "hello world"
 }
 
-func (p *RandProtocol) executeCommand(f func(*RandProtocol) string) string {
-	c := make(chan string)
-	p.invocations <- invocation{f, c}
-	return <-c
+func (p *RandProtocol) GetRandString() string {
+	return p.Invoke(p.DoGetRandString).(string)
 }
 
 func (p *RandProtocol) RegisterCommands(a *api.API) error {
 	var err error
 	a.RegisterCommand("show rand", "show a random number", &err, func() string {
-		return p.executeCommand((*RandProtocol).randInt)
+		return fmt.Sprintf("%d", p.GetRandInt(100))
 	})
 	a.RegisterCommand("show rand int", "show a random number", &err, func() string {
-		return p.executeCommand((*RandProtocol).randInt)
+		return fmt.Sprintf("%d", p.GetRandInt(100))
 	})
 	a.RegisterCommand("show rand string", "show a random string", &err, func() string {
-		return p.executeCommand((*RandProtocol).randString)
+		return p.GetRandString()
 	})
 	return err
 }
