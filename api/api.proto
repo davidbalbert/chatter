@@ -1,0 +1,20 @@
+syntax = "proto3";
+package api;
+
+option go_package = "github.com/davidbalbert/ospfd/api";
+
+service API {
+    rpc GetRandInt(Empty) returns (RandInt) {}
+    rpc GetRandString(Empty) returns (RandString) {}
+}
+
+message Empty {
+}
+
+message RandInt {
+    uint32 value = 1;
+}
+
+message RandString {
+    string value = 1;
+}
