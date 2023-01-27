@@ -11,7 +11,9 @@ import (
 )
 
 func main() {
-	conn, err := grpc.Dial("unix:///tmp/ospfd.sock", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	target := fmt.Sprintf("unix://%s", api.SocketPath)
+
+	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to dial: %v\n", err)
 		os.Exit(1)

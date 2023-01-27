@@ -5,42 +5,23 @@ package api
 import (
 	context "context"
 	"math/rand"
-	"net"
-
-	grpc "google.golang.org/grpc"
 )
 
-const socketPath = "/tmp/ospfd.sock"
+const SocketPath = "/tmp/ospfd.sock"
 
-type Server struct {
+type apiServer struct {
 	UnimplementedAPIServer
-	g *grpc.Server
 }
 
-func NewServer() *Server {
-	return &Server{}
+func NewAPIServer() APIServer {
+	return &apiServer{}
 }
 
-func (s *Server) ListenAndServe() error {
-	listener, err := net.Listen("unix", socketPath)
-	if err != nil {
-		return err
-	}
-
-	s.g = grpc.NewServer()
-	RegisterAPIServer(s.g, s)
-	return s.g.Serve(listener)
-}
-
-func (s *Server) GracefulStop() {
-	s.g.GracefulStop()
-}
-
-func (s *Server) GetRandInt(ctx context.Context, in *Empty) (*RandInt, error) {
+func (s *apiServer) GetRandInt(ctx context.Context, in *Empty) (*RandInt, error) {
 	return &RandInt{Value: rand.Uint32()}, nil
 }
 
-func (s *Server) GetRandString(ctx context.Context, in *Empty) (*RandString, error) {
+func (s *apiServer) GetRandString(ctx context.Context, in *Empty) (*RandString, error) {
 	return &RandString{Value: "Hello, world!"}, nil
 }
 
