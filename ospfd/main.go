@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"math/rand"
 	"os"
 	"reflect"
 
 	"github.com/davidbalbert/ospfd/api"
 	"github.com/davidbalbert/ospfd/config"
-	"github.com/davidbalbert/ospfd/vty"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -82,19 +80,19 @@ func (p *RandProtocol) GetRandString() string {
 	return p.Invoke(p.DoGetRandString).(string)
 }
 
-func (p *RandProtocol) RegisterCommands(a *api.API) error {
-	var err error
-	a.RegisterCommand("show rand", "show a random number", &err, func() string {
-		return fmt.Sprintf("%d", p.GetRandInt(100))
-	})
-	a.RegisterCommand("show rand int", "show a random number", &err, func() string {
-		return fmt.Sprintf("%d", p.GetRandInt(100))
-	})
-	a.RegisterCommand("show rand string", "show a random string", &err, func() string {
-		return p.GetRandString()
-	})
-	return err
-}
+// func (p *RandProtocol) RegisterCommands(a *api.API) error {
+// 	var err error
+// 	a.RegisterCommand("show rand", "show a random number", &err, func() string {
+// 		return fmt.Sprintf("%d", p.GetRandInt(100))
+// 	})
+// 	a.RegisterCommand("show rand int", "show a random number", &err, func() string {
+// 		return fmt.Sprintf("%d", p.GetRandInt(100))
+// 	})
+// 	a.RegisterCommand("show rand string", "show a random string", &err, func() string {
+// 		return p.GetRandString()
+// 	})
+// 	return err
+// }
 
 func main() {
 	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
@@ -113,45 +111,22 @@ func main() {
 	// - A way to specify command hierarchy - e.g. we have to be able to specify "show" (and a help text for show)
 	//   and then a way to specify that "rand" is an object that you can show
 
-	rand := NewRandProtocol()
+	// rand := NewRandProtocol()
 
-	api := api.NewAPI()
-	api.RegisterNamespace("show", "show running system information", &err)
-	if err != nil {
-		fmt.Printf("error registering namespace: %v\n", err)
-		os.Exit(1)
-	}
+	// g.Go(func() error {
+	// 	return rand.Run(ctx)
+	// })
 
-	err = api.RegisterService(rand)
-	if err != nil {
-		fmt.Printf("error registering service: %v\n", err)
-		os.Exit(1)
-	}
+	apiServer := api.NewServer()
 
 	g.Go(func() error {
-		return rand.Run(ctx)
+		return apiServer.ListenAndServe()
 	})
 
-	handle := func(w io.Writer, cmd string) {
-		resp := api.ExecuteCommand(cmd)
-		w.Write([]byte(resp))
-
-		// switch cmd {
-		// case "shutdown":
-		// 	cancel()
-		// case "show rand":
-		// 	resp := rand.ExecuteCommand(cmd)
-		// 	w.Write([]byte(resp))
-		// default:
-		// 	w.Write([]byte("unknown command"))
-		// }
-	}
-
-	server := &vty.Server{}
-	server.HandleFunc(handle)
-
 	g.Go(func() error {
-		return server.ListenAndServe(ctx)
+		<-ctx.Done()
+		apiServer.GracefulStop()
+		return nil
 	})
 
 	err = g.Wait()
