@@ -8,8 +8,7 @@ import (
 	"strings"
 
 	"github.com/davidbalbert/ospfd/api"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/davidbalbert/ospfd/rpc"
 )
 
 type node struct {
@@ -107,19 +106,13 @@ func readLine() (string, error) {
 }
 
 func main() {
-	var err error
-	target := fmt.Sprintf("unix://%s", api.SocketPath)
-
-	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	client, err := api.NewClient()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "failed to dial: %v\n", err)
 		os.Exit(1)
 	}
-	defer conn.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
-
-	client := api.NewAPIClient(conn)
 
 	c := newCLI()
 
@@ -134,7 +127,7 @@ func main() {
 	}
 
 	err = c.registerCommand("show rand int", "Show a random integer", func() string {
-		resp, err := client.GetRandInt(ctx, &api.Empty{})
+		resp, err := client.GetRandInt(ctx, &rpc.Empty{})
 		if err != nil {
 			return fmt.Sprintf("failed to show random int: %v", err)
 		}
@@ -148,7 +141,7 @@ func main() {
 	}
 
 	err = c.registerCommand("show rand string", "Show a random string", func() string {
-		resp, err := client.GetRandString(ctx, &api.Empty{})
+		resp, err := client.GetRandString(ctx, &rpc.Empty{})
 		if err != nil {
 			return fmt.Sprintf("failed to show random string: %v", err)
 		}

@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.2.0
 // - protoc             v3.21.12
-// source: api.proto
+// source: rpc.proto
 
-package api
+package rpc
 
 import (
 	context "context"
@@ -36,7 +36,7 @@ func NewAPIClient(cc grpc.ClientConnInterface) APIClient {
 
 func (c *aPIClient) GetRandInt(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandInt, error) {
 	out := new(RandInt)
-	err := c.cc.Invoke(ctx, "/api.API/GetRandInt", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rpc.API/GetRandInt", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (c *aPIClient) GetRandInt(ctx context.Context, in *Empty, opts ...grpc.Call
 
 func (c *aPIClient) GetRandString(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandString, error) {
 	out := new(RandString)
-	err := c.cc.Invoke(ctx, "/api.API/GetRandString", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/rpc.API/GetRandString", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func _API_GetRandInt_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.API/GetRandInt",
+		FullMethod: "/rpc.API/GetRandInt",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(APIServer).GetRandInt(ctx, req.(*Empty))
@@ -112,7 +112,7 @@ func _API_GetRandString_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/api.API/GetRandString",
+		FullMethod: "/rpc.API/GetRandString",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(APIServer).GetRandString(ctx, req.(*Empty))
@@ -124,7 +124,7 @@ func _API_GetRandString_Handler(srv interface{}, ctx context.Context, dec func(i
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var API_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "api.API",
+	ServiceName: "rpc.API",
 	HandlerType: (*APIServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -137,5 +137,5 @@ var API_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "api.proto",
+	Metadata: "rpc.proto",
 }

@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.28.1
 // 	protoc        v3.21.12
-// source: api.proto
+// source: rpc.proto
 
-package api
+package rpc
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -29,7 +29,7 @@ type Empty struct {
 func (x *Empty) Reset() {
 	*x = Empty{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_api_proto_msgTypes[0]
+		mi := &file_rpc_proto_msgTypes[0]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -42,7 +42,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[0]
+	mi := &file_rpc_proto_msgTypes[0]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +55,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{0}
+	return file_rpc_proto_rawDescGZIP(), []int{0}
 }
 
 type RandInt struct {
@@ -69,7 +69,7 @@ type RandInt struct {
 func (x *RandInt) Reset() {
 	*x = RandInt{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_api_proto_msgTypes[1]
+		mi := &file_rpc_proto_msgTypes[1]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -82,7 +82,7 @@ func (x *RandInt) String() string {
 func (*RandInt) ProtoMessage() {}
 
 func (x *RandInt) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[1]
+	mi := &file_rpc_proto_msgTypes[1]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -95,7 +95,7 @@ func (x *RandInt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RandInt.ProtoReflect.Descriptor instead.
 func (*RandInt) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{1}
+	return file_rpc_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *RandInt) GetValue() uint32 {
@@ -116,7 +116,7 @@ type RandString struct {
 func (x *RandString) Reset() {
 	*x = RandString{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_api_proto_msgTypes[2]
+		mi := &file_rpc_proto_msgTypes[2]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -129,7 +129,7 @@ func (x *RandString) String() string {
 func (*RandString) ProtoMessage() {}
 
 func (x *RandString) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_msgTypes[2]
+	mi := &file_rpc_proto_msgTypes[2]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -142,7 +142,7 @@ func (x *RandString) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RandString.ProtoReflect.Descriptor instead.
 func (*RandString) Descriptor() ([]byte, []int) {
-	return file_api_proto_rawDescGZIP(), []int{2}
+	return file_rpc_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *RandString) GetValue() string {
@@ -152,49 +152,49 @@ func (x *RandString) GetValue() string {
 	return ""
 }
 
-var File_api_proto protoreflect.FileDescriptor
+var File_rpc_proto protoreflect.FileDescriptor
 
-var file_api_proto_rawDesc = []byte{
-	0x0a, 0x09, 0x61, 0x70, 0x69, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x61, 0x70, 0x69,
+var file_rpc_proto_rawDesc = []byte{
+	0x0a, 0x09, 0x72, 0x70, 0x63, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x12, 0x03, 0x72, 0x70, 0x63,
 	0x22, 0x07, 0x0a, 0x05, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x22, 0x1f, 0x0a, 0x07, 0x52, 0x61, 0x6e,
 	0x64, 0x49, 0x6e, 0x74, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x18, 0x01, 0x20,
 	0x01, 0x28, 0x0d, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x22, 0x22, 0x0a, 0x0a, 0x52, 0x61,
 	0x6e, 0x64, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x12, 0x14, 0x0a, 0x05, 0x76, 0x61, 0x6c, 0x75,
 	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x05, 0x76, 0x61, 0x6c, 0x75, 0x65, 0x32, 0x5f,
 	0x0a, 0x03, 0x41, 0x50, 0x49, 0x12, 0x28, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x52, 0x61, 0x6e, 0x64,
-	0x49, 0x6e, 0x74, 0x12, 0x0a, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a,
-	0x0c, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x52, 0x61, 0x6e, 0x64, 0x49, 0x6e, 0x74, 0x22, 0x00, 0x12,
+	0x49, 0x6e, 0x74, 0x12, 0x0a, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a,
+	0x0c, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x52, 0x61, 0x6e, 0x64, 0x49, 0x6e, 0x74, 0x22, 0x00, 0x12,
 	0x2e, 0x0a, 0x0d, 0x47, 0x65, 0x74, 0x52, 0x61, 0x6e, 0x64, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67,
-	0x12, 0x0a, 0x2e, 0x61, 0x70, 0x69, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x0f, 0x2e, 0x61,
-	0x70, 0x69, 0x2e, 0x52, 0x61, 0x6e, 0x64, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x22, 0x00, 0x42,
+	0x12, 0x0a, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x45, 0x6d, 0x70, 0x74, 0x79, 0x1a, 0x0f, 0x2e, 0x72,
+	0x70, 0x63, 0x2e, 0x52, 0x61, 0x6e, 0x64, 0x53, 0x74, 0x72, 0x69, 0x6e, 0x67, 0x22, 0x00, 0x42,
 	0x23, 0x5a, 0x21, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x64, 0x61,
 	0x76, 0x69, 0x64, 0x62, 0x61, 0x6c, 0x62, 0x65, 0x72, 0x74, 0x2f, 0x6f, 0x73, 0x70, 0x66, 0x64,
-	0x2f, 0x61, 0x70, 0x69, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x2f, 0x72, 0x70, 0x63, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
-	file_api_proto_rawDescOnce sync.Once
-	file_api_proto_rawDescData = file_api_proto_rawDesc
+	file_rpc_proto_rawDescOnce sync.Once
+	file_rpc_proto_rawDescData = file_rpc_proto_rawDesc
 )
 
-func file_api_proto_rawDescGZIP() []byte {
-	file_api_proto_rawDescOnce.Do(func() {
-		file_api_proto_rawDescData = protoimpl.X.CompressGZIP(file_api_proto_rawDescData)
+func file_rpc_proto_rawDescGZIP() []byte {
+	file_rpc_proto_rawDescOnce.Do(func() {
+		file_rpc_proto_rawDescData = protoimpl.X.CompressGZIP(file_rpc_proto_rawDescData)
 	})
-	return file_api_proto_rawDescData
+	return file_rpc_proto_rawDescData
 }
 
-var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_api_proto_goTypes = []interface{}{
-	(*Empty)(nil),      // 0: api.Empty
-	(*RandInt)(nil),    // 1: api.RandInt
-	(*RandString)(nil), // 2: api.RandString
+var file_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_rpc_proto_goTypes = []interface{}{
+	(*Empty)(nil),      // 0: rpc.Empty
+	(*RandInt)(nil),    // 1: rpc.RandInt
+	(*RandString)(nil), // 2: rpc.RandString
 }
-var file_api_proto_depIdxs = []int32{
-	0, // 0: api.API.GetRandInt:input_type -> api.Empty
-	0, // 1: api.API.GetRandString:input_type -> api.Empty
-	1, // 2: api.API.GetRandInt:output_type -> api.RandInt
-	2, // 3: api.API.GetRandString:output_type -> api.RandString
+var file_rpc_proto_depIdxs = []int32{
+	0, // 0: rpc.API.GetRandInt:input_type -> rpc.Empty
+	0, // 1: rpc.API.GetRandString:input_type -> rpc.Empty
+	1, // 2: rpc.API.GetRandInt:output_type -> rpc.RandInt
+	2, // 3: rpc.API.GetRandString:output_type -> rpc.RandString
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -202,13 +202,13 @@ var file_api_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_api_proto_init() }
-func file_api_proto_init() {
-	if File_api_proto != nil {
+func init() { file_rpc_proto_init() }
+func file_rpc_proto_init() {
+	if File_rpc_proto != nil {
 		return
 	}
 	if !protoimpl.UnsafeEnabled {
-		file_api_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
+		file_rpc_proto_msgTypes[0].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*Empty); i {
 			case 0:
 				return &v.state
@@ -220,7 +220,7 @@ func file_api_proto_init() {
 				return nil
 			}
 		}
-		file_api_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
+		file_rpc_proto_msgTypes[1].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RandInt); i {
 			case 0:
 				return &v.state
@@ -232,7 +232,7 @@ func file_api_proto_init() {
 				return nil
 			}
 		}
-		file_api_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
+		file_rpc_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RandString); i {
 			case 0:
 				return &v.state
@@ -249,18 +249,18 @@ func file_api_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: file_api_proto_rawDesc,
+			RawDescriptor: file_rpc_proto_rawDesc,
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_api_proto_goTypes,
-		DependencyIndexes: file_api_proto_depIdxs,
-		MessageInfos:      file_api_proto_msgTypes,
+		GoTypes:           file_rpc_proto_goTypes,
+		DependencyIndexes: file_rpc_proto_depIdxs,
+		MessageInfos:      file_rpc_proto_msgTypes,
 	}.Build()
-	File_api_proto = out.File
-	file_api_proto_rawDesc = nil
-	file_api_proto_goTypes = nil
-	file_api_proto_depIdxs = nil
+	File_rpc_proto = out.File
+	file_rpc_proto_rawDesc = nil
+	file_rpc_proto_goTypes = nil
+	file_rpc_proto_depIdxs = nil
 }

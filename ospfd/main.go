@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"net"
 	"os"
 	"reflect"
 
 	"github.com/davidbalbert/ospfd/api"
 	"github.com/davidbalbert/ospfd/config"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc"
 )
 
 const s = `
@@ -119,23 +117,9 @@ func main() {
 	// 	return rand.Run(ctx)
 	// })
 
-	grpcServer := grpc.NewServer()
-
 	g.Go(func() error {
-		listener, err := net.Listen("unix", api.SocketPath)
-		if err != nil {
-			return err
-		}
-
-		apiServer := api.NewAPIServer()
-		api.RegisterAPIServer(grpcServer, apiServer)
-		return grpcServer.Serve(listener)
-	})
-
-	g.Go(func() error {
-		<-ctx.Done()
-		grpcServer.GracefulStop()
-		return nil
+		apiServer := &api.Server{}
+		return apiServer.ListenAndServe(ctx)
 	})
 
 	err = g.Wait()

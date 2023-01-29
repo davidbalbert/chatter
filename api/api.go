@@ -1,26 +1,72 @@
-//go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative api.proto
-
 package api
 
 import (
-	context "context"
-	"math/rand"
+	"context"
+	"fmt"
+	"net"
+
+	"github.com/davidbalbert/ospfd/rpc"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-const SocketPath = "/tmp/ospfd.sock"
+const socketPath = "/tmp/ospfd.sock"
 
-type apiServer struct {
-	UnimplementedAPIServer
+type Server struct {
+	rpc.UnimplementedAPIServer
 }
 
-func NewAPIServer() APIServer {
-	return &apiServer{}
+func (s *Server) ListenAndServe(ctx context.Context) error {
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return err
+	}
+
+	grpcServer := grpc.NewServer()
+	rpc.RegisterAPIServer(grpcServer, s)
+
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return grpcServer.Serve(listener)
+	})
+
+	g.Go(func() error {
+		<-ctx.Done()
+		grpcServer.GracefulStop()
+		return nil
+	})
+
+	return g.Wait()
 }
 
-func (s *apiServer) GetRandInt(ctx context.Context, in *Empty) (*RandInt, error) {
-	return &RandInt{Value: rand.Uint32()}, nil
+func (s *Server) GetRandInt(ctx context.Context, in *rpc.Empty) (*rpc.RandInt, error) {
+	return &rpc.RandInt{Value: 0}, nil
 }
 
-func (s *apiServer) GetRandString(ctx context.Context, in *Empty) (*RandString, error) {
-	return &RandString{Value: "Hello, world!"}, nil
+func (s *Server) GetRandString(ctx context.Context, in *rpc.Empty) (*rpc.RandString, error) {
+	return &rpc.RandString{Value: "Hello, world"}, nil
+}
+
+type Client interface {
+	rpc.APIClient
+}
+
+type client struct {
+	*grpc.ClientConn
+	rpc.APIClient
+}
+
+func NewClient() (Client, error) {
+	target := fmt.Sprintf("unix://%s", socketPath)
+	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, err
+	}
+
+	return &client{
+		ClientConn: conn,
+		APIClient:  rpc.NewAPIClient(conn),
+	}, nil
 }
