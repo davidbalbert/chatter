@@ -1,108 +1,74 @@
 package main
 
-import (
-	"fmt"
-	"os"
-	"strings"
+import "fmt"
 
-	"golang.org/x/term"
-)
-
-type autocompleteNode struct {
-	leaf     bool
-	result   string
-	children map[string]*autocompleteNode
+type node struct {
+	prefix   string
+	children map[rune]*node
 }
 
-type cli struct {
-	root *autocompleteNode // maps prefixes to autocompleteNodes
+func newNode(prefix string) *node {
+	return &node{prefix: prefix, children: make(map[rune]*node)}
 }
 
-func newCLI() *cli {
-	return &cli{
-		root: &autocompleteNode{
-			children: make(map[string]*autocompleteNode),
-		},
+func (n *node) walk(f func(string)) {
+	f(n.prefix)
+
+	for _, v := range n.children {
+		v.walk(f)
 	}
 }
 
-func (c *cli) addCommand(cmd, result string) {
-
+type radixTree struct {
+	root *node
 }
 
-func (c *cli) execute(line string) string {
-	switch line {
-	case "show version":
-		return "ospfd version 0.1"
-	case "show message":
-		return "Hello, world!"
-	default:
-		return "Unknown command"
-	}
+func newRadixTree() *radixTree {
+	return &radixTree{root: newNode("")}
 }
 
-func (c *cli) autocomplete(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
-	if key != '\t' {
-		return line, pos, false
-	}
+func (t *radixTree) insert(s string) {
+	n := t.root
 
-	// if "show version" is the only possible completion for line, then autocomplete to "show version"
-	if strings.HasPrefix("show version", line) {
-		return "show version ", 13, true
-	} else if strings.HasPrefix("show message", line) {
-		return "show message ", 13, true
-	} else if strings.HasPrefix("show", line) {
-		return "show ", 5, true
-	} else if strings.HasPrefix("exit", line) {
-		return "exit ", 5, true
-	}
-
-	// if strings.HasPrefix("show v", line) {
-	// 	return "show version ", 13, true
-	// } else if strings.HasPrefix("show m", line) {
-	// 	return "show message ", 13, true
-	// } else if strings.HasPrefix("show", line) {
-	// 	return "show ", 5, true
-	// } else if strings.HasPrefix("exit", line) {
-	// 	return "exit ", 5, true
-	// }
-
-	return line, pos, false
-}
-
-func client() int {
-	fmt.Printf("%d %d\n", '\t', '?')
-
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		fmt.Println(err)
-		return 1
-	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
-
-	c := newCLI()
-	t := term.NewTerminal(os.Stdin, "ospfd# ")
-	t.AutoCompleteCallback = c.autocomplete
-
-	for {
-		line, err := t.ReadLine()
-		if err != nil {
-			fmt.Println(err)
-			return 1
+	for i, r := range s {
+		if _, ok := n.children[r]; !ok {
+			n.children[r] = newNode(s[:i+1])
 		}
 
-		trimmed := strings.TrimSpace(line)
+		n = n.children[r]
+	}
+}
 
-		if trimmed == "" {
-			continue
-		} else if trimmed == "exit" {
-			return 0
+func (t *radixTree) walk(f func(string)) {
+	t.root.walk(f)
+}
+
+func (t *radixTree) hasPrefix(s string) bool {
+	n := t.root
+
+	for _, r := range s {
+		if _, ok := n.children[r]; !ok {
+			return false
 		}
 
-		fmt.Printf("%s\r\n", c.execute(trimmed))
+		n = n.children[r]
 	}
+
+	return true
 }
 
 func main() {
-	os.Exit(client())
+	t := newRadixTree()
+	t.insert("show ip ospf")
+	t.insert("show version")
+	t.insert("show ip ospf neighbor")
+
+	t.walk(func(s string) {
+		fmt.Println(s)
+	})
+
+	fmt.Println(t.hasPrefix("show ip ospf"))
+	fmt.Println(t.hasPrefix("show ip ospf neighbor"))
+	fmt.Println(t.hasPrefix("show ip ospf neighbor detail"))
+	fmt.Println(t.hasPrefix("sh"))
 }
