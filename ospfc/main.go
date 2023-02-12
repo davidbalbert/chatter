@@ -1,206 +1,108 @@
 package main
 
 import (
-	"bufio"
-	"context"
 	"fmt"
 	"os"
 	"strings"
 
-	"github.com/davidbalbert/ospfd/api"
-	"github.com/davidbalbert/ospfd/rpc"
+	"golang.org/x/term"
 )
 
-type node struct {
-	help     string
-	execute  func() string
-	children map[string]*node
-}
-
-func namespace(help string) *node {
-	return &node{
-		help:     help,
-		execute:  incompleteCommand,
-		children: make(map[string]*node),
-	}
-}
-
-func command(help string, execute func() string) *node {
-	return &node{
-		help:     help,
-		execute:  execute,
-		children: make(map[string]*node),
-	}
+type autocompleteNode struct {
+	leaf     bool
+	result   string
+	children map[string]*autocompleteNode
 }
 
 type cli struct {
-	root *node
-}
-
-func incompleteCommand() string {
-	return "Incomplete command"
+	root *autocompleteNode // maps prefixes to autocompleteNodes
 }
 
 func newCLI() *cli {
-	c := &cli{
-		root: namespace(""),
+	return &cli{
+		root: &autocompleteNode{
+			children: make(map[string]*autocompleteNode),
+		},
+	}
+}
+
+func (c *cli) addCommand(cmd, result string) {
+
+}
+
+func (c *cli) execute(line string) string {
+	switch line {
+	case "show version":
+		return "ospfd version 0.1"
+	case "show message":
+		return "Hello, world!"
+	default:
+		return "Unknown command"
+	}
+}
+
+func (c *cli) autocomplete(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+	if key != '\t' {
+		return line, pos, false
 	}
 
-	return c
-}
-
-func (c *cli) registerNamespace(path, help string) error {
-	return c.registerNode(path, namespace(help))
-}
-
-func (c *cli) registerCommand(path, help string, execute func() string) error {
-	return c.registerNode(path, command(help, execute))
-}
-
-func (c *cli) registerNode(path string, n *node) error {
-	components := strings.Fields(path)
-	ncomps := len(components)
-
-	current := c.root
-	for i, name := range components[:ncomps-1] {
-		current = current.children[name]
-		if current == nil {
-			return fmt.Errorf("cannot register \"%s\", missing node at \"%s\"", path, strings.Join(components[:i+1], " "))
-		}
+	// if "show version" is the only possible completion for line, then autocomplete to "show version"
+	if strings.HasPrefix("show version", line) {
+		return "show version ", 13, true
+	} else if strings.HasPrefix("show message", line) {
+		return "show message ", 13, true
+	} else if strings.HasPrefix("show", line) {
+		return "show ", 5, true
+	} else if strings.HasPrefix("exit", line) {
+		return "exit ", 5, true
 	}
 
-	name := components[ncomps-1]
-	if current.children[name] != nil {
-		return fmt.Errorf("cannot register \"%s\", node already exists", path)
-	}
+	// if strings.HasPrefix("show v", line) {
+	// 	return "show version ", 13, true
+	// } else if strings.HasPrefix("show m", line) {
+	// 	return "show message ", 13, true
+	// } else if strings.HasPrefix("show", line) {
+	// 	return "show ", 5, true
+	// } else if strings.HasPrefix("exit", line) {
+	// 	return "exit ", 5, true
+	// }
 
-	current.children[name] = n
-
-	return nil
+	return line, pos, false
 }
 
-func (c *cli) eval(s string) error {
-	components := strings.Fields(s)
+func client() int {
+	fmt.Printf("%d %d\n", '\t', '?')
 
-	current := c.root
-	for i, name := range components {
-		current = current.children[name]
-		if current == nil {
-			return fmt.Errorf("unknown command \"%s\"", strings.Join(components[:i+1], " "))
-		}
-	}
-
-	fmt.Println(current.execute())
-
-	return nil
-}
-
-func readLine() (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
-		return "", err
+		fmt.Println(err)
+		return 1
 	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	return strings.TrimSpace(line), nil
+	c := newCLI()
+	t := term.NewTerminal(os.Stdin, "ospfd# ")
+	t.AutoCompleteCallback = c.autocomplete
+
+	for {
+		line, err := t.ReadLine()
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
+		trimmed := strings.TrimSpace(line)
+
+		if trimmed == "" {
+			continue
+		} else if trimmed == "exit" {
+			return 0
+		}
+
+		fmt.Printf("%s\r\n", c.execute(trimmed))
+	}
 }
 
 func main() {
-	client, err := api.NewClient()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "failed to dial: %v\n", err)
-		os.Exit(1)
-	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	c := newCLI()
-
-	if err := c.registerNamespace("show", "Show running system information"); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	if err := c.registerNamespace("show rand", "Show random information"); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	err = c.registerCommand("show rand int", "Show a random integer", func() string {
-		resp, err := client.GetRandInt(ctx, &rpc.Empty{})
-		if err != nil {
-			return fmt.Sprintf("failed to show random int: %v", err)
-		}
-
-		return fmt.Sprintf("%d", resp.Value)
-	})
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	err = c.registerCommand("show rand string", "Show a random string", func() string {
-		resp, err := client.GetRandString(ctx, &rpc.Empty{})
-		if err != nil {
-			return fmt.Sprintf("failed to show random string: %v", err)
-		}
-
-		return resp.Value
-	})
-
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	stdin := make(chan string)
-
-	go func() {
-		for {
-			line, err := readLine()
-			if err != nil {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				fmt.Println(err)
-				cancel()
-				return
-			}
-
-			if line == "" {
-				continue
-			}
-
-			stdin <- line
-		}
-	}()
-
-	for {
-		fmt.Print("ospfd# ")
-		select {
-		case line := <-stdin:
-			if line == "exit" {
-				cancel()
-				return
-			}
-
-			err := c.eval(line)
-			if err != nil {
-				fmt.Println(err)
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			default:
-			}
-		case <-ctx.Done():
-			return
-		}
-	}
-
+	os.Exit(client())
 }

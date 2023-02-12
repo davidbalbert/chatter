@@ -21,7 +21,7 @@
             "mode": "auto",
             "program": "${workspaceFolder}/ospfc",
             "console": "integratedTerminal",
-            "preLaunchTask": "sockwait",
+            // "preLaunchTask": "sockwait",
         },
     ],
     "compounds": [
