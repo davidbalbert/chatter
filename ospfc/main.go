@@ -176,14 +176,13 @@ func (root *node) insert(s string) {
 			parent = n
 		} else { // prefixLen < len(n.label) && prefixLen < len(s)
 			// split
-			nleft := newNode(n.label[:prefixLen])
-			nright := n
-			nright.label = nright.label[prefixLen:]
+			nprefix := newNode(n.label[:prefixLen])
+			n.label = n.label[prefixLen:]
 
-			parent.children[nleft.label[0]] = nleft
-			nleft.children[nright.label[0]] = nright
+			parent.children[nprefix.label[0]] = nprefix
+			nprefix.children[n.label[0]] = n
 
-			return
+			parent = nprefix
 		}
 	}
 }
@@ -214,7 +213,7 @@ func main() {
 	t.insert("show version funny")
 
 	t.walk(func(s string) {
-		fmt.Println(s)
+		fmt.Printf("%#v\n", s)
 	})
 
 	// fmt.Println(t.hasPrefix("show ip ospf"))
