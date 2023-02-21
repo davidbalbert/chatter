@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 // 1. lcp is shorter than both the existing label and the key we're inserting
 // therefore, we split
 
@@ -141,14 +143,8 @@ func newNode(label string) *node {
 	}
 }
 
-type radixTree struct {
-	root *node
-}
-
-func newRadixTree() *radixTree {
-	return &radixTree{
-		root: newNode(""),
-	}
+func newRadixTree() *node {
+	return newNode("")
 }
 
 func commonPrefixLen(a, b string) int {
@@ -161,54 +157,48 @@ func commonPrefixLen(a, b string) int {
 	return i
 }
 
-func (t *radixTree) insert(s string) {
-	n := t.root
-	var parent *node
+func (root *node) insert(s string) {
+	parent := root
 	for {
+		n := parent.children[s[0]]
+
+		if n == nil {
+			parent.children[s[0]] = newNode(s)
+			return
+		}
+
 		prefixLen := commonPrefixLen(s, n.label)
 
 		if prefixLen == len(s) {
 			return
 		} else if prefixLen == len(n.label) {
 			s = s[prefixLen:]
-			b := s[0]
-
-			if n.children[b] == nil {
-				n.children[b] = newNode(s)
-				return
-			}
-
 			parent = n
-			n = n.children[b]
-		} else if prefixLen < len(n.label) {
+		} else { // prefixLen < len(n.label) && prefixLen < len(s)
 			// split
 			nleft := newNode(n.label[:prefixLen])
 			nright := n
 			nright.label = nright.label[prefixLen:]
 
 			parent.children[nleft.label[0]] = nleft
-			nleft.children[n.label[0]] = nright
+			nleft.children[nright.label[0]] = nright
 
 			return
 		}
 	}
 }
 
-// func (t *radixTree) walk(f func(string)) {
-// 	var walk func(n *node, s string)
-// 	walk = func(n *node, s string) {
-// 		if n.terminal {
-// 			f(s)
-// 			return
-// 		}
+func (root *node) walk(f func(string)) {
+	var walk func(*node, string)
+	walk = func(n *node, s string) {
+		f(s)
 
-// 		for _, child := range n.children {
-// 			walk(child, s+child.label)
-// 		}
-// 	}
-
-// 	walk(t.root, "")
-// }
+		for _, n := range n.children {
+			walk(n, s+n.label)
+		}
+	}
+	walk(root, "")
+}
 
 func main() {
 	t := newRadixTree()
@@ -223,9 +213,9 @@ func main() {
 	t.insert("show name")
 	t.insert("show version funny")
 
-	// t.walk(func(s string) {
-	// 	fmt.Println(s)
-	// })
+	t.walk(func(s string) {
+		fmt.Println(s)
+	})
 
 	// fmt.Println(t.hasPrefix("show ip ospf"))
 	// fmt.Println(t.hasPrefix("show ip ospf neighbor"))
