@@ -182,7 +182,10 @@ func (root *node) insert(s string) {
 			parent.children[nprefix.label[0]] = nprefix
 			nprefix.children[n.label[0]] = n
 
-			parent = nprefix
+			// TODO: this seems logically correct but when
+			// I uncomment it, "show version funny" gets
+			// printed as "show version  funny"
+			// parent = nprefix
 		}
 	}
 }
