@@ -136,17 +136,6 @@ type node struct {
 	children map[byte]*node
 }
 
-func newNode(label string) *node {
-	return &node{
-		label:    label,
-		children: make(map[byte]*node),
-	}
-}
-
-func newRadixTree() *node {
-	return newNode("")
-}
-
 func commonPrefixLen(a, b string) int {
 	i := 0
 	for ; i < len(a) && i < len(b); i++ {
@@ -160,10 +149,14 @@ func commonPrefixLen(a, b string) int {
 func (root *node) insert(s string) {
 	parent := root
 	for {
+		if parent.children == nil {
+			parent.children = make(map[byte]*node)
+		}
+
 		n := parent.children[s[0]]
 
 		if n == nil {
-			parent.children[s[0]] = newNode(s)
+			parent.children[s[0]] = &node{label: s}
 			return
 		}
 
@@ -176,7 +169,7 @@ func (root *node) insert(s string) {
 			parent = n
 		} else { // prefixLen < len(n.label) && prefixLen < len(s)
 			// split
-			nprefix := newNode(n.label[:prefixLen])
+			nprefix := &node{label: n.label[:prefixLen], children: make(map[byte]*node)}
 			n.label = n.label[prefixLen:]
 
 			parent.children[nprefix.label[0]] = nprefix
@@ -203,7 +196,7 @@ func (root *node) walk(f func(string)) {
 }
 
 func main() {
-	t := newRadixTree()
+	t := &node{}
 	// t.insert("show ip ospf")
 	// t.insert("show version")
 	// t.insert("show ip ospf neighbor")
