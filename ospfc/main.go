@@ -169,16 +169,14 @@ func (root *node) insert(s string) {
 			parent = n
 		} else { // prefixLen < len(n.label) && prefixLen < len(s)
 			// split
-			nprefix := &node{label: n.label[:prefixLen], children: make(map[byte]*node)}
+			prefixNode := &node{label: n.label[:prefixLen], children: make(map[byte]*node)}
 			n.label = n.label[prefixLen:]
 
-			parent.children[nprefix.label[0]] = nprefix
-			nprefix.children[n.label[0]] = n
+			parent.children[prefixNode.label[0]] = prefixNode
+			prefixNode.children[n.label[0]] = n
 
-			// TODO: this seems logically correct but when
-			// I uncomment it, "show version funny" gets
-			// printed as "show version  funny"
-			// parent = nprefix
+			s = s[prefixLen:]
+			parent = prefixNode
 		}
 	}
 }
