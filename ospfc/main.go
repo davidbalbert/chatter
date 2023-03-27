@@ -136,6 +136,7 @@ import (
 type node struct {
 	label    string
 	children map[byte]*node
+	terminal bool
 	value    any
 }
 
@@ -159,7 +160,7 @@ func (root *node) store(s string, value any) {
 		n := parent.children[s[0]]
 
 		if n == nil {
-			parent.children[s[0]] = &node{label: s, value: value}
+			parent.children[s[0]] = &node{label: s, terminal: true, value: value}
 			return
 		}
 
@@ -167,6 +168,7 @@ func (root *node) store(s string, value any) {
 
 		if prefixLen == len(s) {
 			n.value = value
+			n.terminal = true
 			return
 		} else if prefixLen == len(n.label) {
 			s = s[prefixLen:]
@@ -194,8 +196,8 @@ func (root *node) load(s string) (any, bool) {
 
 		prefixLen := commonPrefixLen(s, n.label)
 
-		if prefixLen == len(s) {
-			return n.value, true
+		if s == n.label {
+			return n.value, n.terminal
 		} else if prefixLen == len(n.label) {
 			s = s[prefixLen:]
 			n = n.children[s[0]]
@@ -230,10 +232,30 @@ func main() {
 	t.store("show name", 3)
 	t.store("show version funny", 4)
 
+	// fmt.Println(t.load("show version"))
+	// fmt.Println(t.load("show version detail"))
+	// fmt.Println(t.load("show name"))
+	// fmt.Println(t.load("show version funny"))
+	fmt.Println(t.load("s"))
+	fmt.Println(t.load("sh"))
+	fmt.Println(t.load("sho"))
+	fmt.Println(t.load("show"))
+	fmt.Println(t.load("show "))
+	fmt.Println(t.load("show v"))
+	fmt.Println(t.load("show ve"))
+	fmt.Println(t.load("show ver"))
+	fmt.Println(t.load("show vers"))
+	fmt.Println(t.load("show versi"))
+	fmt.Println(t.load("show versio"))
 	fmt.Println(t.load("show version"))
+	fmt.Println(t.load("show version "))
+	fmt.Println(t.load("show version d"))
+	fmt.Println(t.load("show version de"))
+	fmt.Println(t.load("show version det"))
+	fmt.Println(t.load("show version deta"))
+	fmt.Println(t.load("show version detai"))
 	fmt.Println(t.load("show version detail"))
-	fmt.Println(t.load("show name"))
-	fmt.Println(t.load("show version funny"))
+	fmt.Println(t.load("show version detail "))
 
 	// t.walk(func(s string) {
 	// 	fmt.Printf("%#v\n", s)
