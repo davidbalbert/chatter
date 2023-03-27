@@ -1,6 +1,8 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // 1. lcp is shorter than both the existing label and the key we're inserting
 // therefore, we split
@@ -134,6 +136,7 @@ import "fmt"
 type node struct {
 	label    string
 	children map[byte]*node
+	value    any
 }
 
 func commonPrefixLen(a, b string) int {
@@ -146,7 +149,7 @@ func commonPrefixLen(a, b string) int {
 	return i
 }
 
-func (root *node) insert(s string) {
+func (root *node) store(s string, value any) {
 	parent := root
 	for {
 		if parent.children == nil {
@@ -156,13 +159,14 @@ func (root *node) insert(s string) {
 		n := parent.children[s[0]]
 
 		if n == nil {
-			parent.children[s[0]] = &node{label: s}
+			parent.children[s[0]] = &node{label: s, value: value}
 			return
 		}
 
 		prefixLen := commonPrefixLen(s, n.label)
 
 		if prefixLen == len(s) {
+			n.value = value
 			return
 		} else if prefixLen == len(n.label) {
 			s = s[prefixLen:]
@@ -177,6 +181,26 @@ func (root *node) insert(s string) {
 
 			s = s[prefixLen:]
 			parent = prefixNode
+		}
+	}
+}
+
+func (root *node) load(s string) (any, bool) {
+	n := root
+	for {
+		if n == nil {
+			return nil, false
+		}
+
+		prefixLen := commonPrefixLen(s, n.label)
+
+		if prefixLen == len(s) {
+			return n.value, true
+		} else if prefixLen == len(n.label) {
+			s = s[prefixLen:]
+			n = n.children[s[0]]
+		} else {
+			return nil, false
 		}
 	}
 }
@@ -201,14 +225,19 @@ func main() {
 	// t.insert("show ipsec sa")
 	// t.insert("show")
 
-	t.insert("show version")
-	t.insert("show version detail")
-	t.insert("show name")
-	t.insert("show version funny")
+	t.store("show version", 1)
+	t.store("show version detail", 2)
+	t.store("show name", 3)
+	t.store("show version funny", 4)
 
-	t.walk(func(s string) {
-		fmt.Printf("%#v\n", s)
-	})
+	fmt.Println(t.load("show version"))
+	fmt.Println(t.load("show version detail"))
+	fmt.Println(t.load("show name"))
+	fmt.Println(t.load("show version funny"))
+
+	// t.walk(func(s string) {
+	// 	fmt.Printf("%#v\n", s)
+	// })
 
 	// fmt.Println(t.hasPrefix("show ip ospf"))
 	// fmt.Println(t.hasPrefix("show ip ospf neighbor"))
