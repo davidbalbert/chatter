@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 )
 
@@ -133,13 +134,6 @@ import (
 //                      'f' -> "funny"
 //        'n' -> "name"
 
-type node struct {
-	label    string
-	children map[byte]*node
-	terminal bool
-	value    any
-}
-
 func commonPrefixLen(a, b string) int {
 	i := 0
 	for ; i < len(a) && i < len(b); i++ {
@@ -148,6 +142,66 @@ func commonPrefixLen(a, b string) int {
 		}
 	}
 	return i
+}
+
+type node struct {
+	label    string
+	children map[byte]*node
+	terminal bool
+	value    any
+}
+
+type cursor struct {
+	node   *node
+	offset int
+}
+
+type walkBytesFunc func(prefix string, c cursor) error
+
+var errSkipAll = errors.New("skip all")
+var errSkipPrefix = errors.New("skip prefix")
+
+// calls fn for every byte. it doesn't matter whether we're terminal or not
+func (c cursor) walkBytes(fn walkBytesFunc) error {
+	var walk func(prefix string, c cursor, fn walkBytesFunc) error
+	walk = func(prefix string, c cursor, fn walkBytesFunc) error {
+		n := c.node
+		offset := c.offset
+
+		for offset < len(n.label) {
+			prefix = prefix + string(n.label[offset])
+
+			if err := fn(prefix, cursor{node: n, offset: offset}); err != nil {
+				if err == errSkipPrefix {
+					return nil
+				}
+				return err
+			}
+			offset++
+		}
+
+		if n.children == nil {
+			return nil
+		}
+
+		for _, child := range n.children {
+			if err := walk(prefix, cursor{node: child}, fn); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	if err := walk("", c, fn); err != nil && err != errSkipAll {
+		return err
+	}
+
+	return nil
+}
+
+func (root *node) walkBytes(fn walkBytesFunc) error {
+	return cursor{node: root}.walkBytes(fn)
 }
 
 func (root *node) store(s string, value any) {
@@ -187,7 +241,7 @@ func (root *node) store(s string, value any) {
 	}
 }
 
-func (root *node) load(s string) (any, bool) {
+func (root *node) load(s string) (value any, ok bool) {
 	n := root
 	for {
 		if n == nil {
@@ -232,30 +286,14 @@ func main() {
 	t.store("show name", 3)
 	t.store("show version funny", 4)
 
-	// fmt.Println(t.load("show version"))
-	// fmt.Println(t.load("show version detail"))
-	// fmt.Println(t.load("show name"))
-	// fmt.Println(t.load("show version funny"))
-	fmt.Println(t.load("s"))
-	fmt.Println(t.load("sh"))
-	fmt.Println(t.load("sho"))
-	fmt.Println(t.load("show"))
-	fmt.Println(t.load("show "))
-	fmt.Println(t.load("show v"))
-	fmt.Println(t.load("show ve"))
-	fmt.Println(t.load("show ver"))
-	fmt.Println(t.load("show vers"))
-	fmt.Println(t.load("show versi"))
-	fmt.Println(t.load("show versio"))
-	fmt.Println(t.load("show version"))
-	fmt.Println(t.load("show version "))
-	fmt.Println(t.load("show version d"))
-	fmt.Println(t.load("show version de"))
-	fmt.Println(t.load("show version det"))
-	fmt.Println(t.load("show version deta"))
-	fmt.Println(t.load("show version detai"))
-	fmt.Println(t.load("show version detail"))
-	fmt.Println(t.load("show version detail "))
+	err := t.walkBytes(func(prefix string, c cursor) error {
+		fmt.Printf("%#v %#v\n", prefix, c)
+		return nil
+	})
+
+	if err != nil {
+		panic(err)
+	}
 
 	// t.walk(func(s string) {
 	// 	fmt.Printf("%#v\n", s)
