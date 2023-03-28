@@ -226,10 +226,6 @@ func main() {
 
 	err = n.walkBytes(func(s string) error {
 		fmt.Printf("%#v\n", s)
-		if s == "show version d" || s == "show version fu" {
-			return errSkipPrefix
-		}
-
 		return nil
 	})
 
