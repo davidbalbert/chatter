@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // 1. lcp is shorter than both the existing label and the key we're inserting
@@ -200,6 +201,35 @@ func (c cursor) walkBytes(fn walkBytesFunc) error {
 	return nil
 }
 
+func (c cursor) next() []cursor {
+	if c.offset < len(c.node.label)-1 {
+		return []cursor{{c.node, c.offset + 1}}
+	}
+
+	if c.node.children == nil {
+		return nil
+	}
+
+	var next []cursor
+	for _, child := range c.node.children {
+		next = append(next, cursor{node: child})
+	}
+
+	return next
+}
+
+func (c cursor) value() (any, bool) {
+	if c.offset < len(c.node.label) {
+		return nil, false
+	}
+
+	return c.node.value, c.node.terminal
+}
+
+func (c cursor) String() string {
+	return fmt.Sprintf("{%#v %d}", c.node.label, c.offset)
+}
+
 func (root *node) walkBytes(fn walkBytesFunc) error {
 	return cursor{node: root}.walkBytes(fn)
 }
@@ -261,16 +291,88 @@ func (root *node) load(s string) (value any, ok bool) {
 	}
 }
 
-func (root *node) walk(f func(string)) {
-	var walk func(*node, string)
-	walk = func(n *node, s string) {
-		f(s)
-
-		for _, n := range n.children {
-			walk(n, s+n.label)
-		}
+func (root *node) cursors() []cursor {
+	if len(root.label) > 0 {
+		return []cursor{{node: root}}
 	}
-	walk(root, "")
+
+	var cursors []cursor
+	for _, child := range root.children {
+		cursors = append(cursors, cursor{node: child})
+	}
+
+	return cursors
+}
+
+func (root *node) fuzzyLoad(q string) ([]any, error) {
+	cursors := root.cursors()
+	words := strings.Fields(q)
+	var values []any
+
+	for i, word := range words {
+		last := i == len(words)-1
+		var next []cursor
+
+		fmt.Printf("1. cursors: %v\n", cursors)
+
+		for _, b := range []byte(word) {
+			for _, c := range cursors {
+				err := c.walkBytes(func(prefix string, c1 cursor) error {
+					fmt.Printf("b: %c, %c\n", b, prefix[len(prefix)-1])
+
+					if b == prefix[len(prefix)-1] {
+						next = append(next, c1.next()...)
+					}
+
+					return errSkipPrefix
+				})
+
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			cursors = next
+			next = nil
+		}
+
+		fmt.Printf("2. cursors: %v\n", cursors)
+
+		// right now there's a bug. if we have a query like "a b" and we have a two keys "aay bee" and "aay bee cee"
+		// we expect to load the value for "aay bee", but we get no values because the following code reads through
+		// a space. If we're on the last iteration, we need to read up to a space, but not through it.
+
+		for _, c := range cursors {
+			err := c.walkBytes(func(prefix string, c1 cursor) error {
+				b := prefix[len(prefix)-1]
+				fmt.Printf("b: %c\n", b)
+
+				if last && b == ' ' {
+					value, ok := c1.value()
+					if ok {
+						values = append(values, value)
+					}
+
+					return errSkipPrefix
+				} else if b == ' ' {
+					next = append(next, c1.next()...)
+					return errSkipPrefix
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		cursors = next
+
+		fmt.Printf("3. cursors: %v\n", cursors)
+	}
+
+	return values, nil
 }
 
 func main() {
@@ -286,14 +388,12 @@ func main() {
 	t.store("show name", 3)
 	t.store("show version funny", 4)
 
-	err := t.walkBytes(func(prefix string, c cursor) error {
-		fmt.Printf("%#v %#v\n", prefix, c)
-		return nil
-	})
-
+	values, err := t.fuzzyLoad("sh v")
 	if err != nil {
 		panic(err)
 	}
+
+	fmt.Println(values)
 
 	// t.walk(func(s string) {
 	// 	fmt.Printf("%#v\n", s)
