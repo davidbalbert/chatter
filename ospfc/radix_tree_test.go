@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 )
 
@@ -120,24 +121,12 @@ func TestWalk(t *testing.T) {
 	expectedKeys := []string{"bar", "foo", "foobar"}
 	expectedValues := []int{3, 2, 1}
 
-	if len(keys) != len(expectedKeys) {
-		t.Fatalf("expected %d prefixes, got %d", len(expectedKeys), len(keys))
+	if !reflect.DeepEqual(keys, expectedKeys) {
+		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
 	}
 
-	if len(values) != len(expectedValues) {
-		t.Fatalf("expected %d values, got %d", len(expectedValues), len(values))
-	}
-
-	for i, prefix := range keys {
-		if prefix != expectedKeys[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
-		}
-	}
-
-	for i, value := range values {
-		if value != expectedValues[i] {
-			t.Fatalf("expected values %#v, got %#v", expectedValues, values)
-		}
+	if !reflect.DeepEqual(values, expectedValues) {
+		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
 }
 
@@ -158,24 +147,12 @@ func TestWalkSkipAll(t *testing.T) {
 	expectedPrefixes := []string{"bar"}
 	expectedValues := []int{3}
 
-	if len(keys) != len(expectedPrefixes) {
-		t.Fatalf("expected %d prefixes, got %d", len(expectedPrefixes), len(keys))
+	if !reflect.DeepEqual(keys, expectedPrefixes) {
+		t.Fatalf("expected prefixes %#v, got %#v", expectedPrefixes, keys)
 	}
 
-	if len(values) != len(expectedValues) {
-		t.Fatalf("expected %d values, got %d", len(expectedValues), len(values))
-	}
-
-	for i, prefix := range keys {
-		if prefix != expectedPrefixes[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expectedPrefixes, keys)
-		}
-	}
-
-	for i, value := range values {
-		if value != expectedValues[i] {
-			t.Fatalf("expected values %#v, got %#v", expectedValues, values)
-		}
+	if !reflect.DeepEqual(values, expectedValues) {
+		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
 }
 
@@ -198,14 +175,8 @@ func TestWalkBytes(t *testing.T) {
 
 	expected := []string{"", "b", "ba", "bar", "f", "fo", "foo", "foob", "fooba", "foobar"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -252,14 +223,8 @@ func TestWalkBytesSkipPrefix(t *testing.T) {
 
 	expected := []string{"", "b", "f", "fo", "foo", "foob", "fooba", "foobar"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -287,14 +252,8 @@ func TestWalkBytesSkipAll(t *testing.T) {
 
 	expected := []string{"", "b"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -317,14 +276,8 @@ func TestWalkBytesWithRootBeforeBranch(t *testing.T) {
 
 	expected := []string{"fo", "foo", "foob", "fooba", "foobar"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -347,14 +300,8 @@ func TestWalkBytesWithRootAtBranch(t *testing.T) {
 
 	expected := []string{"foo", "foob", "fooba", "foobar"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -377,14 +324,8 @@ func TestWalkBytesWithRootAfterBranch(t *testing.T) {
 
 	expected := []string{"foob", "fooba", "foobar"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -428,14 +369,8 @@ func TestWalkBytesSkipAllBeforeFirstBranch(t *testing.T) {
 
 	expected := []string{"f"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -457,14 +392,8 @@ func TestWalkBytesSkipPrefixBeforeFirstBranch(t *testing.T) {
 
 	expected := []string{"f"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -486,14 +415,8 @@ func TestWalkBytesErrorBeforeFirstBranch(t *testing.T) {
 
 	expected := []string{"f"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
@@ -520,14 +443,8 @@ func TestWalkBytesErrorOnFirstBranch(t *testing.T) {
 
 	expected := []string{"", "f", "fo", "foo"}
 
-	if len(prefixes) != len(expected) {
-		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
-	}
-
-	for i, prefix := range prefixes {
-		if prefix != expected[i] {
-			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
-		}
+	if !reflect.DeepEqual(prefixes, expected) {
+		t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
 	}
 }
 
