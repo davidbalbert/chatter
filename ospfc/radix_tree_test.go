@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -62,6 +63,22 @@ func TestStoreAndLoadEmptyKey(t *testing.T) {
 		t.Fatal("expected empty key to be found")
 	} else if value != 1 {
 		t.Fatalf("expected empty key to be 1, got %d", value)
+	}
+}
+
+func TestNonExistantEmptyKeyLoad(t *testing.T) {
+	n := &node{}
+
+	_, ok := n.load("")
+	if ok {
+		t.Fatal("expected empty key to not be found")
+	}
+
+	n.store("foo", 1)
+
+	_, ok = n.load("")
+	if ok {
+		t.Fatal("expected empty key to not be found")
 	}
 }
 
@@ -270,7 +287,7 @@ func TestWalkBytesWithRootBeforeBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("b", func(prefix string) error {
+	err := n.walkBytes("fo", func(prefix string) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -279,7 +296,9 @@ func TestWalkBytesWithRootBeforeBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := []string{"b", "ba", "bar"}
+	fmt.Println(prefixes)
+
+	expected := []string{"fo", "foo", "foob", "fooba", "foobar"}
 
 	if len(prefixes) != len(expected) {
 		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
@@ -372,4 +391,32 @@ func TestWalkBytesWithNonexistentRoot(t *testing.T) {
 	if len(prefixes) != 0 {
 		t.Fatalf("expected no prefixes, got %#v", prefixes)
 	}
+}
+
+func TestCursorSub(t *testing.T) {
+	n := &node{}
+	n.store("foobar", 1)
+	n.store("foo", 2)
+	n.store("bar", 3)
+
+	c := &cursor{n: n, edgeIdx: -1}
+
+	c = c.sub("f")
+	if c == nil {
+		t.Fatalf("expected cursor, got nil")
+	}
+
+	if c.prefix != "f" {
+		t.Fatalf("expected prefix %q, got %q", "f", c.prefix)
+	}
+
+	if c.edgeIdx != 1 {
+		t.Fatalf("expected edgeIdx %d, got %d", 1, c.edgeIdx)
+	}
+
+	if c.pos != 0 {
+		t.Fatalf("expected pos %d, got %d", 0, c.pos)
+	}
+
+	fmt.Printf("%+v\n", c)
 }

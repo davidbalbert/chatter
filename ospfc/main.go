@@ -231,7 +231,7 @@ func (c *cursor) sub(root string) *cursor {
 				return &cursor{
 					n:       n,
 					edgeIdx: i,
-					pos:     prefixLen,
+					pos:     prefixLen - 1,
 					prefix:  c.prefix + root,
 				}
 			} else {
@@ -252,7 +252,7 @@ func (c *cursor) walkBytesToNearestNode(fn walkBytesFunc) (*node, string, error)
 	}
 
 	edge := c.n.edges[c.edgeIdx]
-	rest := edge.label[c.pos:]
+	rest := edge.label[c.pos+1:]
 
 	for i := 0; i < len(rest); i++ {
 		err := fn(c.prefix + rest[:i])
