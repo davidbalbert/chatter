@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 )
 
@@ -159,9 +160,136 @@ func (n *node) walk(fn walkFunc) error {
 
 type walkBytesFunc func(s string) error
 
+type cursor struct {
+	n       *node
+	edgeIdx int // -1 if we're at a node
+	pos     int
+	prefix  string
+}
+
+func (c *cursor) sub(root string) *cursor {
+	if len(root) == 0 {
+		return c
+	}
+
+	r := root
+	var n *node
+	if c.edgeIdx == -1 {
+		n = c.n
+	} else {
+		edge := c.n.edges[c.edgeIdx]
+		rest := edge.label[c.pos:]
+		prefixLength := commonPrefixLen(rest, r)
+
+		// possible outcomes:
+		// - neither rest nor root is a prefix of the other. return nil
+		// - root is a prefix of rest and on this edge. return new cursor
+		// - rest is a prefix of root and on this edge. set n to edge.node and continue
+
+		if prefixLength < len(rest) && prefixLength < len(r) {
+			// r is not in the tree
+			return nil
+		} else if prefixLength < len(rest) {
+			// r is a prefix of rest (it's on edge), just move pos
+			return &cursor{
+				n:       c.n,
+				edgeIdx: c.edgeIdx,
+				pos:     c.pos + prefixLength,
+				prefix:  c.prefix + root[:prefixLength],
+			}
+		} else {
+			// rest is a prefix of r
+			n = edge.node
+			r = r[prefixLength:]
+		}
+	}
+
+	for {
+		i := sort.Search(len(n.edgeIndex), func(i int) bool {
+			return n.edgeIndex[i] >= r[0]
+		})
+
+		if i < len(n.edgeIndex) && n.edgeIndex[i] == r[0] {
+			// edge found
+			e := n.edges[i]
+			prefixLen := commonPrefixLen(e.label, r)
+
+			if prefixLen == len(e.label) && prefixLen == len(r) {
+				// exact match on next node
+				return &cursor{
+					n:       e.node,
+					edgeIdx: -1,
+					pos:     0,
+					prefix:  c.prefix + root,
+				}
+			} else if prefixLen == len(e.label) {
+				// e.label is a prefix of r
+				r = r[prefixLen:]
+				n = e.node
+			} else if prefixLen == len(r) {
+				// r is a prefix of e.label
+				return &cursor{
+					n:       n,
+					edgeIdx: i,
+					pos:     prefixLen,
+					prefix:  c.prefix + root,
+				}
+			} else {
+				// prefixLen < len(n.label) && prefixLen < len(r)
+				// r is not in the tree
+				return nil
+			}
+		} else {
+			// no edge found
+			return nil
+		}
+	}
+}
+
+func (c *cursor) walkBytesToNearestNode(fn walkBytesFunc) (*node, string, error) {
+	if c.edgeIdx == -1 {
+		return c.n, "", nil
+	}
+
+	edge := c.n.edges[c.edgeIdx]
+	rest := edge.label[c.pos:]
+
+	for i := 0; i < len(rest); i++ {
+		err := fn(c.prefix + rest[:i])
+		if err == errSkipAll {
+			return nil, "", errSkipAll
+		} else if err == errSkipPrefix {
+			return nil, "", nil
+		} else if err != nil {
+			return nil, "", err
+		}
+	}
+
+	return edge.node, rest, nil
+}
+
 // calls fn for each byte in the tree, even when the byte falls inside an edge
-func (n *node) walkBytes(fn walkBytesFunc) error {
-	if !n.hasValue && len(n.edges) == 0 {
+func (n *node) walkBytes(root string, fn walkBytesFunc) error {
+	// if the tree is empty, we don't want to call fn at all, even for "".
+	if len(root) == 0 && !n.hasValue && len(n.edges) == 0 {
+		return nil
+	}
+
+	var c *cursor = &cursor{n: n, edgeIdx: -1, pos: 0, prefix: ""}
+
+	c = c.sub(root)
+	if c == nil {
+		return fmt.Errorf("root %q not found", root)
+	}
+
+	n, s, err := c.walkBytesToNearestNode(fn)
+	if err == errSkipAll {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	if n == nil {
 		return nil
 	}
 
@@ -193,7 +321,7 @@ func (n *node) walkBytes(fn walkBytesFunc) error {
 		return nil
 	}
 
-	err := walk("", n)
+	err = walk(root+s, n)
 	if err == errSkipAll {
 		return nil
 	}
@@ -215,22 +343,23 @@ func main() {
 	// fmt.Println(n.load("show ver"))
 	// fmt.Println(n.load("nothing going on here"))
 
-	err := n.walk(func(key string, value any) error {
-		fmt.Printf("%#v: %#v\n", key, value)
-		return nil
-	})
+	// err := n.walk(func(key string, value any) error {
+	// 	fmt.Printf("%#v: %#v\n", key, value)
+	// 	return nil
+	// })
 
-	if err != nil {
-		panic(err)
-	}
+	// if err != nil {
+	// 	panic(err)
+	// }
 
-	err = n.walkBytes(func(s string) error {
+	err := n.walkBytes("s", func(s string) error {
 		fmt.Printf("%#v\n", s)
 		return nil
 	})
 
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 
 	// t.walk(func(s string) {
