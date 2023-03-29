@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
@@ -296,8 +295,6 @@ func TestWalkBytesWithRootBeforeBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(prefixes)
-
 	expected := []string{"fo", "foo", "foob", "fooba", "foobar"}
 
 	if len(prefixes) != len(expected) {
@@ -404,19 +401,55 @@ func TestCursorSub(t *testing.T) {
 	c = c.sub("f")
 	if c == nil {
 		t.Fatalf("expected cursor, got nil")
-	}
-
-	if c.prefix != "f" {
+	} else if c.prefix != "f" {
 		t.Fatalf("expected prefix %q, got %q", "f", c.prefix)
-	}
-
-	if c.edgeIdx != 1 {
+	} else if c.edgeIdx != 1 {
 		t.Fatalf("expected edgeIdx %d, got %d", 1, c.edgeIdx)
-	}
-
-	if c.pos != 0 {
+	} else if c.pos != 0 {
 		t.Fatalf("expected pos %d, got %d", 0, c.pos)
 	}
 
-	fmt.Printf("%+v\n", c)
+	c = c.sub("o")
+	if c == nil {
+		t.Fatalf("expected cursor, got nil")
+	} else if c.prefix != "fo" {
+		t.Fatalf("expected prefix %q, got %q", "fo", c.prefix)
+	} else if c.edgeIdx != 1 {
+		t.Fatalf("expected edgeIdx %d, got %d", 1, c.edgeIdx)
+	} else if c.pos != 1 {
+		t.Fatalf("expected pos %d, got %d", 1, c.pos)
+	}
+
+	c = c.sub("o")
+	if c == nil {
+		t.Fatalf("expected cursor, got nil")
+	} else if c.prefix != "foo" {
+		t.Fatalf("expected prefix %q, got %q", "foo", c.prefix)
+	} else if c.edgeIdx != -1 {
+		t.Fatalf("expected edgeIdx %d, got %d", -1, c.edgeIdx)
+	} else if c.pos != 0 {
+		t.Fatalf("expected pos %d, got %d", 0, c.pos)
+	}
+
+	c = c.sub("b")
+	if c == nil {
+		t.Fatalf("expected cursor, got nil")
+	} else if c.prefix != "foob" {
+		t.Fatalf("expected prefix %q, got %q", "foob", c.prefix)
+	} else if c.edgeIdx != 0 {
+		t.Fatalf("expected edgeIdx %d, got %d", 0, c.edgeIdx)
+	} else if c.pos != 0 {
+		t.Fatalf("expected pos %d, got %d", 0, c.pos)
+	}
+
+	c = c.sub("z")
+	if c != nil {
+		t.Fatalf("expected nil, got cursor")
+	}
+
+	c = &cursor{n: n, edgeIdx: -1}
+	c = c.sub("z")
+	if c != nil {
+		t.Fatalf("expected nil, got cursor")
+	}
 }

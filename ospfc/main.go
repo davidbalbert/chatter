@@ -178,7 +178,7 @@ func (c *cursor) sub(root string) *cursor {
 		n = c.n
 	} else {
 		edge := c.n.edges[c.edgeIdx]
-		rest := edge.label[c.pos:]
+		rest := edge.label[c.pos+1:]
 		prefixLength := commonPrefixLen(rest, r)
 
 		// possible outcomes:
@@ -205,6 +205,15 @@ func (c *cursor) sub(root string) *cursor {
 	}
 
 	for {
+		if len(r) == 0 {
+			return &cursor{
+				n:       n,
+				edgeIdx: -1,
+				pos:     0,
+				prefix:  c.prefix + root,
+			}
+		}
+
 		i := sort.Search(len(n.edgeIndex), func(i int) bool {
 			return n.edgeIndex[i] >= r[0]
 		})
