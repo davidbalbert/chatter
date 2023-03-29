@@ -30,13 +30,13 @@ type node struct {
 }
 
 func (n *node) store(key string, value any) {
-	if len(key) == 0 {
-		n.hasValue = true
-		n.value = value
-		return
-	}
-
 	for {
+		if len(key) == 0 {
+			n.hasValue = true
+			n.value = value
+			return
+		}
+
 		i := sort.Search(len(n.edgeIndex), func(i int) bool {
 			return n.edgeIndex[i] >= key[0]
 		})
