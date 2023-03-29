@@ -320,9 +320,7 @@ func (n *node) walkBytes(root string, fn walkBytesFunc) error {
 			}
 
 			err := walk(key+e.label, e.node)
-			if err == errSkipPrefix {
-				continue
-			} else if err != nil {
+			if err != nil {
 				return err
 			}
 		}
@@ -340,10 +338,10 @@ func (n *node) walkBytes(root string, fn walkBytesFunc) error {
 
 func main() {
 	n := &node{}
-	n.store("show version", 1)
-	n.store("show version detail", 2)
-	n.store("show name", 3)
-	n.store("show version funny", 4)
+	// n.store("show version", 1)
+	// n.store("show version detail", 2)
+	// n.store("show name", 3)
+	// n.store("show version funny", 4)
 
 	// fmt.Println(n.load("show version"))
 	// fmt.Println(n.load("show version detail"))
@@ -361,7 +359,11 @@ func main() {
 	// 	panic(err)
 	// }
 
-	err := n.walkBytes("s", func(s string) error {
+	n.store("foo", 1)
+	n.store("foobar", 2)
+	n.store("bar", 3)
+
+	err := n.walkBytes("f", func(s string) error {
 		fmt.Printf("%#v\n", s)
 		return nil
 	})

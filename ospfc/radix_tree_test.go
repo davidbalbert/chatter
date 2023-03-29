@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"testing"
 )
 
@@ -208,6 +209,25 @@ func TestWalkBytes(t *testing.T) {
 	}
 }
 
+func TestWalkBytesEmptyNode(t *testing.T) {
+	n := &node{}
+
+	count := 0
+
+	err := n.walkBytes("", func(prefix string) error {
+		count++
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if count != 0 {
+		t.Fatalf("expected 0 prefixes, got %d", count)
+	}
+}
+
 func TestWalkBytesSkipPrefix(t *testing.T) {
 	n := &node{}
 	n.store("foo", 1)
@@ -387,6 +407,127 @@ func TestWalkBytesWithNonexistentRoot(t *testing.T) {
 
 	if len(prefixes) != 0 {
 		t.Fatalf("expected no prefixes, got %#v", prefixes)
+	}
+}
+
+func TestWalkBytesSkipAllBeforeFirstBranch(t *testing.T) {
+	n := &node{}
+	n.store("foobar", 1)
+	n.store("foo", 2)
+
+	var prefixes []string
+
+	err := n.walkBytes("f", func(prefix string) error {
+		prefixes = append(prefixes, prefix)
+		return errSkipAll
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := []string{"f"}
+
+	if len(prefixes) != len(expected) {
+		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
+	}
+
+	for i, prefix := range prefixes {
+		if prefix != expected[i] {
+			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
+		}
+	}
+}
+
+func TestWalkBytesSkipPrefixBeforeFirstBranch(t *testing.T) {
+	n := &node{}
+	n.store("foobar", 1)
+	n.store("foo", 2)
+
+	var prefixes []string
+
+	err := n.walkBytes("f", func(prefix string) error {
+		prefixes = append(prefixes, prefix)
+		return errSkipPrefix
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := []string{"f"}
+
+	if len(prefixes) != len(expected) {
+		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
+	}
+
+	for i, prefix := range prefixes {
+		if prefix != expected[i] {
+			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
+		}
+	}
+}
+
+func TestWalkBytesErrorBeforeFirstBranch(t *testing.T) {
+	n := &node{}
+	n.store("foobar", 1)
+	n.store("foo", 2)
+
+	var prefixes []string
+
+	err := n.walkBytes("f", func(prefix string) error {
+		prefixes = append(prefixes, prefix)
+		return errors.New("test error")
+	})
+
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	expected := []string{"f"}
+
+	if len(prefixes) != len(expected) {
+		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
+	}
+
+	for i, prefix := range prefixes {
+		if prefix != expected[i] {
+			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
+		}
+	}
+}
+
+func TestWalkBytesErrorOnFirstBranch(t *testing.T) {
+	n := &node{}
+	n.store("foobar", 1)
+	n.store("foo", 2)
+
+	var prefixes []string
+
+	err := n.walkBytes("", func(prefix string) error {
+		prefixes = append(prefixes, prefix)
+
+		if prefix == "foo" {
+			return errors.New("test error")
+		}
+
+		return nil
+	})
+
+	if err == nil {
+		t.Fatalf("expected error, got nil")
+	}
+
+	expected := []string{"", "f", "fo", "foo"}
+
+	if len(prefixes) != len(expected) {
+		t.Fatalf("expected %d prefixes, got %d", len(expected), len(prefixes))
+	}
+
+	for i, prefix := range prefixes {
+		if prefix != expected[i] {
+			t.Fatalf("expected prefixes %#v, got %#v", expected, prefixes)
+		}
 	}
 }
 
