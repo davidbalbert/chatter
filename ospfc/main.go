@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 func commonPrefixLen(a, b string) int {
@@ -158,7 +159,7 @@ func (n *node) walk(fn walkFunc) error {
 	return err
 }
 
-type walkBytesFunc func(s string) error
+type walkBytesFunc func(prefix string, value any, hasValue bool, leaf bool) error
 
 type cursor struct {
 	n       *node
@@ -264,7 +265,7 @@ func (c *cursor) walkBytesToNearestNode(fn walkBytesFunc) (*node, string, error)
 	rest := edge.label[c.pos+1:]
 
 	for i := 0; i < len(rest); i++ {
-		err := fn(c.prefix + rest[:i])
+		err := fn(c.prefix+rest[:i], nil, false, false)
 		if err == errSkipAll {
 			return nil, "", errSkipAll
 		} else if err == errSkipPrefix {
@@ -304,14 +305,17 @@ func (n *node) walkBytes(root string, fn walkBytesFunc) error {
 
 	var walk func(key string, n *node) error
 	walk = func(key string, n *node) error {
-		if err := fn(key); err != nil {
+		err := fn(key, n.value, n.hasValue, len(n.edgeIndex) == 0)
+		if err == errSkipPrefix {
+			return nil
+		} else if err != nil {
 			return err
 		}
 
 	Edges:
 		for _, e := range n.edges {
 			for i := 0; i < len(e.label)-1; i++ {
-				err := fn(key + string(e.label[:i+1]))
+				err := fn(key+string(e.label[:i+1]), nil, false, false)
 				if err == errSkipPrefix {
 					continue Edges
 				} else if err != nil {
@@ -336,41 +340,116 @@ func (n *node) walkBytes(root string, fn walkBytesFunc) error {
 	return err
 }
 
+type cli struct {
+	tree node
+}
+
+func (c *cli) register(key string, value any) {
+	c.tree.store(strings.TrimSpace(key), value)
+}
+
+func (c *cli) expandAndLoad(query string) ([]string, []any, error) {
+	fields := strings.Fields(query)
+
+	if len(fields) == 0 {
+		return nil, nil, fmt.Errorf("empty query")
+	}
+
+	roots := []string{fields[0]}
+	for i := 0; i < len(fields)-1; i++ {
+		var newRoots []string
+
+		for _, root := range roots {
+			err := c.tree.walkBytes(root, func(prefix string, value any, hasValue bool, leaf bool) error {
+				if prefix[len(prefix)-1] == ' ' {
+					newRoots = append(newRoots, prefix+fields[i+1])
+					return errSkipPrefix
+				} else if leaf {
+					// we're at the end of the string, but we still have more fields, so this can't match
+					return errSkipPrefix
+				}
+
+				return nil
+			})
+
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+
+		roots = newRoots
+	}
+
+	var keys []string
+	var values []any
+	for _, root := range roots {
+		c.tree.walkBytes(root, func(prefix string, value any, hasValue bool, leaf bool) error {
+			if prefix[len(prefix)-1] == ' ' {
+				return errSkipPrefix
+			} else if hasValue {
+				keys = append(keys, prefix)
+				values = append(values, value)
+			}
+
+			return nil
+		})
+	}
+	return keys, values, nil
+}
+
 func main() {
-	n := &node{}
-	// n.store("show version", 1)
-	// n.store("show version detail", 2)
-	// n.store("show name", 3)
-	// n.store("show version funny", 4)
+	c := &cli{}
+	c.register("show version", 1)
+	c.register("show version detail", 2)
+	c.register("show name", 3)
+	c.register("show number", 4)
+	c.register("show version funny", 5)
 
-	// fmt.Println(n.load("show version"))
-	// fmt.Println(n.load("show version detail"))
-	// fmt.Println(n.load("show name"))
-	// fmt.Println(n.load("show version funny"))
-	// fmt.Println(n.load("show ver"))
-	// fmt.Println(n.load("nothing going on here"))
-
-	// err := n.walk(func(key string, value any) error {
-	// 	fmt.Printf("%#v: %#v\n", key, value)
-	// 	return nil
-	// })
-
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	n.store("foo", 1)
-	n.store("foobar", 2)
-	n.store("bar", 3)
-
-	err := n.walkBytes("f", func(s string) error {
-		fmt.Printf("%#v\n", s)
-		return nil
-	})
-
+	fmt.Println("? show version")
+	keys, values, err := c.expandAndLoad("show version")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
+	}
+
+	for i := range keys {
+		fmt.Printf("! %#v %#v\n", keys[i], values[i])
+	}
+	fmt.Println()
+
+	fmt.Println("? sh ver")
+	keys, values, err = c.expandAndLoad("sh ver")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	for i := range keys {
+		fmt.Printf("! %#v %#v\n", keys[i], values[i])
+	}
+	fmt.Println()
+
+	fmt.Println("? s v d")
+	keys, values, err = c.expandAndLoad("s v d")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	for i := range keys {
+		fmt.Printf("! %#v %#v\n", keys[i], values[i])
+	}
+	fmt.Println()
+
+	fmt.Println("? sh n")
+	keys, values, err = c.expandAndLoad("sh n")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	for i := range keys {
+		fmt.Printf("! %#v %#v\n", keys[i], values[i])
 	}
 
 	// t.walk(func(s string) {

@@ -164,7 +164,7 @@ func TestWalkBytes(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("", func(prefix string) error {
+	err := n.walkBytes("", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -185,7 +185,7 @@ func TestWalkBytesEmptyNode(t *testing.T) {
 
 	count := 0
 
-	err := n.walkBytes("", func(prefix string) error {
+	err := n.walkBytes("", func(prefix string, value any, hasValue bool, leaf bool) error {
 		count++
 		return nil
 	})
@@ -207,7 +207,7 @@ func TestWalkBytesSkipPrefix(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("", func(prefix string) error {
+	err := n.walkBytes("", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 
 		if prefix == "b" {
@@ -236,7 +236,7 @@ func TestWalkBytesSkipAll(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("", func(prefix string) error {
+	err := n.walkBytes("", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 
 		if prefix == "b" {
@@ -265,7 +265,7 @@ func TestWalkBytesWithRootBeforeBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("fo", func(prefix string) error {
+	err := n.walkBytes("fo", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -289,7 +289,7 @@ func TestWalkBytesWithRootAtBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("foo", func(prefix string) error {
+	err := n.walkBytes("foo", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -313,7 +313,7 @@ func TestWalkBytesWithRootAfterBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("foob", func(prefix string) error {
+	err := n.walkBytes("foob", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -337,7 +337,7 @@ func TestWalkBytesWithNonexistentRoot(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("fob", func(prefix string) error {
+	err := n.walkBytes("fob", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return nil
 	})
@@ -358,7 +358,7 @@ func TestWalkBytesSkipAllBeforeFirstBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("f", func(prefix string) error {
+	err := n.walkBytes("f", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return errSkipAll
 	})
@@ -381,7 +381,7 @@ func TestWalkBytesSkipPrefixBeforeFirstBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("f", func(prefix string) error {
+	err := n.walkBytes("f", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return errSkipPrefix
 	})
@@ -404,7 +404,7 @@ func TestWalkBytesErrorBeforeFirstBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("f", func(prefix string) error {
+	err := n.walkBytes("f", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 		return errors.New("test error")
 	})
@@ -427,7 +427,7 @@ func TestWalkBytesErrorOnFirstBranch(t *testing.T) {
 
 	var prefixes []string
 
-	err := n.walkBytes("", func(prefix string) error {
+	err := n.walkBytes("", func(prefix string, value any, hasValue bool, leaf bool) error {
 		prefixes = append(prefixes, prefix)
 
 		if prefix == "foo" {
