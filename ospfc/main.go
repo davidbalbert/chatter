@@ -1,6 +1,10 @@
+//go:generate goyacc -o cmddef.go -p "cmddef" cmddef.y
+
 package main
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -243,10 +247,18 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 }
 
 func main() {
-	n := &node{}
-	n.store("show version", 1)
-	n.store("show version detail", 2)
-	n.store("show name", 3)
-	n.store("show number", 4)
-	n.store("show version funny", 5)
+	// n := &node{}
+	// n.store("show version", 1)
+	// n.store("show version detail", 2)
+	// n.store("show name", 3)
+	// n.store("show number", 4)
+	// n.store("show version funny", 5)
+
+	result, err := parseCommandDefinition("show ip bgp")
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("%#v\n", result)
 }
