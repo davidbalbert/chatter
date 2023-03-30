@@ -121,18 +121,6 @@ func (n *node) load(key string) (any, bool) {
 	}
 }
 
-func (n *node) findEdge(b byte) *edge {
-	i := sort.Search(len(n.edgeIndex), func(i int) bool {
-		return n.edgeIndex[i] >= b
-	})
-
-	if i < len(n.edgeIndex) && n.edgeIndex[i] == b {
-		return n.edges[i]
-	}
-
-	return nil
-}
-
 type walkPartialTokensFunc func(key string, value any) error
 
 // walkPartialTokens tokenizes keys in the tree using sep as a separator, and calls fn for each
@@ -164,10 +152,16 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 	walkNode = func(prefix string, n *node, tokPrefix string, tokPrefixes []string) error {
 		// walkNode is always called with len(tokPrefix) > 0
 
-		edge := n.findEdge(tokPrefix[0])
-		if edge == nil {
+		i := sort.Search(len(n.edgeIndex), func(i int) bool {
+			return n.edgeIndex[i] >= tokPrefix[0]
+		})
+
+		if i == len(n.edgeIndex) || n.edgeIndex[i] != tokPrefix[0] {
+			// no edge found
 			return nil
 		}
+
+		edge := n.edges[i]
 
 		return walkEdge(prefix, edge, 0, tokPrefix, tokPrefixes)
 	}
