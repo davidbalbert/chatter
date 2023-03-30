@@ -1,9 +1,6 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"os"
 	"sort"
 	"strings"
 )
@@ -124,340 +121,138 @@ func (n *node) load(key string) (any, bool) {
 	}
 }
 
-var (
-	errSkipAll    = errors.New("skip all")
-	errSkipPrefix = errors.New("skip prefix")
-)
+func (n *node) findEdge(b byte) *edge {
+	i := sort.Search(len(n.edgeIndex), func(i int) bool {
+		return n.edgeIndex[i] >= b
+	})
 
-type walkFunc func(key string, value any) error
+	if i < len(n.edgeIndex) && n.edgeIndex[i] == b {
+		return n.edges[i]
+	}
 
-func (n *node) walk(fn walkFunc) error {
-	var walk func(key string, n *node) error
-	walk = func(key string, n *node) error {
-		if n.hasValue {
-			err := fn(key, n.value)
-			if err != nil {
-				return err
-			}
-		}
+	return nil
+}
 
-		for _, e := range n.edges {
-			err := walk(key+e.label, e.node)
-			if err != nil {
-				return err
-			}
+type walkPartialTokensFunc func(key string, value any) error
+
+// walkPartialTokens tokenizes keys in the tree using sep as a separator, and calls fn for each
+// key that matches the query. The query is tokenized using the same separator, and each token
+// in the query must be a prefix of a corresponding token in the key. The number of tokens in
+// each matched key must match the number of tokens in the query.
+//
+// E.g. if sep is ' ', then the query "fo ba" will match the keys "foo bar" and "foo baz", but not
+// "foo bar baz". As a special case, a query of "" will match the key "", and nothing else, for any
+// value of sep.
+func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokensFunc) error {
+	queryParts := strings.FieldsFunc(query, func(r rune) bool {
+		return r == rune(sep)
+	})
+
+	// special case: if the query is empty, we match the key "".
+	if len(queryParts) == 0 {
+		if root.hasValue {
+			return fn("", root.value)
 		}
 
 		return nil
 	}
 
-	err := walk("", n)
-	if err == errSkipAll {
-		return nil
-	}
+	var walkNode func(prefix string, n *node, tokPrefix string, tokPrefixes []string) error
+	var walkEdge func(prefix string, e *edge, offset int, tokPrefix string, tokPrefixes []string) error
+	var walkUntilSep func(prefix string, e *edge, offset int, tokPrefixes []string) error
 
-	return err
-}
+	walkNode = func(prefix string, n *node, tokPrefix string, tokPrefixes []string) error {
+		// walkNode is always called with len(tokPrefix) > 0
 
-type walkBytesFunc func(prefix string, value any, hasValue bool, leaf bool) error
-
-type cursor struct {
-	n       *node
-	edgeIdx int // -1 if we're at a node
-	pos     int
-	prefix  string
-}
-
-func (c *cursor) sub(root string) *cursor {
-	if len(root) == 0 {
-		return c
-	}
-
-	r := root
-	var n *node
-	if c.edgeIdx == -1 {
-		n = c.n
-	} else {
-		edge := c.n.edges[c.edgeIdx]
-		rest := edge.label[c.pos+1:]
-		prefixLength := commonPrefixLen(rest, r)
-
-		// possible outcomes:
-		// - neither rest nor root is a prefix of the other. return nil
-		// - root is a prefix of rest and on this edge. return new cursor
-		// - rest is a prefix of root and on this edge. set n to edge.node and continue
-
-		if prefixLength < len(rest) && prefixLength < len(r) {
-			// r is not in the tree
+		edge := n.findEdge(tokPrefix[0])
+		if edge == nil {
 			return nil
-		} else if prefixLength < len(rest) {
-			// r is a prefix of rest (it's on edge), just move pos
-			return &cursor{
-				n:       c.n,
-				edgeIdx: c.edgeIdx,
-				pos:     c.pos + prefixLength,
-				prefix:  c.prefix + root[:prefixLength],
-			}
+		}
+
+		return walkEdge(prefix, edge, 0, tokPrefix, tokPrefixes)
+	}
+
+	walkEdge = func(prefix string, e *edge, offset int, partialToken string, partialTokens []string) error {
+		rest := e.label[offset:]
+		prefixLen := commonPrefixLen(rest, partialToken)
+
+		if prefixLen < len(partialToken) && prefixLen < len(rest) {
+			// neither the edge	nor partialToken is a prefix of the other. no match.
+			return nil
+		} else if prefixLen < len(partialToken) {
+			// partialToken continues past the end of the edge (i.e. rest is a prefix of partialToken).
+			// Keep searching at the next node. partialToken[prefixLen:] is guaranteed to be non-empty.
+			return walkNode(prefix+rest, e.node, partialToken[prefixLen:], partialTokens)
+		} else if prefixLen < len(rest) {
+			// partialToken ends inside the edge (i.e. partialToken is a prefix of rest).
+			// Start searching for separator on this edge.
+			return walkUntilSep(prefix+rest[:prefixLen], e, offset+prefixLen, partialTokens)
 		} else {
-			// rest is a prefix of r
-			n = edge.node
-			r = r[prefixLength:]
-		}
-	}
+			// partialToken == rest
+			// Start searching for separator starting at the next node.
+			node := e.node
 
-	for {
-		if len(r) == 0 {
-			return &cursor{
-				n:       n,
-				edgeIdx: -1,
-				pos:     0,
-				prefix:  c.prefix + root,
-			}
-		}
-
-		i := sort.Search(len(n.edgeIndex), func(i int) bool {
-			return n.edgeIndex[i] >= r[0]
-		})
-
-		if i < len(n.edgeIndex) && n.edgeIndex[i] == r[0] {
-			// edge found
-			e := n.edges[i]
-			prefixLen := commonPrefixLen(e.label, r)
-
-			if prefixLen == len(e.label) && prefixLen == len(r) {
-				// exact match on next node
-				return &cursor{
-					n:       e.node,
-					edgeIdx: -1,
-					pos:     0,
-					prefix:  c.prefix + root,
-				}
-			} else if prefixLen == len(e.label) {
-				// e.label is a prefix of r
-				r = r[prefixLen:]
-				n = e.node
-			} else if prefixLen == len(r) {
-				// r is a prefix of e.label
-				return &cursor{
-					n:       n,
-					edgeIdx: i,
-					pos:     prefixLen - 1,
-					prefix:  c.prefix + root,
-				}
-			} else {
-				// prefixLen < len(n.label) && prefixLen < len(r)
-				// r is not in the tree
-				return nil
-			}
-		} else {
-			// no edge found
-			return nil
-		}
-	}
-}
-
-func (c *cursor) walkBytesToNearestNode(fn walkBytesFunc) (*node, string, error) {
-	if c.edgeIdx == -1 {
-		return c.n, "", nil
-	}
-
-	edge := c.n.edges[c.edgeIdx]
-	rest := edge.label[c.pos+1:]
-
-	for i := 0; i < len(rest); i++ {
-		err := fn(c.prefix+rest[:i], nil, false, false)
-		if err == errSkipAll {
-			return nil, "", errSkipAll
-		} else if err == errSkipPrefix {
-			return nil, "", nil
-		} else if err != nil {
-			return nil, "", err
-		}
-	}
-
-	return edge.node, rest, nil
-}
-
-// calls fn for each byte in the tree, even when the byte falls inside an edge
-func (n *node) walkBytes(root string, fn walkBytesFunc) error {
-	// if the tree is empty, we don't want to call fn at all, even for "".
-	if len(root) == 0 && !n.hasValue && len(n.edges) == 0 {
-		return nil
-	}
-
-	var c *cursor = &cursor{n: n, edgeIdx: -1, pos: 0, prefix: ""}
-
-	c = c.sub(root)
-	if c == nil {
-		return fmt.Errorf("root %q not found", root)
-	}
-
-	n, s, err := c.walkBytesToNearestNode(fn)
-	if err == errSkipAll {
-		return nil
-	} else if err != nil {
-		return err
-	}
-
-	if n == nil {
-		return nil
-	}
-
-	var walk func(key string, n *node) error
-	walk = func(key string, n *node) error {
-		err := fn(key, n.value, n.hasValue, len(n.edgeIndex) == 0)
-		if err == errSkipPrefix {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-	Edges:
-		for _, e := range n.edges {
-			for i := 0; i < len(e.label)-1; i++ {
-				err := fn(key+string(e.label[:i+1]), nil, false, false)
-				if err == errSkipPrefix {
-					continue Edges
-				} else if err != nil {
+			if node.hasValue && len(partialTokens) == 0 {
+				err := fn(prefix+rest, node.value)
+				if err != nil {
 					return err
 				}
 			}
 
-			err := walk(key+e.label, e.node)
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	}
-
-	err = walk(root+s, n)
-	if err == errSkipAll {
-		return nil
-	}
-
-	return err
-}
-
-type cli struct {
-	tree node
-}
-
-func (c *cli) register(key string, value any) {
-	c.tree.store(strings.TrimSpace(key), value)
-}
-
-func (c *cli) expandAndLoad(query string) ([]string, []any, error) {
-	fields := strings.Fields(query)
-
-	if len(fields) == 0 {
-		return nil, nil, fmt.Errorf("empty query")
-	}
-
-	roots := []string{fields[0]}
-	for i := 0; i < len(fields)-1; i++ {
-		var newRoots []string
-
-		for _, root := range roots {
-			err := c.tree.walkBytes(root, func(prefix string, value any, hasValue bool, leaf bool) error {
-				if prefix[len(prefix)-1] == ' ' {
-					newRoots = append(newRoots, prefix+fields[i+1])
-					return errSkipPrefix
-				} else if leaf {
-					// we're at the end of the string, but we still have more fields, so this can't match
-					return errSkipPrefix
+			for _, e := range node.edges {
+				err := walkUntilSep(prefix+rest, e, 0, partialTokens)
+				if err != nil {
+					return err
 				}
-
-				return nil
-			})
-
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-
-		roots = newRoots
-	}
-
-	var keys []string
-	var values []any
-	for _, root := range roots {
-		c.tree.walkBytes(root, func(prefix string, value any, hasValue bool, leaf bool) error {
-			if prefix[len(prefix)-1] == ' ' {
-				return errSkipPrefix
-			} else if hasValue {
-				keys = append(keys, prefix)
-				values = append(values, value)
 			}
 
 			return nil
-		})
+		}
 	}
-	return keys, values, nil
+
+	walkUntilSep = func(prefix string, e *edge, offset int, partialTokens []string) error {
+		suffix := e.label[offset:]
+		i := strings.Index(suffix, string(sep))
+
+		if i == -1 {
+			// no separator
+
+			if len(partialTokens) == 0 {
+				// no more partial tokens, so we've found a match
+				if e.node.hasValue {
+					err := fn(prefix+suffix, e.node.value)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			for _, e := range e.node.edges {
+				err := walkUntilSep(prefix+suffix, e, 0, partialTokens)
+				if err != nil {
+					return err
+				}
+			}
+
+			return nil
+		} else if len(partialTokens) == 0 {
+			// we found a separator on this edge, but have no more partial tokens, so stop here
+			return nil
+		} else if i == len(suffix)-1 {
+			return walkNode(prefix+suffix, e.node, partialTokens[0], partialTokens[1:])
+		} else {
+			return walkEdge(prefix+suffix[:i+1], e, i+1, partialTokens[0], partialTokens[1:])
+		}
+	}
+
+	return walkNode("", root, queryParts[0], queryParts[1:])
 }
 
 func main() {
-	c := &cli{}
-	c.register("show version", 1)
-	c.register("show version detail", 2)
-	c.register("show name", 3)
-	c.register("show number", 4)
-	c.register("show version funny", 5)
-
-	fmt.Println("? show version")
-	keys, values, err := c.expandAndLoad("show version")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	for i := range keys {
-		fmt.Printf("! %#v %#v\n", keys[i], values[i])
-	}
-	fmt.Println()
-
-	fmt.Println("? sh ver")
-	keys, values, err = c.expandAndLoad("sh ver")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	for i := range keys {
-		fmt.Printf("! %#v %#v\n", keys[i], values[i])
-	}
-	fmt.Println()
-
-	fmt.Println("? s v d")
-	keys, values, err = c.expandAndLoad("s v d")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	for i := range keys {
-		fmt.Printf("! %#v %#v\n", keys[i], values[i])
-	}
-	fmt.Println()
-
-	fmt.Println("? sh n")
-	keys, values, err = c.expandAndLoad("sh n")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	for i := range keys {
-		fmt.Printf("! %#v %#v\n", keys[i], values[i])
-	}
-
-	// t.walk(func(s string) {
-	// 	fmt.Printf("%#v\n", s)
-	// })
-
-	// fmt.Println(t.hasPrefix("show ip ospf"))
-	// fmt.Println(t.hasPrefix("show ip ospf neighbor"))
-	// fmt.Println(t.hasPrefix("show ip ospf neighbor detail"))
-	// fmt.Println(t.hasPrefix("sh"))
+	n := &node{}
+	n.store("show version", 1)
+	n.store("show version detail", 2)
+	n.store("show name", 3)
+	n.store("show number", 4)
+	n.store("show version funny", 5)
 }
