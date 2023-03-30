@@ -103,7 +103,7 @@ func TestOverwrite(t *testing.T) {
 	}
 }
 
-func TestWalkPartialTokens(t *testing.T) {
+func TestWalkPartialTokensExactMatch(t *testing.T) {
 	n := &node{}
 	n.store("show version", 1)
 	n.store("show version detail", 2)
@@ -128,17 +128,25 @@ func TestWalkPartialTokens(t *testing.T) {
 	if !reflect.DeepEqual(values, expectedValues) {
 		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
+}
 
-	keys = nil
-	values = nil
+func TestWalkPartialTokensPrefixMatch(t *testing.T) {
+	n := &node{}
+	n.store("show version", 1)
+	n.store("show version detail", 2)
+	n.store("show name", 3)
+	n.store("show number", 4)
+
+	var keys []string
+	var values []int
 	n.walkPartialTokens("sh ver", ' ', func(prefix string, value any) error {
 		keys = append(keys, prefix)
 		values = append(values, value.(int))
 		return nil
 	})
 
-	expectedKeys = []string{"show version"}
-	expectedValues = []int{1}
+	expectedKeys := []string{"show version"}
+	expectedValues := []int{1}
 
 	if !reflect.DeepEqual(keys, expectedKeys) {
 		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
@@ -147,36 +155,25 @@ func TestWalkPartialTokens(t *testing.T) {
 	if !reflect.DeepEqual(values, expectedValues) {
 		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
+}
 
-	keys = nil
-	values = nil
-	n.walkPartialTokens("s v d", ' ', func(prefix string, value any) error {
-		keys = append(keys, prefix)
-		values = append(values, value.(int))
-		return nil
-	})
+func TestWalkPartialTokensMultipleMatches(t *testing.T) {
+	n := &node{}
+	n.store("show version", 1)
+	n.store("show version detail", 2)
+	n.store("show name", 3)
+	n.store("show number", 4)
 
-	expectedKeys = []string{"show version detail"}
-	expectedValues = []int{2}
-
-	if !reflect.DeepEqual(keys, expectedKeys) {
-		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
-	}
-
-	if !reflect.DeepEqual(values, expectedValues) {
-		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
-	}
-
-	keys = nil
-	values = nil
+	var keys []string
+	var values []int
 	n.walkPartialTokens("sh n", ' ', func(prefix string, value any) error {
 		keys = append(keys, prefix)
 		values = append(values, value.(int))
 		return nil
 	})
 
-	expectedKeys = []string{"show name", "show number"}
-	expectedValues = []int{3, 4}
+	expectedKeys := []string{"show name", "show number"}
+	expectedValues := []int{3, 4}
 
 	if !reflect.DeepEqual(keys, expectedKeys) {
 		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
@@ -223,17 +220,26 @@ func TestWalkPartialTokens(t *testing.T) {
 	if !reflect.DeepEqual(values, expectedValues) {
 		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
+}
 
-	keys = nil
-	values = nil
+func TestWalkPartialTokensTooFewTokens(t *testing.T) {
+	n := &node{}
+	n.store("show version", 1)
+	n.store("show version detail", 2)
+	n.store("show name", 3)
+	n.store("show number", 4)
+
+	var keys []string
+	var values []int
+
 	n.walkPartialTokens("sh", ' ', func(prefix string, value any) error {
 		keys = append(keys, prefix)
 		values = append(values, value.(int))
 		return nil
 	})
 
-	expectedKeys = nil
-	expectedValues = nil
+	expectedKeys := []string(nil)
+	expectedValues := []int(nil)
 
 	if !reflect.DeepEqual(keys, expectedKeys) {
 		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
@@ -242,17 +248,26 @@ func TestWalkPartialTokens(t *testing.T) {
 	if !reflect.DeepEqual(values, expectedValues) {
 		t.Fatalf("expected values %#v, got %#v", expectedValues, values)
 	}
+}
 
-	keys = nil
-	values = nil
+func TestWalkPartialTokensTooMany(t *testing.T) {
+	n := &node{}
+	n.store("show version", 1)
+	n.store("show version detail", 2)
+	n.store("show name", 3)
+	n.store("show number", 4)
+
+	var keys []string
+	var values []int
+
 	n.walkPartialTokens("sh na foo", ' ', func(prefix string, value any) error {
 		keys = append(keys, prefix)
 		values = append(values, value.(int))
 		return nil
 	})
 
-	expectedKeys = nil
-	expectedValues = nil
+	expectedKeys := []string(nil)
+	expectedValues := []int(nil)
 
 	if !reflect.DeepEqual(keys, expectedKeys) {
 		t.Fatalf("expected prefixes %#v, got %#v", expectedKeys, keys)
