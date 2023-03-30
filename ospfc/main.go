@@ -241,7 +241,7 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 		} else if i == len(suffix)-1 {
 			return walkNode(prefix+suffix, e.node, partialTokens[0], partialTokens[1:])
 		} else {
-			return walkEdge(prefix+suffix[:i+1], e, i+1, partialTokens[0], partialTokens[1:])
+			return walkEdge(prefix+suffix[:i+1], e, offset+i+1, partialTokens[0], partialTokens[1:])
 		}
 	}
 
