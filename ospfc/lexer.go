@@ -9,13 +9,6 @@ import (
 
 const EOF = 0
 
-var tokenNames map[int]string = map[int]string{
-	EOF:      "EOF",
-	LITERAL:  "LITERAL",
-	VARIABLE: "VARIABLE",
-	WS:       "WS",
-}
-
 type astType int
 
 const (
