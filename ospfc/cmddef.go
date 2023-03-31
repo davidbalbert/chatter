@@ -10,13 +10,14 @@ import __yyfmt__ "fmt"
 
 //line cmddef.y:7
 type cmddefSymType struct {
-	yys    int
-	tokens []string
-	s      string
+	yys  int
+	node *ast
+	s    string
 }
 
 const LITERAL = 57346
 const VARIABLE = 57347
+const WS = 57348
 
 var cmddefToknames = [...]string{
 	"$end",
@@ -24,6 +25,7 @@ var cmddefToknames = [...]string{
 	"$unk",
 	"LITERAL",
 	"VARIABLE",
+	"WS",
 }
 
 var cmddefStatenames = [...]string{}
@@ -78,7 +80,7 @@ var cmddefTok1 = [...]int8{
 }
 
 var cmddefTok2 = [...]int8{
-	2, 3, 4, 5,
+	2, 3, 4, 5, 6,
 }
 
 var cmddefTok3 = [...]int8{
@@ -426,19 +428,25 @@ cmddefdefault:
 		cmddefDollar = cmddefS[cmddefpt-1 : cmddefpt+1]
 //line cmddef.y:22
 		{
-			cmddeflex.(*cmddefLex).result = cmddefVAL.tokens
+			(cmddeflex).(*lexer).result = newNode(astCommand, "", cmddefDollar[1].node)
 		}
 	case 2:
 		cmddefDollar = cmddefS[cmddefpt-2 : cmddefpt+1]
 //line cmddef.y:25
 		{
-			cmddefVAL.tokens = append(cmddefDollar[1].tokens, cmddefDollar[2].s)
+			cmddefDollar[1].node.children = append(cmddefDollar[1].node.children, cmddefDollar[2].node)
 		}
 	case 3:
 		cmddefDollar = cmddefS[cmddefpt-1 : cmddefpt+1]
 //line cmddef.y:26
 		{
-			cmddefVAL.tokens = []string{cmddefDollar[1].s}
+			cmddefVAL.node = newNode(astTokens, "", cmddefDollar[1].node)
+		}
+	case 4:
+		cmddefDollar = cmddefS[cmddefpt-1 : cmddefpt+1]
+//line cmddef.y:28
+		{
+			cmddefVAL.node = newNode(astToken, cmddefDollar[1].s)
 		}
 	}
 	goto cmddefstack /* stack new state and value */

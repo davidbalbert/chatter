@@ -5,26 +5,26 @@ package main
 %}
 
 %union {
-	tokens []string
+	node *ast
 	s string
 }
 
-%type <tokens> command
-%type <tokens> tokens
-%type <s> token
+%type <node> command
+%type <node> tokens
+%type <node> token
 
-%token <s> LITERAL
-%token <s> VARIABLE
+%token <s> LITERAL VARIABLE
+%token <s> WS // ignored
 
 %%
 
 command:
-	tokens { cmddeflex.(*cmddefLex).result = $$ }
+	tokens { (cmddeflex).(*lexer).result = newNode(astCommand, "", $1) }
 
 tokens:
-	tokens token { $$ = append($1, $2) }
-	| token { $$ = []string{$1} }
+	tokens token { $1.children = append($1.children, $2) }
+	| token { $$ = newNode(astTokens, "", $1) }
 
-token: LITERAL
+token: LITERAL { $$ = newNode(astToken, $1) }
 
 %%
