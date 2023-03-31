@@ -1,5 +1,3 @@
-//go:generate goyacc -o cmddef.go -p "cmddef" cmddef.y
-
 package main
 
 import (
@@ -7,6 +5,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"github.com/davidbalbert/ospfd/ospfc/commands"
 )
 
 func commonPrefixLen(a, b string) int {
@@ -254,7 +254,7 @@ func main() {
 	// n.store("show number", 4)
 	// n.store("show version funny", 5)
 
-	result, err := parseCommandDefinition("show ip FOO bgp")
+	result, err := commands.ParseCommandDefinition("show ip FOO bgp")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

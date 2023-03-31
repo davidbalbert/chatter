@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"fmt"
@@ -9,32 +9,13 @@ import (
 
 const EOF = 0
 
-type astType int
-
-const (
-	_ astType = iota
-	astCommand
-	astTokens
-	astToken
-)
-
-type ast struct {
-	_type    astType
-	value    string
-	children []*ast
-}
-
-func newNode(_type astType, value string, children ...*ast) *ast {
-	return &ast{_type: _type, value: value, children: children}
-}
-
 type lexer struct {
 	scanner      io.RuneScanner
 	input        string
 	buf          []rune
 	line, col    int
 	patterns     map[int]regexp.Regexp
-	currentToken cmddefSymType
+	currentToken yySymType
 	result       *ast
 	err          error
 }
@@ -72,7 +53,7 @@ func (l *lexer) setErr(err error) {
 	l.err = fmt.Errorf("<stdin>:%d:%d: error: %w\n\t%s\n\t%s", l.line, l.col, err, line, marker)
 }
 
-func (l *lexer) Lex(lval *cmddefSymType) int {
+func (l *lexer) Lex(lval *yySymType) int {
 	for {
 		t := l.nextToken(lval)
 		if t == EOF {
@@ -85,7 +66,7 @@ func (l *lexer) Lex(lval *cmddefSymType) int {
 	}
 }
 
-func (l *lexer) nextToken(lval *cmddefSymType) int {
+func (l *lexer) nextToken(lval *yySymType) int {
 	if len(l.buf) == 0 {
 		err := l.readLine()
 		if err != nil {
@@ -136,12 +117,10 @@ func (l *lexer) consume(n int) {
 	l.buf = l.buf[n:]
 }
 
-func parseCommandDefinition(s string) (*ast, error) {
-	cmddefErrorVerbose = true
-
+func ParseCommandDefinition(s string) (*ast, error) {
 	l := newLexer(s)
 
-	p := cmddefNewParser()
+	p := yyNewParser()
 	p.Parse(l)
 
 	if l.err != nil {
