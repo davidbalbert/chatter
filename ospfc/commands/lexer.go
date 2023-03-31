@@ -117,7 +117,7 @@ func (l *lexer) consume(n int) {
 	l.buf = l.buf[n:]
 }
 
-func ParseCommandDefinition(s string) (*ast, error) {
+func ParseDeclaration(s string) (*ast, error) {
 	l := newLexer(s)
 
 	p := yyNewParser()

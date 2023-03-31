@@ -254,7 +254,7 @@ func main() {
 	// n.store("show number", 4)
 	// n.store("show version funny", 5)
 
-	result, err := commands.ParseCommandDefinition("show ip FOO bgp")
+	result, err := commands.ParseDeclaration("show ip FOO bgp")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
