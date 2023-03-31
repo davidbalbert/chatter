@@ -36,7 +36,8 @@ func newNode(_type astType, value string, children ...*ast) *ast {
 }
 
 type lexer struct {
-	s            io.RuneScanner
+	scanner      io.RuneScanner
+	input        string
 	buf          []rune
 	line, col    int
 	patterns     map[int]regexp.Regexp
@@ -47,7 +48,8 @@ type lexer struct {
 
 func newLexer(s string) *lexer {
 	l := &lexer{
-		s: strings.NewReader(s),
+		scanner: strings.NewReader(s),
+		input:   s,
 	}
 
 	regexps := map[string]int{
@@ -65,7 +67,16 @@ func newLexer(s string) *lexer {
 }
 
 func (l *lexer) Error(s string) {
-	l.err = fmt.Errorf("%s", s)
+	l.col -= len(l.currentToken.s) // rewind to start of unexpected token
+	l.setErr(fmt.Errorf(s))
+}
+
+func (l *lexer) setErr(err error) {
+	lines := strings.Split(l.input, "\n")
+	line := lines[l.line-1]
+	marker := strings.Repeat(" ", l.col) + "^"
+
+	l.err = fmt.Errorf("<stdin>:%d:%d: error: %w\n\t%s\n\t%s", l.line, l.col, err, line, marker)
 }
 
 func (l *lexer) Lex(lval *cmddefSymType) int {
@@ -86,7 +97,7 @@ func (l *lexer) nextToken(lval *cmddefSymType) int {
 		err := l.readLine()
 		if err != nil {
 			if err != io.EOF {
-				l.err = err
+				l.setErr(err)
 			}
 			return EOF
 		}
@@ -97,19 +108,22 @@ func (l *lexer) nextToken(lval *cmddefSymType) int {
 		if m != nil {
 			lval.s = m[0]
 			l.consume(len(lval.s))
-			fmt.Printf("token %s %q\n", tokenNames[t], lval.s)
+			l.col += len(lval.s)
 			l.currentToken = *lval
 			return t
 		}
 	}
 
-	l.err = fmt.Errorf("unexpected character %q", l.buf[0])
+	l.setErr(fmt.Errorf("unexpected character %q", l.buf[0]))
 	return EOF
 }
 
 func (l *lexer) readLine() error {
+	l.line++
+	l.col = 0
+
 	for {
-		r, _, err := l.s.ReadRune()
+		r, _, err := l.scanner.ReadRune()
 		if err != nil {
 			if err == io.EOF && len(l.buf) > 0 {
 				return nil
@@ -119,12 +133,8 @@ func (l *lexer) readLine() error {
 
 		l.buf = append(l.buf, r)
 
-		if r == '\n' {
-			l.line++
-			l.col = 0
+		if r == '\r' {
 			return nil
-		} else {
-			l.col++
 		}
 	}
 }
