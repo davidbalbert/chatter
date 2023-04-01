@@ -295,7 +295,7 @@ func TestForkWithChildren(t *testing.T) {
 		literal:all,
 		argument:ipv4,
 		argument:ipv6,
-		argument:string,
+		argument:string
 	]
 	`
 
