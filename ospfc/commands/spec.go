@@ -9,7 +9,7 @@ import (
 
 // An example spec:
 // fork[
-//	  	literal:foo[
+//	  	literal:foo?"This is a description"[
 //			join.1
 //		],
 //		literal:bar[
@@ -19,19 +19,21 @@ import (
 //
 // Whitespace between children is not significant. A rough grammar is:
 //
-// spec <- ws? name id? children? ws?
+// spec <- ws? name id? description? children? ws?
 // name <- "fork" / "join" / "literal:" word / "argument:" argtype
 // id <- '.' [1-9][0-9]*
+// description <- '?' '"' [^"]* '"'
 // children <- '[' ws? spec (ws? ',' ws? spec)* ws? ']'
 // word <- [a-zA-Z0-9]+
 // argtype <- "string" / "ipv4" / "ipv6"
 // ws <- [ \t\r\n]*
 
 type spec struct {
-	typeName string
-	arg      string
-	id       int
-	children []*spec
+	typeName    string
+	arg         string
+	id          int
+	description string
+	children    []*spec
 }
 
 type specParser struct {
@@ -52,6 +54,12 @@ func (p *specParser) parse() (*spec, error) {
 
 	if p.peek() == '.' {
 		if err := p.parseID(s); err != nil {
+			return nil, err
+		}
+	}
+
+	if p.peek() == '?' {
+		if err := p.parseDescription(s); err != nil {
 			return nil, err
 		}
 	}
@@ -135,6 +143,31 @@ func (p *specParser) parseID(s *spec) error {
 	}
 
 	s.id = id
+
+	return nil
+}
+
+func (p *specParser) parseDescription(s *spec) error {
+	p.next() // consume the '?'
+
+	if p.next() != '"' {
+		return p.errorf("expected '\"'")
+	}
+
+	var desc string
+	for p.peek() != '"' {
+		if p.peek() == utf8.RuneError {
+			return p.errorf("unexpected EOF")
+		}
+
+		desc += string(p.next())
+	}
+
+	if p.next() != '"' {
+		return p.errorf("expected '\"'")
+	}
+
+	s.description = desc
 
 	return nil
 }

@@ -507,3 +507,92 @@ func TestInvalidZeroID(t *testing.T) {
 		t.Fatalf("expected error to contain 'invalid id 0', got %q", err.Error())
 	}
 }
+
+func TestDescription(t *testing.T) {
+	s, err := parseSpec("literal:foo?\"does the foo\"")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s == nil {
+		t.Fatal("expected spec")
+	}
+
+	if s.typeName != "literal" {
+		t.Fatalf("expected literal, got %q", s.typeName)
+	}
+
+	if s.arg != "foo" {
+		t.Fatalf("expected arg foo, got %q", s.arg)
+	}
+
+	if s.id != 0 {
+		t.Fatalf("expected id 0, got %d", s.id)
+	}
+
+	if s.description != "does the foo" {
+		t.Fatalf("expected description 'does the foo', got %q", s.description)
+	}
+
+	if len(s.children) != 0 {
+		t.Fatalf("expected no children, got %d", len(s.children))
+	}
+}
+
+func TestMoreComplicatedDescription(t *testing.T) {
+	s := `
+	literal:foo.1?"is foo"[
+		literal:bar.2?"is bar"
+	]	
+	`
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	if spec.typeName != "literal" {
+		t.Fatalf("expected literal, got %q", spec.typeName)
+	}
+
+	if spec.arg != "foo" {
+		t.Fatalf("expected arg foo, got %q", spec.arg)
+	}
+
+	if spec.id != 1 {
+		t.Fatalf("expected id 1, got %d", spec.id)
+	}
+
+	if spec.description != "is foo" {
+		t.Fatalf("expected description 'is foo', got %q", spec.description)
+	}
+
+	if len(spec.children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(spec.children))
+	}
+
+	c1 := spec.children[0]
+	if c1.typeName != "literal" {
+		t.Fatalf("expected literal, got %q", c1.typeName)
+	}
+
+	if c1.arg != "bar" {
+		t.Fatalf("expected arg bar, got %q", c1.arg)
+	}
+
+	if c1.id != 2 {
+		t.Fatalf("expected id 2, got %d", c1.id)
+	}
+
+	if c1.description != "is bar" {
+		t.Fatalf("expected description 'is bar', got %q", c1.description)
+	}
+
+	if len(c1.children) != 0 {
+		t.Fatalf("expected no children, got %d", len(c1.children))
+	}
+}
