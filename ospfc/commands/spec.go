@@ -24,6 +24,7 @@ import (
 // id <- '.' [1-9][0-9]*
 // description <- '?' '"' [^"]* '"'
 // children <- '[' spec (',' spec)* ']'
+// children <- '[' spec (',' spec)* ','? ws? ']'
 // word <- [a-zA-Z0-9]+
 // argtype <- "string" / "ipv4" / "ipv6"
 // ws <- [ \t\r\n]*
@@ -177,17 +178,30 @@ func (p *specParser) parseChildren(s *spec) error {
 		return p.errorf("expected '['")
 	}
 
-	for p.peek() != ']' {
+	child, err := p.parse()
+	if err != nil {
+		return err
+	}
+
+	s.children = append(s.children, child)
+
+	for {
+		if p.peek() == ',' {
+			p.next()
+		}
+
+		p.skipWhitespace()
+
+		if p.peek() == ']' {
+			break
+		}
+
 		child, err := p.parse()
 		if err != nil {
 			return err
 		}
 
 		s.children = append(s.children, child)
-
-		if p.peek() == ',' {
-			p.next()
-		}
 	}
 
 	if p.next() != ']' {
