@@ -116,16 +116,3 @@ func (l *lexer) readLine() error {
 func (l *lexer) consume(n int) {
 	l.buf = l.buf[n:]
 }
-
-func ParseDeclaration(s string) (*ast, error) {
-	l := newLexer(s)
-
-	p := yyNewParser()
-	p.Parse(l)
-
-	if l.err != nil {
-		return nil, l.err
-	}
-
-	return l.result, nil
-}

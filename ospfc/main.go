@@ -2,11 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"net/netip"
 	"sort"
 	"strings"
-
-	"github.com/davidbalbert/ospfd/ospfc/commands"
 )
 
 func commonPrefixLen(a, b string) int {
@@ -246,19 +244,73 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 	return walkNode("", root, queryParts[0], queryParts[1:])
 }
 
-func main() {
-	// n := &node{}
-	// n.store("show version", 1)
-	// n.store("show version detail", 2)
-	// n.store("show name", 3)
-	// n.store("show number", 4)
-	// n.store("show version funny", 5)
+func autocompleteBGPNeighborsV4(prefix string) ([]string, error) {
+	options := []string{"1.2.3.4", "5.6.7.8"}
 
-	result, err := commands.ParseDeclaration("show ip FOO bgp")
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	var matches []string
+	for _, option := range options {
+		if strings.HasPrefix(option, prefix) {
+			matches = append(matches, option)
+		}
 	}
 
-	fmt.Printf("%#v\n", result)
+	return matches, nil
+}
+
+func autocompleteBGPNeighborsV6(prefix string) ([]string, error) {
+	options := []string{"2001:db8::1", "2001:db8::2"}
+
+	var matches []string
+	for _, option := range options {
+		if strings.HasPrefix(option, prefix) {
+			matches = append(matches, option)
+		}
+	}
+
+	return matches, nil
+}
+
+func main() {
+	cli := &CLI{}
+
+	cli.MustDocument("show", "Show running system information")
+	cli.MustRegister("show version", "Show ospfd version", func() {
+		fmt.Println("ospfd v0.0.1")
+	})
+
+	cli.MustDocument("show ip", "IP information")
+	cli.MustDocument("show ip route", "IP routing table")
+	cli.MustRegister(
+		"show ip route A.B.C.D",
+		"Network in the IP routing table to display",
+		func(addr netip.Addr) {
+			fmt.Println("addr:", addr)
+		})
+
+	cli.MustDocument("show bgp", "BGP information")
+	cli.MustDocument("show bgp neighbors", "Detailed information on TCP and BGP neighbor connections")
+
+	// If the last node is a choice, the description will be set on all options in the choice.
+	// To override the description of a particular option, you can call MustDocument after MustRegister (see below).
+	cli.MustRegister(
+		"show bgp neighbors <A.B.C.D|X:X:X::X|all>",
+		"Neighbor to display information about",
+		func(neighbor netip.Addr, all string) {
+			if all != "" {
+				fmt.Println("All neighbors")
+				return
+			} else {
+				fmt.Println("Neighbor:", neighbor)
+			}
+		})
+
+	// Here we're overriding the description of the "all" option.
+	cli.MustDocument("show bgp neighbors all", "Display information about all neighbors")
+
+	// Last node must be a variable type
+	// If you want to set autocomplete different options of a Choice node, you
+	// register each option separately, like below – unlike in MustRegister,
+	// we assume that setting autocomplete options on Choice nodes doesn't make sense.
+	cli.MustAutocomplete("show bgp neighbors A.B.C.D", autocompleteBGPNeighborsV4)
+	cli.MustAutocomplete("show bgp <some|all> neighbors X:X:X::X", autocompleteBGPNeighborsV6)
 }
