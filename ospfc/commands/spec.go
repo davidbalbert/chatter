@@ -416,7 +416,7 @@ func (p *specParser) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf("%d:%d: %s\n\t%s\n\t%s", p.line, p.col, fmt.Sprintf(format, args...), line, marker)
 }
 
-func ParseSpec(s string) (*Spec, error) {
+func parseSpec(s string) (*Spec, error) {
 	p := &specParser{
 		s:    s,
 		line: 1,
@@ -587,11 +587,16 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 	return nil
 }
 
-func AssertMatches(t *testing.T, s *Spec, g Graph) {
+func AssertMatches(t *testing.T, s string, g Graph) {
 	t.Helper()
 
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	m := newMatcher()
-	err := m.match("/"+s.pathComponent(), g, s)
+	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err != nil {
 		t.Fatal(err)
 	}

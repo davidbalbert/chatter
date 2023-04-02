@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseFork(t *testing.T) {
-	spec, err := ParseSpec("fork")
+	spec, err := parseSpec("fork")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestParseFork(t *testing.T) {
 }
 
 func TestParseJoin(t *testing.T) {
-	spec, err := ParseSpec("join")
+	spec, err := parseSpec("join")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestParseJoin(t *testing.T) {
 }
 
 func TestParseJoinWithID(t *testing.T) {
-	spec, err := ParseSpec("join.1")
+	spec, err := parseSpec("join.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestParseJoinWithID(t *testing.T) {
 }
 
 func TestParseLiteral(t *testing.T) {
-	spec, err := ParseSpec("literal:foo")
+	spec, err := parseSpec("literal:foo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,19 +101,19 @@ func TestParseLiteral(t *testing.T) {
 }
 
 func TestParseLiteralMissingValue(t *testing.T) {
-	_, err := ParseSpec("literal")
+	_, err := parseSpec("literal")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	_, err = ParseSpec("literal:")
+	_, err = parseSpec("literal:")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestParseArgumentString(t *testing.T) {
-	spec, err := ParseSpec("argument:string")
+	spec, err := parseSpec("argument:string")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestParseArgumentString(t *testing.T) {
 }
 
 func TestParseArgumentIPv4(t *testing.T) {
-	spec, err := ParseSpec("argument:ipv4")
+	spec, err := parseSpec("argument:ipv4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestParseArgumentIPv4(t *testing.T) {
 }
 
 func TestParseArgumentIPv6(t *testing.T) {
-	spec, err := ParseSpec("argument:ipv6")
+	spec, err := parseSpec("argument:ipv6")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,26 +182,26 @@ func TestParseArgumentIPv6(t *testing.T) {
 }
 
 func TestParseArgumentBadType(t *testing.T) {
-	_, err := ParseSpec("argument:foo")
+	_, err := parseSpec("argument:foo")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestParseArgumentMissingType(t *testing.T) {
-	_, err := ParseSpec("argument")
+	_, err := parseSpec("argument")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	_, err = ParseSpec("argument:")
+	_, err = parseSpec("argument:")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestLiteralWithChild(t *testing.T) {
-	s, err := ParseSpec("literal:foo[literal:bar]")
+	s, err := parseSpec("literal:foo[literal:bar]")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestLiteralWithChildAndWhitespace(t *testing.T) {
 	]
 	`
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestForkWithChildren(t *testing.T) {
 	]
 	`
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestForkJoinWithID(t *testing.T) {
 	]
 	`
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +501,7 @@ func TestForkJoinWithID(t *testing.T) {
 }
 
 func TestInvalidZeroID(t *testing.T) {
-	_, err := ParseSpec("join.0")
+	_, err := parseSpec("join.0")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -512,7 +512,7 @@ func TestInvalidZeroID(t *testing.T) {
 }
 
 func TestDescription(t *testing.T) {
-	s, err := ParseSpec("literal:foo?\"does the foo\"")
+	s, err := parseSpec("literal:foo?\"does the foo\"")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +549,7 @@ func TestMoreComplicatedDescription(t *testing.T) {
 	]	
 	`
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +601,7 @@ func TestMoreComplicatedDescription(t *testing.T) {
 }
 
 func TestAutocomplete(t *testing.T) {
-	s, err := ParseSpec("argument:ipv4!A?\"Autocompletes IPv4 addresses\"")
+	s, err := parseSpec("argument:ipv4!A?\"Autocompletes IPv4 addresses\"")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -640,7 +640,7 @@ func TestHandler(t *testing.T) {
 	]
 	`
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -740,7 +740,7 @@ func TestMatcher(t *testing.T) {
 
 	g := &literal{value: "show", child: &literal{value: "version"}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -764,7 +764,7 @@ func TestMatcherError(t *testing.T) {
 
 	g := &literal{value: "show", child: &literal{value: "version"}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -792,7 +792,7 @@ func TestMatcherErrorDifferentType(t *testing.T) {
 
 	g := &literal{value: "show", child: &literal{value: "version"}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -820,7 +820,7 @@ func TestMatcherErrorDifferentArgType(t *testing.T) {
 
 	g := &literal{value: "show", child: &argument{t: argumentTypeIPv6}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -846,7 +846,7 @@ func TestMatcherErrorNoChildren(t *testing.T) {
 	`
 
 	g := &literal{value: "show", child: &literal{value: "version"}}
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -879,7 +879,7 @@ func TestMatcherErrorTooManyChildren(t *testing.T) {
 		"literal:baz": &literal{value: "baz"},
 	}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -910,7 +910,7 @@ func TestMatcherErrorMissingChild(t *testing.T) {
 		"literal:foo": &literal{value: "foo"},
 	}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -942,7 +942,7 @@ func TestMatcherErrorChildOrder(t *testing.T) {
 		"literal:foo": &literal{value: "foo"},
 	}}
 
-	spec, err := ParseSpec(s)
+	spec, err := parseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
