@@ -779,8 +779,8 @@ func TestMatcherError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	if err.Error() != "/literal:show/literal:name: expected literal \"name\", got \"version\"" {
-		t.Fatalf("expected error to be '/literal:show/literal:name: expected literal \"name\", got \"version\"', got %q", err.Error())
+	if err.Error() != "/literal:show/literal:name: expected literal:name, got literal:version" {
+		t.Fatalf("expected error to be '/literal:show/literal:name: expected literal:name, got literal:version', got %q", err.Error())
 	}
 }
 
@@ -835,8 +835,8 @@ func TestMatcherErrorDifferentArgType(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	if err.Error() != "/literal:show/argument:ipv4: expected argument type ipv4, got ipv6" {
-		t.Fatalf("expected error to be '/literal:show/argument:ipv4: expected argument type ipv4, got ipv6', got %q", err.Error())
+	if err.Error() != "/literal:show/argument:ipv4: expected argument:ipv4, got argument:ipv6" {
+		t.Fatalf("expected error to be '/literal:show/argument:ipv4: expected argument:ipv4, got argument:ipv6', got %q", err.Error())
 	}
 }
 
@@ -957,7 +957,7 @@ func TestMatcherErrorChildOrder(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	if err.Error() != "/fork/literal:foo: expected literal \"foo\", got \"bar\"" {
+	if err.Error() != "/fork/literal:foo: expected literal:foo, got literal:bar" {
 		t.Fatalf("expected error to be '/fork/literal:foo: expected literal \"foo\", got \"bar\"', got %q", err.Error())
 	}
 }

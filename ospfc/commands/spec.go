@@ -478,7 +478,7 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 		}
 
 		if lit.value != s.value {
-			return fmt.Errorf("%s: expected literal %q, got %q", path, s.value, lit.value)
+			return fmt.Errorf("%s: expected literal:%s, got literal:%s", path, s.value, lit.value)
 		}
 
 		if s.description != lit.description {
@@ -508,7 +508,7 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 		}
 
 		if s.argType != arg.t {
-			return fmt.Errorf("%s: expected argument type %v, got %v", path, s.argType, arg.t)
+			return fmt.Errorf("%s: expected argument:%s, got argument:%s", path, s.argType, arg.t)
 		}
 
 		if s.description != arg.description {
