@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"errors"
+	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -594,5 +597,137 @@ func TestMoreComplicatedDescription(t *testing.T) {
 
 	if len(c1.children) != 0 {
 		t.Fatalf("expected no children, got %d", len(c1.children))
+	}
+}
+
+func TestAutocomplete(t *testing.T) {
+	s, err := parseSpec("argument:ipv4!A?\"Autocompletes IPv4 addresses\"")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s == nil {
+		t.Fatal("expected spec")
+	}
+
+	if s.typeName != "argument" {
+		t.Fatalf("expected argument, got %q", s.typeName)
+	}
+
+	if s.arg != "ipv4" {
+		t.Fatalf("expected arg ipv4, got %q", s.arg)
+	}
+
+	if s.id != 0 {
+		t.Fatalf("expected id 0, got %d", s.id)
+	}
+
+	if s.description != "Autocompletes IPv4 addresses" {
+		t.Fatalf("expected description 'Autocompletes IPv4 addresses', got %q", s.description)
+	}
+
+	if s.hasAutocomplete != true {
+		t.Fatal("expected hasAutocomplete to be true")
+	}
+}
+
+func TestHandler(t *testing.T) {
+	s := `
+	literal:show[
+		argument:ipv4!A[
+			argument:ipv6!A!Hfunc(ipv4, ipv6)?"Has autocomplete and handler"
+		]
+	]
+	`
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	if spec.typeName != "literal" {
+		t.Fatalf("expected literal, got %q", spec.typeName)
+	}
+
+	if spec.arg != "show" {
+		t.Fatalf("expected arg show, got %q", spec.arg)
+	}
+
+	if spec.id != 0 {
+		t.Fatalf("expected id 0, got %d", spec.id)
+	}
+
+	if spec.description != "" {
+		t.Fatalf("expected description '', got %q", spec.description)
+	}
+
+	if len(spec.children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(spec.children))
+	}
+
+	c1 := spec.children[0]
+	if c1.typeName != "argument" {
+		t.Fatalf("expected argument, got %q", c1.typeName)
+	}
+
+	if c1.arg != "ipv4" {
+		t.Fatalf("expected arg ipv4, got %q", c1.arg)
+	}
+
+	if c1.id != 0 {
+		t.Fatalf("expected id 0, got %d", c1.id)
+	}
+
+	if c1.description != "" {
+		t.Fatalf("expected description '', got %q", c1.description)
+	}
+
+	if c1.hasAutocomplete != true {
+		t.Fatal("expected hasAutocomplete to be true")
+	}
+
+	if c1.handler != nil {
+		t.Fatal("expected handler to be empty")
+	}
+
+	if len(c1.children) != 1 {
+		t.Fatalf("expected 1 child, got %d", len(c1.children))
+	}
+
+	c2 := c1.children[0]
+	if c2.typeName != "argument" {
+		t.Fatalf("expected argument, got %q", c2.typeName)
+	}
+
+	if c2.arg != "ipv6" {
+		t.Fatalf("expected arg ipv6, got %q", c2.arg)
+	}
+
+	if c2.id != 0 {
+		t.Fatalf("expected id 0, got %d", c2.id)
+	}
+
+	if c2.description != "Has autocomplete and handler" {
+		t.Fatalf("expected description 'Has autocomplete and handler', got %q", c2.description)
+	}
+
+	if c2.hasAutocomplete != true {
+		t.Fatal("expected hasAutocomplete to be true")
+	}
+
+	if c2.handler == nil {
+		t.Fatal("expected handler to not be empty")
+	}
+
+	in := []reflect.Type{reflect.TypeOf(netip.Addr{}), reflect.TypeOf(netip.Addr{})}
+	out := []reflect.Type{reflect.TypeOf(errors.New(""))}
+	signature := reflect.FuncOf(in, out, false)
+
+	if *c2.handler != signature {
+		t.Fatalf("expected handler to be %v, got %v", signature, c1.handler)
 	}
 }
