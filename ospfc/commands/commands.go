@@ -16,6 +16,7 @@ type Graph interface {
 	SetAutocompleteFunc(AutocompleteFunc)
 	Merge(Graph) Graph
 	Children() []Graph
+	withChild(Graph) Graph
 }
 
 type literal struct {
@@ -81,8 +82,24 @@ func (l *literal) Merge(other Graph) Graph {
 		return fork.Merge(l)
 	}
 
+	var j *join
+	if len(other.Children()) == 0 {
+		j = &join{child: l.child}
+	} else if len(other.Children()) > 1 {
+		panic("(*literal).Merge: other is not a fork and has more than one child")
+	} else if l.child == nil {
+		j = &join{child: other.Children()[0]}
+	} else {
+		j = &join{child: l.child.Merge(other.Children()[0])}
+	}
+
 	// otherwise, create a fork with us and other as children
-	return &fork{children: map[string]Graph{l.Name(): l, other.Name(): other}}
+	return &fork{
+		children: map[string]Graph{
+			l.Name():     l.withChild(j),
+			other.Name(): other.withChild(j),
+		},
+	}
 }
 
 func (l *literal) Children() []Graph {
@@ -91,6 +108,13 @@ func (l *literal) Children() []Graph {
 	}
 
 	return []Graph{l.child}
+}
+
+func (l *literal) withChild(child Graph) Graph {
+	l2 := *l
+	l2.child = child
+
+	return &l2
 }
 
 type argumentType int
@@ -190,6 +214,13 @@ func (a *argument) Children() []Graph {
 	return []Graph{a.child}
 }
 
+func (a *argument) withChild(child Graph) Graph {
+	a2 := *a
+	a2.child = child
+
+	return &a2
+}
+
 type fork struct {
 	children map[string]Graph
 }
@@ -261,6 +292,10 @@ func (f *fork) Children() []Graph {
 	return children
 }
 
+func (f *fork) withChild(child Graph) Graph {
+	panic("can't call withChild on fork")
+}
+
 type join struct {
 	child Graph
 }
@@ -303,6 +338,13 @@ func (j *join) Children() []Graph {
 	}
 
 	return []Graph{j.child}
+}
+
+func (j *join) withChild(child Graph) Graph {
+	j2 := *j
+	j2.child = child
+
+	return &j2
 }
 
 func ParseDeclaration(s string) (Graph, reflect.Type, error) {

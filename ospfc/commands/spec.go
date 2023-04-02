@@ -35,6 +35,9 @@ import (
 // word <- [a-zA-Z0-9]+
 // argtype <- "string" / "ipv4" / "ipv6"
 // ws <- [ \t\r\n]*
+//
+// All nodes of the same type and ID (.1, .2, etc.) must be reference equal to each other.
+// You only need to specify other attributes on the first node of a given type and ID.
 
 type Spec struct {
 	typeName        string
@@ -477,6 +480,19 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			return fmt.Errorf("%s: expected literal, got %T", path, g)
 		}
 
+		if ref != nil {
+			litref, ok := ref.(*literal)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, ref)
+			}
+
+			if lit != litref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, litref)
+			}
+
+			return nil
+		}
+
 		if lit.value != s.value {
 			return fmt.Errorf("%s: expected literal:%s, got literal:%s", path, s.value, lit.value)
 		}
@@ -490,21 +506,23 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 		} else if s.handler != nil && (!lit.handlerFunc.IsValid() || *s.handler != lit.handlerFunc.Type()) {
 			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, lit.handlerFunc.Type())
 		}
-
-		if ref != nil {
-			litref, ok := ref.(*literal)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, ref)
-			}
-
-			if lit != litref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, litref)
-			}
-		}
 	case "argument":
 		arg, ok := g.(*argument)
 		if !ok {
 			return fmt.Errorf("%s: expected argument, got %T", path, g)
+		}
+
+		if ref != nil {
+			argref, ok := ref.(*argument)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, ref)
+			}
+
+			if arg != argref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, argref)
+			}
+
+			return nil
 		}
 
 		if s.argType != arg.t {
@@ -526,17 +544,6 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 		} else if !s.hasAutocomplete && arg.autocompleteFunc != nil {
 			return fmt.Errorf("%s: expected no autocomplete, got %T", path, arg.autocompleteFunc)
 		}
-
-		if ref != nil {
-			argref, ok := ref.(*argument)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, ref)
-			}
-
-			if arg != argref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, argref)
-			}
-		}
 	case "fork":
 		fk, ok := g.(*fork)
 		if !ok {
@@ -552,6 +559,8 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			if fk != fkref {
 				return fmt.Errorf("%s: expected %p to be equal to %p", path, fk, fkref)
 			}
+
+			return nil
 		}
 	case "join":
 		j, ok := g.(*join)
@@ -568,6 +577,8 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			if j != jref {
 				return fmt.Errorf("%s: expected %p to be equal to %p", path, j, jref)
 			}
+
+			return nil
 		}
 	default:
 		return fmt.Errorf("%s: unknown type %q", path, s.typeName)
