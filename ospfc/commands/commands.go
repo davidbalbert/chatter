@@ -7,11 +7,13 @@ import (
 	"reflect"
 )
 
+type AutocompleteFunc func(string) ([]string, error)
+
 type Graph interface {
 	Name() string
 	SetDescription(string)
 	SetHandlerFunc(reflect.Value)
-	SetAutocompleteFunc(func(string) ([]string, error))
+	SetAutocompleteFunc(AutocompleteFunc)
 	Merge(Graph) Graph
 	Children() []Graph
 }
@@ -43,7 +45,7 @@ func (l *literal) SetHandlerFunc(handlerFunc reflect.Value) {
 	}
 }
 
-func (l *literal) SetAutocompleteFunc(autocompleteFunc func(string) ([]string, error)) {
+func (l *literal) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
 	if l.child == nil {
 		panic("(*literal).SetAutocompleteFunc: no child")
 	}
@@ -117,7 +119,7 @@ type argument struct {
 	t                argumentType
 	description      string
 	handlerFunc      reflect.Value
-	autocompleteFunc func(string) ([]string, error)
+	autocompleteFunc AutocompleteFunc
 	child            Graph
 }
 
@@ -141,7 +143,7 @@ func (p *argument) SetHandlerFunc(handlerFunc reflect.Value) {
 	}
 }
 
-func (p *argument) SetAutocompleteFunc(autocompleteFunc func(string) ([]string, error)) {
+func (p *argument) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
 	if p.child == nil {
 		p.autocompleteFunc = autocompleteFunc
 	} else {
@@ -202,7 +204,7 @@ func (f *fork) SetDescription(description string) {
 	}
 }
 
-func (f *fork) SetAutocompleteFunc(autocompleteFunc func(string) ([]string, error)) {
+func (f *fork) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
 	if len(f.children) == 0 {
 		panic("no children")
 	}
@@ -283,7 +285,7 @@ func (j *join) SetHandlerFunc(handlerFunc reflect.Value) {
 	j.child.SetHandlerFunc(handlerFunc)
 }
 
-func (j *join) SetAutocompleteFunc(autocompleteFunc func(string) ([]string, error)) {
+func (j *join) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
 	if j.child == nil {
 		panic("can't SetAutocompleteFunc on a join with no child")
 	}
