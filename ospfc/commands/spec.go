@@ -449,24 +449,24 @@ func (s *Spec) pathComponent() string {
 }
 
 type matcher struct {
-	identifiedGraphs map[string]Graph
+	references map[string]Graph
 }
 
 func newMatcher() *matcher {
 	return &matcher{
-		identifiedGraphs: make(map[string]Graph),
+		references: make(map[string]Graph),
 	}
 }
 
 func (m *matcher) match(path string, g Graph, s *Spec) error {
-	var identified Graph
+	var ref Graph
 
 	if s.id != 0 {
 		key := s.pathComponent()
 		var ok bool
-		identified, ok = m.identifiedGraphs[key]
+		ref, ok = m.references[key]
 		if !ok {
-			m.identifiedGraphs[key] = g
+			m.references[key] = g
 		}
 	}
 
@@ -491,14 +491,14 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, lit.handlerFunc.Type())
 		}
 
-		if identified != nil {
-			ilit, ok := identified.(*literal)
+		if ref != nil {
+			litref, ok := ref.(*literal)
 			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, identified)
+				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, ref)
 			}
 
-			if lit != ilit {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, ilit)
+			if lit != litref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, litref)
 			}
 		}
 	case "argument":
@@ -527,14 +527,14 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			return fmt.Errorf("%s: expected no autocomplete, got %T", path, arg.autocompleteFunc)
 		}
 
-		if identified != nil {
-			iarg, ok := identified.(*argument)
+		if ref != nil {
+			argref, ok := ref.(*argument)
 			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, identified)
+				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, ref)
 			}
 
-			if arg != iarg {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, iarg)
+			if arg != argref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, argref)
 			}
 		}
 	case "fork":
@@ -543,14 +543,14 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			return fmt.Errorf("%s: expected fork, got %T", path, g)
 		}
 
-		if identified != nil {
-			ifk, ok := identified.(*fork)
+		if ref != nil {
+			fkref, ok := ref.(*fork)
 			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be fork, got %T", path, identified)
+				return fmt.Errorf("%s: expected previous identified to be fork, got %T", path, ref)
 			}
 
-			if fk != ifk {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, fk, ifk)
+			if fk != fkref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, fk, fkref)
 			}
 		}
 	case "join":
@@ -559,14 +559,14 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 			return fmt.Errorf("%s: expected join, got %T", path, g)
 		}
 
-		if identified != nil {
-			ij, ok := identified.(*join)
+		if ref != nil {
+			jref, ok := ref.(*join)
 			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be join, got %T", path, identified)
+				return fmt.Errorf("%s: expected previous identified to be join, got %T", path, ref)
 			}
 
-			if j != ij {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, j, ij)
+			if j != jref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, j, jref)
 			}
 		}
 	default:

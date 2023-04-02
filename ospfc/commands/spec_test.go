@@ -961,3 +961,118 @@ func TestMatcherErrorChildOrder(t *testing.T) {
 		t.Fatalf("expected error to be '/fork/literal:foo: expected literal \"foo\", got \"bar\"', got %q", err.Error())
 	}
 }
+
+func TestMatcherReferenceIdentity(t *testing.T) {
+	s := `
+	fork[
+		literal:foo[
+			join.1
+		],
+		literal:bar[
+			join.1
+		]
+	]`
+
+	j := &join{}
+
+	g := &fork{children: map[string]Graph{
+		"literal:foo": &literal{value: "foo", child: j},
+		"literal:bar": &literal{value: "bar", child: j},
+	}}
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref, ok := m.references["join.1"]
+	if !ok {
+		t.Fatal("expected join to be referenced")
+	}
+
+	jref, ok := ref.(*join)
+	if !ok {
+		t.Fatal("expected jref to be a join")
+	}
+
+	if jref != j {
+		t.Fatal("expected jref to be the same as j")
+	}
+}
+
+func TestMatcherReferenceIdentitySeparate(t *testing.T) {
+	s := `
+	fork[
+		literal:foo[
+			join.1
+		],
+		literal:bar[
+			join.2
+		]
+	]`
+
+	j1 := &join{}
+	j2 := &join{}
+
+	g := &fork{children: map[string]Graph{
+		"literal:foo": &literal{value: "foo", child: j1},
+		"literal:bar": &literal{value: "bar", child: j2},
+	}}
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ref, ok := m.references["join.1"]
+	if !ok {
+		t.Fatal("expected join to be referenced")
+	}
+
+	jref, ok := ref.(*join)
+	if !ok {
+		t.Fatal("expected jref to be a join")
+	}
+
+	if jref != j1 {
+		t.Fatal("expected jref to be the same as j1")
+	}
+
+	ref, ok = m.references["join.2"]
+	if !ok {
+		t.Fatal("expected join to be referenced")
+	}
+
+	jref, ok = ref.(*join)
+	if !ok {
+		t.Fatal("expected jref to be a join")
+	}
+
+	if jref != j2 {
+		t.Fatal("expected jref to be the same as j2")
+	}
+
+	if j1 == j2 {
+		t.Fatal("expected j1 and j2 to be different")
+	}
+}
