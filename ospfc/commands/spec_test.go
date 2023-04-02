@@ -731,3 +731,233 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("expected handler to be %v, got %v", signature, c1.handler)
 	}
 }
+
+func TestMatcher(t *testing.T) {
+	s := `
+	literal:show[
+		literal:version
+	]`
+
+	g := &literal{value: "show", child: &literal{value: "version"}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match(spec.pathComponent(), g, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMatcherError(t *testing.T) {
+	s := `
+	literal:show[
+		literal:name
+	]`
+
+	g := &literal{value: "show", child: &literal{value: "version"}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/literal:show/literal:name: expected literal \"name\", got \"version\"" {
+		t.Fatalf("expected error to be '/literal:show/literal:name: expected literal \"name\", got \"version\"', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorDifferentType(t *testing.T) {
+	s := `
+	literal:show[
+		argument:ipv4
+	]`
+
+	g := &literal{value: "show", child: &literal{value: "version"}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/literal:show/argument:ipv4: expected argument, got *commands.literal" {
+		t.Fatalf("expected error to be '/literal:show/argument:ipv4: expected argument, got *commands.literal', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorDifferentArgType(t *testing.T) {
+	s := `
+	literal:show[
+		argument:ipv4
+	]`
+
+	g := &literal{value: "show", child: &argument{t: argumentTypeIPv6}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/literal:show/argument:ipv4: expected argument type ipv4, got ipv6" {
+		t.Fatalf("expected error to be '/literal:show/argument:ipv4: expected argument type ipv4, got ipv6', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorNoChildren(t *testing.T) {
+	s := `
+	literal:show
+	`
+
+	g := &literal{value: "show", child: &literal{value: "version"}}
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/literal:show: expected 0 children, got 1" {
+		t.Fatalf("expected error to be '/literal:show: expected 0 children, got 1', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorTooManyChildren(t *testing.T) {
+	s := `
+	fork[
+		literal:foo,
+		literal:bar
+	]`
+
+	g := &fork{children: map[string]Graph{
+		"literal:foo": &literal{value: "foo"},
+		"literal:bar": &literal{value: "bar"},
+		"literal:baz": &literal{value: "baz"},
+	}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/fork: expected 2 children, got 3" {
+		t.Fatalf("expected error to be '/fork: expected 2 children, got 3', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorMissingChild(t *testing.T) {
+	s := `
+	fork[
+		literal:foo,
+		literal:bar
+	]`
+
+	g := &fork{children: map[string]Graph{
+		"literal:foo": &literal{value: "foo"},
+	}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/fork: expected 2 children, got 1" {
+		t.Fatalf("expected error to be '/fork: expected 2 children, got 1', got %q", err.Error())
+	}
+}
+
+func TestMatcherErrorChildOrder(t *testing.T) {
+	s := `
+	fork[
+		literal:foo,
+		literal:bar
+	]`
+
+	g := &fork{children: map[string]Graph{
+		"literal:bar": &literal{value: "bar"},
+		"literal:foo": &literal{value: "foo"},
+	}}
+
+	spec, err := ParseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newMatcher()
+	err = m.match("/"+spec.pathComponent(), g, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if err.Error() != "/fork/literal:foo: expected literal \"foo\", got \"bar\"" {
+		t.Fatalf("expected error to be '/fork/literal:foo: expected literal \"foo\", got \"bar\"', got %q", err.Error())
+	}
+}

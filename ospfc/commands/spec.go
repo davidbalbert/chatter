@@ -426,40 +426,80 @@ func ParseSpec(s string) (*Spec, error) {
 }
 
 func (s *Spec) pathComponent() string {
+	var name string
+
 	switch s.typeName {
 	case "literal":
-		return "literal:" + s.argType.String()
+		name = "literal:" + s.value
 	case "argument":
-		return "argument:" + s.argType.String()
+		name = "argument:" + s.argType.String()
 	case "fork":
-		return "fork"
+		name = "fork"
 	case "join":
-		return "join"
+		name = "join"
 	default:
 		panic("unreachable")
 	}
+
+	if s.id != 0 {
+		name += "." + strconv.Itoa(s.id)
+	}
+
+	return name
 }
 
-func (s *Spec) match(path string, g Graph) error {
+type matcher struct {
+	identifiedGraphs map[string]Graph
+}
+
+func newMatcher() *matcher {
+	return &matcher{
+		identifiedGraphs: make(map[string]Graph),
+	}
+}
+
+func (m *matcher) match(path string, g Graph, s *Spec) error {
+	var identified Graph
+
+	if s.id != 0 {
+		key := s.pathComponent()
+		var ok bool
+		identified, ok = m.identifiedGraphs[key]
+		if !ok {
+			m.identifiedGraphs[key] = g
+		}
+	}
+
 	switch s.typeName {
 	case "literal":
-		literal, ok := g.(*literal)
+		lit, ok := g.(*literal)
 		if !ok {
 			return fmt.Errorf("%s: expected literal, got %T", path, g)
 		}
 
-		if literal.value != s.value {
-			return fmt.Errorf("%s: expected literal %q, got %q", path, s.value, literal.value)
+		if lit.value != s.value {
+			return fmt.Errorf("%s: expected literal %q, got %q", path, s.value, lit.value)
 		}
 
-		if s.description != literal.description {
-			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, literal.description)
+		if s.description != lit.description {
+			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, lit.description)
 		}
 
-		if s.handler == nil && literal.handlerFunc.IsValid() {
-			return fmt.Errorf("%s: expected no handler, got %v", path, literal.handlerFunc.Type())
-		} else if s.handler != nil && (!literal.handlerFunc.IsValid() || *s.handler != literal.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, literal.handlerFunc.Type())
+		if s.handler == nil && lit.handlerFunc.IsValid() {
+			return fmt.Errorf("%s: expected no handler, got %v", path, lit.handlerFunc.Type())
+		} else if s.handler != nil && (!lit.handlerFunc.IsValid() || *s.handler != lit.handlerFunc.Type()) {
+			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, lit.handlerFunc.Type())
+		}
+
+		if identified != nil {
+			ilit, ok := identified.(*literal)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, identified)
+			}
+
+			if lit != ilit {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, ilit)
+			}
 		}
 	case "argument":
 		arg, ok := g.(*argument)
@@ -486,15 +526,48 @@ func (s *Spec) match(path string, g Graph) error {
 		} else if !s.hasAutocomplete && arg.autocompleteFunc != nil {
 			return fmt.Errorf("%s: expected no autocomplete, got %T", path, arg.autocompleteFunc)
 		}
+
+		if identified != nil {
+			iarg, ok := identified.(*argument)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, identified)
+			}
+
+			if arg != iarg {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, iarg)
+			}
+		}
 	case "fork":
-		_, ok := g.(*fork)
+		fk, ok := g.(*fork)
 		if !ok {
 			return fmt.Errorf("%s: expected fork, got %T", path, g)
 		}
+
+		if identified != nil {
+			ifk, ok := identified.(*fork)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be fork, got %T", path, identified)
+			}
+
+			if fk != ifk {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, fk, ifk)
+			}
+		}
 	case "join":
-		_, ok := g.(*join)
+		j, ok := g.(*join)
 		if !ok {
 			return fmt.Errorf("%s: expected join, got %T", path, g)
+		}
+
+		if identified != nil {
+			ij, ok := identified.(*join)
+			if !ok {
+				return fmt.Errorf("%s: expected previous identified to be join, got %T", path, identified)
+			}
+
+			if j != ij {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, j, ij)
+			}
 		}
 	default:
 		return fmt.Errorf("%s: unknown type %q", path, s.typeName)
@@ -505,7 +578,7 @@ func (s *Spec) match(path string, g Graph) error {
 	}
 
 	for i, child := range s.children {
-		err := child.match(path+"."+child.pathComponent(), g.Children()[i])
+		err := m.match(path+"/"+child.pathComponent(), g.Children()[i], child)
 		if err != nil {
 			return err
 		}
@@ -517,7 +590,8 @@ func (s *Spec) match(path string, g Graph) error {
 func AssertMatches(t *testing.T, s *Spec, g Graph) {
 	t.Helper()
 
-	err := s.match(s.pathComponent(), g)
+	m := newMatcher()
+	err := m.match("/"+s.pathComponent(), g, s)
 	if err != nil {
 		t.Fatal(err)
 	}
