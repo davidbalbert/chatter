@@ -283,8 +283,10 @@ func main() {
 	cli.MustRegister(
 		"show ip route A.B.C.D",
 		"Network in the IP routing table to display",
-		func(addr netip.Addr) {
+		func(addr netip.Addr) error {
 			fmt.Println("addr:", addr)
+
+			return nil
 		})
 
 	cli.MustDocument("show bgp", "BGP information")
@@ -295,13 +297,14 @@ func main() {
 	cli.MustRegister(
 		"show bgp neighbors <A.B.C.D|X:X:X::X|all>",
 		"Neighbor to display information about",
-		func(neighbor netip.Addr, all string) {
+		func(neighbor netip.Addr, all string) error {
 			if all != "" {
 				fmt.Println("All neighbors")
-				return
 			} else {
 				fmt.Println("Neighbor:", neighbor)
 			}
+
+			return nil
 		})
 
 	// Here we're overriding the description of the "all" option.
