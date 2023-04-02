@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseFork(t *testing.T) {
-	spec, err := parseSpec("fork")
+	spec, err := ParseSpec("fork")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -18,8 +18,8 @@ func TestParseFork(t *testing.T) {
 		t.Fatalf("expected fork, got %q", spec.typeName)
 	}
 
-	if spec.arg != "" {
-		t.Fatalf("expected empty arg, got %q", spec.arg)
+	if spec.value != "" {
+		t.Fatalf("expected empty value, got %q", spec.value)
 	}
 
 	if len(spec.children) != 0 {
@@ -32,7 +32,7 @@ func TestParseFork(t *testing.T) {
 }
 
 func TestParseJoin(t *testing.T) {
-	spec, err := parseSpec("join")
+	spec, err := ParseSpec("join")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,8 +41,8 @@ func TestParseJoin(t *testing.T) {
 		t.Fatalf("expected join, got %q", spec.typeName)
 	}
 
-	if spec.arg != "" {
-		t.Fatalf("expected empty arg, got %q", spec.arg)
+	if spec.value != "" {
+		t.Fatalf("expected empty value, got %q", spec.value)
 	}
 
 	if len(spec.children) != 0 {
@@ -55,7 +55,7 @@ func TestParseJoin(t *testing.T) {
 }
 
 func TestParseJoinWithID(t *testing.T) {
-	spec, err := parseSpec("join.1")
+	spec, err := ParseSpec("join.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,8 +64,8 @@ func TestParseJoinWithID(t *testing.T) {
 		t.Fatalf("expected join, got %q", spec.typeName)
 	}
 
-	if spec.arg != "" {
-		t.Fatalf("expected empty arg, got %q", spec.arg)
+	if spec.value != "" {
+		t.Fatalf("expected empty value, got %q", spec.value)
 	}
 
 	if len(spec.children) != 0 {
@@ -78,7 +78,7 @@ func TestParseJoinWithID(t *testing.T) {
 }
 
 func TestParseLiteral(t *testing.T) {
-	spec, err := parseSpec("literal:foo")
+	spec, err := ParseSpec("literal:foo")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,8 +87,8 @@ func TestParseLiteral(t *testing.T) {
 		t.Fatalf("expected literal, got %q", spec.typeName)
 	}
 
-	if spec.arg != "foo" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.value != "foo" {
+		t.Fatalf("expected arg foo, got %q", spec.value)
 	}
 
 	if len(spec.children) != 0 {
@@ -101,19 +101,19 @@ func TestParseLiteral(t *testing.T) {
 }
 
 func TestParseLiteralMissingValue(t *testing.T) {
-	_, err := parseSpec("literal")
+	_, err := ParseSpec("literal")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	_, err = parseSpec("literal:")
+	_, err = ParseSpec("literal:")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestParseArgumentString(t *testing.T) {
-	spec, err := parseSpec("argument:string")
+	spec, err := ParseSpec("argument:string")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,8 +122,8 @@ func TestParseArgumentString(t *testing.T) {
 		t.Fatalf("expected argument, got %q", spec.typeName)
 	}
 
-	if spec.arg != "string" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.argType != argumentTypeString {
+		t.Fatalf("expected argument type %s, got %s", argumentTypeString, spec.argType)
 	}
 
 	if len(spec.children) != 0 {
@@ -136,7 +136,7 @@ func TestParseArgumentString(t *testing.T) {
 }
 
 func TestParseArgumentIPv4(t *testing.T) {
-	spec, err := parseSpec("argument:ipv4")
+	spec, err := ParseSpec("argument:ipv4")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,8 +145,8 @@ func TestParseArgumentIPv4(t *testing.T) {
 		t.Fatalf("expected argument, got %q", spec.typeName)
 	}
 
-	if spec.arg != "ipv4" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.argType != argumentTypeIPv4 {
+		t.Fatalf("expected argument type %s, got %q", argumentTypeIPv4, spec.argType)
 	}
 
 	if len(spec.children) != 0 {
@@ -159,7 +159,7 @@ func TestParseArgumentIPv4(t *testing.T) {
 }
 
 func TestParseArgumentIPv6(t *testing.T) {
-	spec, err := parseSpec("argument:ipv6")
+	spec, err := ParseSpec("argument:ipv6")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +168,8 @@ func TestParseArgumentIPv6(t *testing.T) {
 		t.Fatalf("expected argument, got %q", spec.typeName)
 	}
 
-	if spec.arg != "ipv6" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.argType != argumentTypeIPv6 {
+		t.Fatalf("expected argument type %s, got %s", argumentTypeIPv6, spec.argType)
 	}
 
 	if len(spec.children) != 0 {
@@ -182,26 +182,26 @@ func TestParseArgumentIPv6(t *testing.T) {
 }
 
 func TestParseArgumentBadType(t *testing.T) {
-	_, err := parseSpec("argument:foo")
+	_, err := ParseSpec("argument:foo")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestParseArgumentMissingType(t *testing.T) {
-	_, err := parseSpec("argument")
+	_, err := ParseSpec("argument")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	_, err = parseSpec("argument:")
+	_, err = ParseSpec("argument:")
 	if err == nil {
 		t.Fatal("expected error")
 	}
 }
 
 func TestLiteralWithChild(t *testing.T) {
-	s, err := parseSpec("literal:foo[literal:bar]")
+	s, err := ParseSpec("literal:foo[literal:bar]")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,8 +214,8 @@ func TestLiteralWithChild(t *testing.T) {
 		t.Fatalf("expected literal, got %q", s.typeName)
 	}
 
-	if s.arg != "foo" {
-		t.Fatalf("expected arg foo, got %q", s.arg)
+	if s.value != "foo" {
+		t.Fatalf("expected value foo, got %q", s.value)
 	}
 
 	if s.id != 0 {
@@ -230,8 +230,8 @@ func TestLiteralWithChild(t *testing.T) {
 		t.Fatalf("expected literal, got %q", s.children[0].typeName)
 	}
 
-	if s.children[0].arg != "bar" {
-		t.Fatalf("expected arg bar, got %q", s.children[0].arg)
+	if s.children[0].value != "bar" {
+		t.Fatalf("expected value bar, got %q", s.children[0].value)
 	}
 
 	if s.children[0].id != 0 {
@@ -250,7 +250,7 @@ func TestLiteralWithChildAndWhitespace(t *testing.T) {
 	]
 	`
 
-	spec, err := parseSpec(s)
+	spec, err := ParseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,8 +263,8 @@ func TestLiteralWithChildAndWhitespace(t *testing.T) {
 		t.Fatalf("expected literal, got %q", spec.typeName)
 	}
 
-	if spec.arg != "foo" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.value != "foo" {
+		t.Fatalf("expected value foo, got %q", spec.value)
 	}
 
 	if spec.id != 0 {
@@ -279,8 +279,8 @@ func TestLiteralWithChildAndWhitespace(t *testing.T) {
 		t.Fatalf("expected literal, got %q", spec.children[0].typeName)
 	}
 
-	if spec.children[0].arg != "bar" {
-		t.Fatalf("expected arg bar, got %q", spec.children[0].arg)
+	if spec.children[0].value != "bar" {
+		t.Fatalf("expected value bar, got %q", spec.children[0].value)
 	}
 
 	if spec.children[0].id != 0 {
@@ -302,7 +302,7 @@ func TestForkWithChildren(t *testing.T) {
 	]
 	`
 
-	spec, err := parseSpec(s)
+	spec, err := ParseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,8 +315,8 @@ func TestForkWithChildren(t *testing.T) {
 		t.Fatalf("expected fork, got %q", spec.typeName)
 	}
 
-	if spec.arg != "" {
-		t.Fatalf("expected arg '', got %q", spec.arg)
+	if spec.value != "" {
+		t.Fatalf("expected value '', got %q", spec.value)
 	}
 
 	if spec.id != 0 {
@@ -332,8 +332,8 @@ func TestForkWithChildren(t *testing.T) {
 		t.Fatalf("expected literal, got %q", c1.typeName)
 	}
 
-	if c1.arg != "all" {
-		t.Fatalf("expected arg all, got %q", c1.arg)
+	if c1.value != "all" {
+		t.Fatalf("expected arg all, got %q", c1.value)
 	}
 
 	if c1.id != 0 {
@@ -349,8 +349,8 @@ func TestForkWithChildren(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c2.typeName)
 	}
 
-	if c2.arg != "ipv4" {
-		t.Fatalf("expected arg ipv4, got %q", c2.arg)
+	if c2.argType != argumentTypeIPv4 {
+		t.Fatalf("expected arg %s, got %s", argumentTypeIPv4, c2.argType)
 	}
 
 	if c2.id != 0 {
@@ -366,8 +366,8 @@ func TestForkWithChildren(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c3.typeName)
 	}
 
-	if c3.arg != "ipv6" {
-		t.Fatalf("expected arg ipv6, got %q", c3.arg)
+	if c3.argType != argumentTypeIPv6 {
+		t.Fatalf("expected value %s, got %s", argumentTypeIPv6, c3.argType)
 	}
 
 	if c3.id != 0 {
@@ -383,8 +383,8 @@ func TestForkWithChildren(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c4.typeName)
 	}
 
-	if c4.arg != "string" {
-		t.Fatalf("expected arg string, got %q", c4.arg)
+	if c4.argType != argumentTypeString {
+		t.Fatalf("expected value %s, got %s", argumentTypeString, c4.argType)
 	}
 
 	if c4.id != 0 {
@@ -408,7 +408,7 @@ func TestForkJoinWithID(t *testing.T) {
 	]
 	`
 
-	spec, err := parseSpec(s)
+	spec, err := ParseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,8 +421,8 @@ func TestForkJoinWithID(t *testing.T) {
 		t.Fatalf("expected fork, got %q", spec.typeName)
 	}
 
-	if spec.arg != "" {
-		t.Fatalf("expected arg '', got %q", spec.arg)
+	if spec.value != "" {
+		t.Fatalf("expected value '', got %q", spec.value)
 	}
 
 	if spec.id != 0 {
@@ -438,8 +438,8 @@ func TestForkJoinWithID(t *testing.T) {
 		t.Fatalf("expected literal, got %q", c1.typeName)
 	}
 
-	if c1.arg != "all" {
-		t.Fatalf("expected arg all, got %q", c1.arg)
+	if c1.value != "all" {
+		t.Fatalf("expected value all, got %q", c1.value)
 	}
 
 	if c1.id != 0 {
@@ -454,8 +454,8 @@ func TestForkJoinWithID(t *testing.T) {
 		t.Fatalf("expected join, got %q", c1.children[0].typeName)
 	}
 
-	if c1.children[0].arg != "" {
-		t.Fatalf("expected arg '', got %q", c1.children[0].arg)
+	if c1.children[0].value != "" {
+		t.Fatalf("expected value '', got %q", c1.children[0].value)
 	}
 
 	if c1.children[0].id != 1 {
@@ -471,8 +471,8 @@ func TestForkJoinWithID(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c2.typeName)
 	}
 
-	if c2.arg != "ipv4" {
-		t.Fatalf("expected arg ipv4, got %q", c2.arg)
+	if c2.argType != argumentTypeIPv4 {
+		t.Fatalf("expected argType %s, got %s", argumentTypeIPv4, c2.argType)
 	}
 
 	if c2.id != 0 {
@@ -487,8 +487,8 @@ func TestForkJoinWithID(t *testing.T) {
 		t.Fatalf("expected join, got %q", c2.children[0].typeName)
 	}
 
-	if c2.children[0].arg != "" {
-		t.Fatalf("expected arg '', got %q", c2.children[0].arg)
+	if c2.children[0].value != "" {
+		t.Fatalf("expected value '', got %q", c2.children[0].value)
 	}
 
 	if c2.children[0].id != 1 {
@@ -501,7 +501,7 @@ func TestForkJoinWithID(t *testing.T) {
 }
 
 func TestInvalidZeroID(t *testing.T) {
-	_, err := parseSpec("join.0")
+	_, err := ParseSpec("join.0")
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -512,7 +512,7 @@ func TestInvalidZeroID(t *testing.T) {
 }
 
 func TestDescription(t *testing.T) {
-	s, err := parseSpec("literal:foo?\"does the foo\"")
+	s, err := ParseSpec("literal:foo?\"does the foo\"")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -525,8 +525,8 @@ func TestDescription(t *testing.T) {
 		t.Fatalf("expected literal, got %q", s.typeName)
 	}
 
-	if s.arg != "foo" {
-		t.Fatalf("expected arg foo, got %q", s.arg)
+	if s.value != "foo" {
+		t.Fatalf("expected arg value, got %q", s.value)
 	}
 
 	if s.id != 0 {
@@ -549,7 +549,7 @@ func TestMoreComplicatedDescription(t *testing.T) {
 	]	
 	`
 
-	spec, err := parseSpec(s)
+	spec, err := ParseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,8 +562,8 @@ func TestMoreComplicatedDescription(t *testing.T) {
 		t.Fatalf("expected literal, got %q", spec.typeName)
 	}
 
-	if spec.arg != "foo" {
-		t.Fatalf("expected arg foo, got %q", spec.arg)
+	if spec.value != "foo" {
+		t.Fatalf("expected value foo, got %q", spec.value)
 	}
 
 	if spec.id != 1 {
@@ -583,8 +583,8 @@ func TestMoreComplicatedDescription(t *testing.T) {
 		t.Fatalf("expected literal, got %q", c1.typeName)
 	}
 
-	if c1.arg != "bar" {
-		t.Fatalf("expected arg bar, got %q", c1.arg)
+	if c1.value != "bar" {
+		t.Fatalf("expected value bar, got %q", c1.value)
 	}
 
 	if c1.id != 2 {
@@ -601,7 +601,7 @@ func TestMoreComplicatedDescription(t *testing.T) {
 }
 
 func TestAutocomplete(t *testing.T) {
-	s, err := parseSpec("argument:ipv4!A?\"Autocompletes IPv4 addresses\"")
+	s, err := ParseSpec("argument:ipv4!A?\"Autocompletes IPv4 addresses\"")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -614,8 +614,8 @@ func TestAutocomplete(t *testing.T) {
 		t.Fatalf("expected argument, got %q", s.typeName)
 	}
 
-	if s.arg != "ipv4" {
-		t.Fatalf("expected arg ipv4, got %q", s.arg)
+	if s.argType != argumentTypeIPv4 {
+		t.Fatalf("expected argType %s, got %s", argumentTypeIPv4, s.argType)
 	}
 
 	if s.id != 0 {
@@ -640,7 +640,7 @@ func TestHandler(t *testing.T) {
 	]
 	`
 
-	spec, err := parseSpec(s)
+	spec, err := ParseSpec(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,8 +653,8 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("expected literal, got %q", spec.typeName)
 	}
 
-	if spec.arg != "show" {
-		t.Fatalf("expected arg show, got %q", spec.arg)
+	if spec.value != "show" {
+		t.Fatalf("expected value show, got %q", spec.value)
 	}
 
 	if spec.id != 0 {
@@ -674,8 +674,8 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c1.typeName)
 	}
 
-	if c1.arg != "ipv4" {
-		t.Fatalf("expected arg ipv4, got %q", c1.arg)
+	if c1.argType != argumentTypeIPv4 {
+		t.Fatalf("expected argType %s, got %s", argumentTypeIPv4, c1.argType)
 	}
 
 	if c1.id != 0 {
@@ -703,8 +703,8 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("expected argument, got %q", c2.typeName)
 	}
 
-	if c2.arg != "ipv6" {
-		t.Fatalf("expected arg ipv6, got %q", c2.arg)
+	if c2.argType != argumentTypeIPv6 {
+		t.Fatalf("expected arg %s, got %q", argumentTypeIPv6, c2.argType)
 	}
 
 	if c2.id != 0 {

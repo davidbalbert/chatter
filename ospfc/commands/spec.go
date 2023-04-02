@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"testing"
 	"unicode/utf8"
 )
 
@@ -35,14 +36,15 @@ import (
 // argtype <- "string" / "ipv4" / "ipv6"
 // ws <- [ \t\r\n]*
 
-type spec struct {
+type Spec struct {
 	typeName        string
-	arg             string
+	value           string
+	argType         argumentType
 	id              int
 	handler         *reflect.Type
 	hasAutocomplete bool
 	description     string
-	children        []*spec
+	children        []*Spec
 }
 
 type specParser struct {
@@ -52,8 +54,8 @@ type specParser struct {
 	col  int
 }
 
-func (p *specParser) parseSpec() (*spec, error) {
-	s := &spec{}
+func (p *specParser) parseSpec() (*Spec, error) {
+	s := &Spec{}
 
 	p.skipWhitespace()
 
@@ -97,7 +99,7 @@ func (p *specParser) parseSpec() (*spec, error) {
 	return s, nil
 }
 
-func (p *specParser) parseName(s *spec) error {
+func (p *specParser) parseName(s *Spec) error {
 	if p.peek() == 'f' {
 		if !p.consume("fork") {
 			return p.errorf("expected 'fork'")
@@ -140,7 +142,16 @@ func (p *specParser) parseName(s *spec) error {
 			return err
 		}
 
-		s.arg = argtype
+		switch argtype {
+		case "string":
+			s.argType = argumentTypeString
+		case "ipv4":
+			s.argType = argumentTypeIPv4
+		case "ipv6":
+			s.argType = argumentTypeIPv6
+		default:
+			return p.errorf("invalid argument type %s", argtype)
+		}
 
 		return nil
 	}
@@ -148,7 +159,7 @@ func (p *specParser) parseName(s *spec) error {
 	return p.errorf("expected 'fork', 'join', 'literal:', or 'argument:'")
 }
 
-func (p *specParser) parseID(s *spec) error {
+func (p *specParser) parseID(s *Spec) error {
 	p.next() // consume the '.'
 
 	var num string
@@ -172,7 +183,7 @@ func (p *specParser) parseID(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseHandler(s *spec) error {
+func (p *specParser) parseHandler(s *Spec) error {
 	p.next() // consume the '!'
 	p.next() // consume the 'H'
 
@@ -183,7 +194,7 @@ func (p *specParser) parseHandler(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseAutocomplete(s *spec) error {
+func (p *specParser) parseAutocomplete(s *Spec) error {
 	p.next() // consume the '!'
 	p.next() // consume the 'A'
 
@@ -192,7 +203,7 @@ func (p *specParser) parseAutocomplete(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseDescription(s *spec) error {
+func (p *specParser) parseDescription(s *Spec) error {
 	p.next() // consume the '?'
 
 	if p.next() != '"' {
@@ -217,7 +228,7 @@ func (p *specParser) parseDescription(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseChildren(s *spec) error {
+func (p *specParser) parseChildren(s *Spec) error {
 	if p.next() != '[' {
 		return p.errorf("expected '['")
 	}
@@ -255,7 +266,7 @@ func (p *specParser) parseChildren(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseSignature(s *spec) error {
+func (p *specParser) parseSignature(s *Spec) error {
 	if !p.consume("func(") {
 		return p.errorf("expected 'func('")
 	}
@@ -310,7 +321,7 @@ func (p *specParser) parseSignature(s *spec) error {
 	return nil
 }
 
-func (p *specParser) parseWord(s *spec) error {
+func (p *specParser) parseWord(s *Spec) error {
 	var word string
 	for p.peek() >= 'a' && p.peek() <= 'z' || p.peek() >= 'A' && p.peek() <= 'Z' || p.peek() >= '0' && p.peek() <= '9' {
 		word += string(p.next())
@@ -320,7 +331,7 @@ func (p *specParser) parseWord(s *spec) error {
 		return p.errorf("expected word")
 	}
 
-	s.arg = word
+	s.value = word
 
 	return nil
 }
@@ -405,11 +416,109 @@ func (p *specParser) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf("%d:%d: %s\n\t%s\n\t%s", p.line, p.col, fmt.Sprintf(format, args...), line, marker)
 }
 
-func parseSpec(s string) (*spec, error) {
+func ParseSpec(s string) (*Spec, error) {
 	p := &specParser{
 		s:    s,
 		line: 1,
 	}
 
 	return p.parseSpec()
+}
+
+func (s *Spec) pathComponent() string {
+	switch s.typeName {
+	case "literal":
+		return "literal:" + s.argType.String()
+	case "argument":
+		return "argument:" + s.argType.String()
+	case "fork":
+		return "fork"
+	case "join":
+		return "join"
+	default:
+		panic("unreachable")
+	}
+}
+
+func (s *Spec) match(path string, g Graph) error {
+	switch s.typeName {
+	case "literal":
+		literal, ok := g.(*literal)
+		if !ok {
+			return fmt.Errorf("%s: expected literal, got %T", path, g)
+		}
+
+		if literal.value != s.value {
+			return fmt.Errorf("%s: expected literal %q, got %q", path, s.value, literal.value)
+		}
+
+		if s.description != literal.description {
+			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, literal.description)
+		}
+
+		if s.handler == nil && literal.handlerFunc.IsValid() {
+			return fmt.Errorf("%s: expected no handler, got %v", path, literal.handlerFunc.Type())
+		} else if s.handler != nil && (!literal.handlerFunc.IsValid() || *s.handler != literal.handlerFunc.Type()) {
+			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, literal.handlerFunc.Type())
+		}
+	case "argument":
+		arg, ok := g.(*argument)
+		if !ok {
+			return fmt.Errorf("%s: expected argument, got %T", path, g)
+		}
+
+		if s.argType != arg.t {
+			return fmt.Errorf("%s: expected argument type %v, got %v", path, s.argType, arg.t)
+		}
+
+		if s.description != arg.description {
+			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, arg.description)
+		}
+
+		if s.handler == nil && arg.handlerFunc.IsValid() {
+			return fmt.Errorf("%s: expected no handler, got %v", path, arg.handlerFunc.Type())
+		} else if s.handler != nil && (!arg.handlerFunc.IsValid() || *s.handler != arg.handlerFunc.Type()) {
+			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, arg.handlerFunc.Type())
+		}
+
+		if s.hasAutocomplete && arg.autocompleteFunc == nil {
+			return fmt.Errorf("%s: expected autocomplete, got none", path)
+		} else if !s.hasAutocomplete && arg.autocompleteFunc != nil {
+			return fmt.Errorf("%s: expected no autocomplete, got %T", path, arg.autocompleteFunc)
+		}
+	case "fork":
+		_, ok := g.(*fork)
+		if !ok {
+			return fmt.Errorf("%s: expected fork, got %T", path, g)
+		}
+	case "join":
+		_, ok := g.(*join)
+		if !ok {
+			return fmt.Errorf("%s: expected join, got %T", path, g)
+		}
+	default:
+		return fmt.Errorf("%s: unknown type %q", path, s.typeName)
+	}
+
+	if len(s.children) != len(g.Children()) {
+		return fmt.Errorf("%s: expected %d children, got %d", path, len(s.children), len(g.Children()))
+	}
+
+	for i, child := range s.children {
+		err := child.match(path+"."+child.pathComponent(), g.Children()[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func AssertMatches(t *testing.T, s *Spec, g Graph) {
+	t.Helper()
+
+	err := s.match(s.pathComponent(), g)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
