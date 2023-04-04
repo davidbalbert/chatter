@@ -19,6 +19,9 @@ type AutocompleteFunc func(string) ([]string, error)
 
 type Node interface {
 	Merge(Node) Node
+	SetDescription(string)
+	SetHandlerFunc(reflect.Value)
+	SetAutocompleteFunc(AutocompleteFunc)
 }
 
 type UnaryNode interface {
@@ -28,15 +31,18 @@ type UnaryNode interface {
 	OverwriteDescription(UnaryNode, string)
 	HandlerFunc() reflect.Value
 	OverwriteHandlerFunc(UnaryNode, reflect.Value)
+	AutocompleteFunc() AutocompleteFunc
+	OverwriteAutocompleteFunc(UnaryNode, AutocompleteFunc)
 	Child() Node
 	mergeAttributes(UnaryNode, Node) UnaryNode
 	withChild(Node) UnaryNode
 }
 
 type unaryBase struct {
-	description string
-	handlerFunc reflect.Value
-	child       Node
+	description      string
+	handlerFunc      reflect.Value
+	autocompleteFunc AutocompleteFunc
+	child            Node
 }
 
 func (u *unaryBase) Description() string {
@@ -56,12 +62,49 @@ func (u *unaryBase) HandlerFunc() reflect.Value {
 	return u.handlerFunc
 }
 
+func (u *unaryBase) SetDescription(description string) {
+	if u.child != nil {
+		u.child.SetDescription(description)
+	} else {
+		u.description = description
+	}
+}
+
+func (u *unaryBase) SetHandlerFunc(handlerFunc reflect.Value) {
+	if u.child != nil {
+		u.child.SetHandlerFunc(handlerFunc)
+	} else {
+		u.handlerFunc = handlerFunc
+	}
+}
+
 func (u *unaryBase) OverwriteHandlerFunc(target UnaryNode, handlerFunc reflect.Value) {
 	if handlerFunc.IsValid() {
 		if u.handlerFunc.IsValid() {
 			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", target.id(), u.handlerFunc, handlerFunc)
 		}
 		u.handlerFunc = handlerFunc
+	}
+}
+
+func (u *unaryBase) AutocompleteFunc() AutocompleteFunc {
+	return u.autocompleteFunc
+}
+
+func (u *unaryBase) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
+	if u.child != nil {
+		u.child.SetAutocompleteFunc(autocompleteFunc)
+	} else {
+		u.autocompleteFunc = autocompleteFunc
+	}
+}
+
+func (u *unaryBase) OverwriteAutocompleteFunc(target UnaryNode, autocompleteFunc AutocompleteFunc) {
+	if autocompleteFunc != nil {
+		if u.autocompleteFunc != nil {
+			fmt.Printf("warning: overwriting autocomplete for %q: %v -> %v\n", target.id(), u.autocompleteFunc, autocompleteFunc)
+		}
+		u.autocompleteFunc = autocompleteFunc
 	}
 }
 
@@ -94,6 +137,7 @@ func (l *literal) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newL := *l
 	newL.OverwriteDescription(l, u.Description())
 	newL.OverwriteHandlerFunc(l, u.HandlerFunc())
+	newL.OverwriteAutocompleteFunc(l, u.AutocompleteFunc())
 	newL.child = child
 	return &newL
 }
@@ -128,6 +172,7 @@ func (a *argumentString) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
 	newA.OverwriteDescription(a, u.Description())
 	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
+	newA.OverwriteAutocompleteFunc(a, u.AutocompleteFunc())
 	newA.child = child
 	return &newA
 }
@@ -162,6 +207,7 @@ func (a *argumentIPv4) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
 	newA.OverwriteDescription(a, u.Description())
 	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
+	newA.OverwriteAutocompleteFunc(a, u.AutocompleteFunc())
 	newA.child = child
 	return &newA
 }
@@ -196,6 +242,7 @@ func (a *argumentIPv6) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
 	newA.OverwriteDescription(a, u.Description())
 	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
+	newA.OverwriteAutocompleteFunc(a, u.AutocompleteFunc())
 	newA.child = child
 	return &newA
 }
@@ -293,4 +340,34 @@ func (f *fork) mergeUnary(u UnaryNode) *fork {
 			children:   children,
 		}
 	}
+}
+
+func (f *fork) SetDescription(s string) {
+	for _, child := range f.children {
+		child.SetDescription(s)
+	}
+}
+
+func (f *fork) SetHandlerFunc(handlerFunc reflect.Value) {
+	for _, child := range f.children {
+		child.SetHandlerFunc(handlerFunc)
+	}
+}
+
+func (f *fork) SetAutocompleteFunc(fn AutocompleteFunc) {
+	for _, child := range f.children {
+		child.SetAutocompleteFunc(fn)
+	}
+}
+
+func ParseDeclaration(s string) (Node, reflect.Type, error) {
+	l := newLexer(s)
+	p := yyNewParser()
+
+	p.Parse(l)
+	if l.err != nil {
+		return nil, nil, l.err
+	}
+
+	return nil, nil, nil
 }
