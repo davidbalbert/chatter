@@ -25,19 +25,53 @@ type UnaryNode interface {
 	Node
 	id() string
 	Description() string
-	OverwriteDescription(string)
+	OverwriteDescription(UnaryNode, string)
 	HandlerFunc() reflect.Value
-	OverwriteHandlerFunc(reflect.Value)
+	OverwriteHandlerFunc(UnaryNode, reflect.Value)
 	Child() Node
 	mergeAttributes(UnaryNode, Node) UnaryNode
 	withChild(Node) UnaryNode
 }
 
-type literal struct {
-	value       string
+type unaryBase struct {
 	description string
 	handlerFunc reflect.Value
 	child       Node
+}
+
+func (u *unaryBase) Description() string {
+	return u.description
+}
+
+func (u *unaryBase) OverwriteDescription(target UnaryNode, description string) {
+	if description != "" {
+		if willOverwrite(u.description, description) {
+			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", target.id(), u.description, description)
+		}
+		u.description = description
+	}
+}
+
+func (u *unaryBase) HandlerFunc() reflect.Value {
+	return u.handlerFunc
+}
+
+func (u *unaryBase) OverwriteHandlerFunc(target UnaryNode, handlerFunc reflect.Value) {
+	if handlerFunc.IsValid() {
+		if u.handlerFunc.IsValid() {
+			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", target.id(), u.handlerFunc, handlerFunc)
+		}
+		u.handlerFunc = handlerFunc
+	}
+}
+
+func (u *unaryBase) Child() Node {
+	return u.child
+}
+
+type literal struct {
+	unaryBase
+	value string
 }
 
 func (l *literal) id() string {
@@ -56,42 +90,12 @@ func (l *literal) Merge(other Node) Node {
 	}
 }
 
-func (l *literal) Description() string {
-	return l.description
-}
-
-func (l *literal) HandlerFunc() reflect.Value {
-	return l.handlerFunc
-}
-
-func (l *literal) Child() Node {
-	return l.child
-}
-
 func (l *literal) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newL := *l
-	newL.OverwriteDescription(u.Description())
-	newL.OverwriteHandlerFunc(u.HandlerFunc())
+	newL.OverwriteDescription(l, u.Description())
+	newL.OverwriteHandlerFunc(l, u.HandlerFunc())
 	newL.child = child
 	return &newL
-}
-
-func (l *literal) OverwriteDescription(description string) {
-	if description != "" {
-		if willOverwrite(l.description, description) {
-			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", l.id(), l.description, description)
-		}
-		l.description = description
-	}
-}
-
-func (l *literal) OverwriteHandlerFunc(handlerFunc reflect.Value) {
-	if handlerFunc.IsValid() {
-		if l.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", l.id(), l.handlerFunc, handlerFunc)
-		}
-		l.handlerFunc = handlerFunc
-	}
 }
 
 func (l *literal) withChild(child Node) UnaryNode {
@@ -101,9 +105,7 @@ func (l *literal) withChild(child Node) UnaryNode {
 }
 
 type argumentString struct {
-	description string
-	handlerFunc reflect.Value
-	child       Node
+	unaryBase
 }
 
 func (a *argumentString) id() string {
@@ -122,42 +124,12 @@ func (a *argumentString) Merge(other Node) Node {
 	}
 }
 
-func (a *argumentString) Child() Node {
-	return a.child
-}
-
 func (a *argumentString) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
-	newA.OverwriteDescription(u.Description())
-	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.OverwriteDescription(a, u.Description())
+	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
 	newA.child = child
 	return &newA
-}
-
-func (a *argumentString) Description() string {
-	return a.description
-}
-
-func (a *argumentString) OverwriteDescription(description string) {
-	if description != "" {
-		if willOverwrite(a.description, description) {
-			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
-		}
-		a.description = description
-	}
-}
-
-func (a *argumentString) HandlerFunc() reflect.Value {
-	return a.handlerFunc
-}
-
-func (a *argumentString) OverwriteHandlerFunc(handlerFunc reflect.Value) {
-	if handlerFunc.IsValid() {
-		if a.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
-		}
-		a.handlerFunc = handlerFunc
-	}
 }
 
 func (a *argumentString) withChild(child Node) UnaryNode {
@@ -167,9 +139,7 @@ func (a *argumentString) withChild(child Node) UnaryNode {
 }
 
 type argumentIPv4 struct {
-	description string
-	handlerFunc reflect.Value
-	child       Node
+	unaryBase
 }
 
 func (a *argumentIPv4) id() string {
@@ -188,42 +158,12 @@ func (a *argumentIPv4) Merge(other Node) Node {
 	}
 }
 
-func (a *argumentIPv4) Child() Node {
-	return a.child
-}
-
 func (a *argumentIPv4) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
-	newA.OverwriteDescription(u.Description())
-	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.OverwriteDescription(a, u.Description())
+	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
 	newA.child = child
 	return &newA
-}
-
-func (a *argumentIPv4) Description() string {
-	return a.description
-}
-
-func (a *argumentIPv4) OverwriteDescription(description string) {
-	if description != "" {
-		if willOverwrite(a.description, description) {
-			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
-		}
-		a.description = description
-	}
-}
-
-func (a *argumentIPv4) HandlerFunc() reflect.Value {
-	return a.handlerFunc
-}
-
-func (a *argumentIPv4) OverwriteHandlerFunc(handlerFunc reflect.Value) {
-	if handlerFunc.IsValid() {
-		if a.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
-		}
-		a.handlerFunc = handlerFunc
-	}
 }
 
 func (a *argumentIPv4) withChild(child Node) UnaryNode {
@@ -233,9 +173,7 @@ func (a *argumentIPv4) withChild(child Node) UnaryNode {
 }
 
 type argumentIPv6 struct {
-	description string
-	handlerFunc reflect.Value
-	child       Node
+	unaryBase
 }
 
 func (a *argumentIPv6) id() string {
@@ -254,42 +192,12 @@ func (a *argumentIPv6) Merge(other Node) Node {
 	}
 }
 
-func (a *argumentIPv6) Child() Node {
-	return a.child
-}
-
 func (a *argumentIPv6) mergeAttributes(u UnaryNode, child Node) UnaryNode {
 	newA := *a
-	newA.OverwriteDescription(u.Description())
-	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.OverwriteDescription(a, u.Description())
+	newA.OverwriteHandlerFunc(a, u.HandlerFunc())
 	newA.child = child
 	return &newA
-}
-
-func (a *argumentIPv6) Description() string {
-	return a.description
-}
-
-func (a *argumentIPv6) OverwriteDescription(description string) {
-	if description != "" {
-		if willOverwrite(a.description, description) {
-			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
-		}
-		a.description = description
-	}
-}
-
-func (a *argumentIPv6) HandlerFunc() reflect.Value {
-	return a.handlerFunc
-}
-
-func (a *argumentIPv6) OverwriteHandlerFunc(handlerFunc reflect.Value) {
-	if handlerFunc.IsValid() {
-		if a.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
-		}
-		a.handlerFunc = handlerFunc
-	}
 }
 
 func (a *argumentIPv6) withChild(child Node) UnaryNode {
