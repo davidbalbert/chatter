@@ -7,355 +7,382 @@ import (
 	"reflect"
 )
 
+func willOverwrite(old, new string) bool {
+	if old != "" && old != new {
+		return true
+	} else {
+		return false
+	}
+}
+
 type AutocompleteFunc func(string) ([]string, error)
 
-type Graph interface {
-	Name() string
-	SetDescription(string)
-	SetHandlerFunc(reflect.Value)
-	SetAutocompleteFunc(AutocompleteFunc)
-	Merge(Graph) Graph
-	Children() []Graph
-	withChild(Graph) Graph
+type Node interface {
+	Merge(Node) Node
+}
+
+type UnaryNode interface {
+	Node
+	id() string
+	Description() string
+	OverwriteDescription(string)
+	HandlerFunc() reflect.Value
+	OverwriteHandlerFunc(reflect.Value)
+	Child() Node
+	mergeAttributes(UnaryNode, Node) UnaryNode
+	withChild(Node) UnaryNode
 }
 
 type literal struct {
 	value       string
 	description string
 	handlerFunc reflect.Value
-	child       Graph
+	child       Node
 }
 
-func (l *literal) Name() string {
+func (l *literal) id() string {
 	return "literal:" + l.value
 }
 
-func (l *literal) SetDescription(description string) {
-	if l.child == nil {
+func (l *literal) Merge(other Node) Node {
+	if u, ok := other.(UnaryNode); ok && l.id() == u.id() {
+		return l.mergeAttributes(u, l.Child().Merge(u.Child()))
+	} else if u, ok := other.(UnaryNode); ok {
+		return newFork(l, u)
+	} else if f, ok := other.(*fork); ok {
+		return f.Merge(l)
+	} else {
+		panic(fmt.Sprintf("unexpected type %T", other))
+	}
+}
+
+func (l *literal) Description() string {
+	return l.description
+}
+
+func (l *literal) HandlerFunc() reflect.Value {
+	return l.handlerFunc
+}
+
+func (l *literal) Child() Node {
+	return l.child
+}
+
+func (l *literal) mergeAttributes(u UnaryNode, child Node) UnaryNode {
+	newL := *l
+	newL.OverwriteDescription(u.Description())
+	newL.OverwriteHandlerFunc(u.HandlerFunc())
+	newL.child = child
+	return &newL
+}
+
+func (l *literal) OverwriteDescription(description string) {
+	if description != "" {
+		if willOverwrite(l.description, description) {
+			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", l.id(), l.description, description)
+		}
 		l.description = description
-	} else {
-		l.child.SetDescription(description)
 	}
 }
 
-func (l *literal) SetHandlerFunc(handlerFunc reflect.Value) {
-	if l.child == nil {
+func (l *literal) OverwriteHandlerFunc(handlerFunc reflect.Value) {
+	if handlerFunc.IsValid() {
+		if l.handlerFunc.IsValid() {
+			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", l.id(), l.handlerFunc, handlerFunc)
+		}
 		l.handlerFunc = handlerFunc
-	} else {
-		l.child.SetHandlerFunc(handlerFunc)
 	}
 }
 
-func (l *literal) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
-	if l.child == nil {
-		panic("(*literal).SetAutocompleteFunc: no child")
-	}
-
-	l.child.SetAutocompleteFunc(autocompleteFunc)
+func (l *literal) withChild(child Node) UnaryNode {
+	newL := *l
+	newL.child = child
+	return &newL
 }
 
-func (l *literal) Merge(other Graph) Graph {
-	// if the other one is a leteral, and has the same value
-	// merge its properties into us, printing warnings if we already have the property set,
-	// and then merge its child into our child
+type argumentString struct {
+	description string
+	handlerFunc reflect.Value
+	child       Node
+}
 
-	if otherLiteral, ok := other.(*literal); ok && otherLiteral.value == l.value {
-		if otherLiteral.description != "" && l.description != "" {
-			fmt.Printf("warning: overwriting description for literal %q\n", l.value)
-			l.description = otherLiteral.description
-		}
+func (a *argumentString) id() string {
+	return "argument:string"
+}
 
-		if otherLiteral.handlerFunc.IsValid() && l.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for literal %q\n", l.value)
-			l.handlerFunc = otherLiteral.handlerFunc
-		}
-
-		if otherLiteral.child != nil && l.child != nil {
-			l.child = l.child.Merge(otherLiteral.child)
-		} else if otherLiteral.child != nil {
-			l.child = otherLiteral.child
-		}
-	}
-
-	// if the other one is a fork, merge us into the fork
-	if fork, ok := other.(*fork); ok {
-		return fork.Merge(l)
-	}
-
-	var j *join
-	if len(other.Children()) == 0 {
-		j = &join{child: l.child}
-	} else if len(other.Children()) > 1 {
-		panic("(*literal).Merge: other is not a fork and has more than one child")
-	} else if l.child == nil {
-		j = &join{child: other.Children()[0]}
+func (a *argumentString) Merge(other Node) Node {
+	if u, ok := other.(UnaryNode); ok && u.id() == u.id() {
+		return a.mergeAttributes(u, a.Child().Merge(u.Child()))
+	} else if u, ok := other.(UnaryNode); ok {
+		return newFork(a, u)
+	} else if f, ok := other.(*fork); ok {
+		return f.Merge(a)
 	} else {
-		j = &join{child: l.child.Merge(other.Children()[0])}
+		panic(fmt.Sprintf("unexpected type %T", other))
 	}
+}
 
-	// otherwise, create a fork with us and other as children
+func (a *argumentString) Child() Node {
+	return a.child
+}
+
+func (a *argumentString) mergeAttributes(u UnaryNode, child Node) UnaryNode {
+	newA := *a
+	newA.OverwriteDescription(u.Description())
+	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.child = child
+	return &newA
+}
+
+func (a *argumentString) Description() string {
+	return a.description
+}
+
+func (a *argumentString) OverwriteDescription(description string) {
+	if description != "" {
+		if willOverwrite(a.description, description) {
+			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
+		}
+		a.description = description
+	}
+}
+
+func (a *argumentString) HandlerFunc() reflect.Value {
+	return a.handlerFunc
+}
+
+func (a *argumentString) OverwriteHandlerFunc(handlerFunc reflect.Value) {
+	if handlerFunc.IsValid() {
+		if a.handlerFunc.IsValid() {
+			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
+		}
+		a.handlerFunc = handlerFunc
+	}
+}
+
+func (a *argumentString) withChild(child Node) UnaryNode {
+	newA := *a
+	newA.child = child
+	return &newA
+}
+
+type argumentIPv4 struct {
+	description string
+	handlerFunc reflect.Value
+	child       Node
+}
+
+func (a *argumentIPv4) id() string {
+	return "argument:ipv4"
+}
+
+func (a *argumentIPv4) Merge(other Node) Node {
+	if u, ok := other.(UnaryNode); ok && u.id() == u.id() {
+		return a.mergeAttributes(u, a.Child().Merge(u.Child()))
+	} else if u, ok := other.(UnaryNode); ok {
+		return newFork(a, u)
+	} else if f, ok := other.(*fork); ok {
+		return f.Merge(a)
+	} else {
+		panic(fmt.Sprintf("unexpected type %T", other))
+	}
+}
+
+func (a *argumentIPv4) Child() Node {
+	return a.child
+}
+
+func (a *argumentIPv4) mergeAttributes(u UnaryNode, child Node) UnaryNode {
+	newA := *a
+	newA.OverwriteDescription(u.Description())
+	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.child = child
+	return &newA
+}
+
+func (a *argumentIPv4) Description() string {
+	return a.description
+}
+
+func (a *argumentIPv4) OverwriteDescription(description string) {
+	if description != "" {
+		if willOverwrite(a.description, description) {
+			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
+		}
+		a.description = description
+	}
+}
+
+func (a *argumentIPv4) HandlerFunc() reflect.Value {
+	return a.handlerFunc
+}
+
+func (a *argumentIPv4) OverwriteHandlerFunc(handlerFunc reflect.Value) {
+	if handlerFunc.IsValid() {
+		if a.handlerFunc.IsValid() {
+			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
+		}
+		a.handlerFunc = handlerFunc
+	}
+}
+
+func (a *argumentIPv4) withChild(child Node) UnaryNode {
+	newA := *a
+	newA.child = child
+	return &newA
+}
+
+type argumentIPv6 struct {
+	description string
+	handlerFunc reflect.Value
+	child       Node
+}
+
+func (a *argumentIPv6) id() string {
+	return "argument:ipv6"
+}
+
+func (a *argumentIPv6) Merge(other Node) Node {
+	if u, ok := other.(UnaryNode); ok && u.id() == u.id() {
+		return a.mergeAttributes(u, a.Child().Merge(u.Child()))
+	} else if u, ok := other.(UnaryNode); ok {
+		return newFork(a, u)
+	} else if f, ok := other.(*fork); ok {
+		return f.Merge(a)
+	} else {
+		panic(fmt.Sprintf("unexpected type %T", other))
+	}
+}
+
+func (a *argumentIPv6) Child() Node {
+	return a.child
+}
+
+func (a *argumentIPv6) mergeAttributes(u UnaryNode, child Node) UnaryNode {
+	newA := *a
+	newA.OverwriteDescription(u.Description())
+	newA.OverwriteHandlerFunc(u.HandlerFunc())
+	newA.child = child
+	return &newA
+}
+
+func (a *argumentIPv6) Description() string {
+	return a.description
+}
+
+func (a *argumentIPv6) OverwriteDescription(description string) {
+	if description != "" {
+		if willOverwrite(a.description, description) {
+			fmt.Printf("warning: overwriting description for %q: %q -> %q\n", a.id(), a.description, description)
+		}
+		a.description = description
+	}
+}
+
+func (a *argumentIPv6) HandlerFunc() reflect.Value {
+	return a.handlerFunc
+}
+
+func (a *argumentIPv6) OverwriteHandlerFunc(handlerFunc reflect.Value) {
+	if handlerFunc.IsValid() {
+		if a.handlerFunc.IsValid() {
+			fmt.Printf("warning: overwriting handler for %q: %v -> %v\n", a.id(), a.handlerFunc, handlerFunc)
+		}
+		a.handlerFunc = handlerFunc
+	}
+}
+
+func (a *argumentIPv6) withChild(child Node) UnaryNode {
+	newA := *a
+	newA.child = child
+	return &newA
+}
+
+type fork struct {
+	grandchild Node
+	children   map[string]UnaryNode
+}
+
+func newFork(a, b UnaryNode) *fork {
+	grandchild := a.Child().Merge(b.Child())
+
 	return &fork{
-		children: map[string]Graph{
-			l.Name():     l.withChild(j),
-			other.Name(): other.withChild(j),
+		grandchild: grandchild,
+		children: map[string]UnaryNode{
+			a.id(): a.withChild(grandchild),
+			b.id(): b.withChild(grandchild),
 		},
 	}
 }
 
-func (l *literal) Children() []Graph {
-	if l.child == nil {
-		return nil
-	}
-
-	return []Graph{l.child}
-}
-
-func (l *literal) withChild(child Graph) Graph {
-	l2 := *l
-	l2.child = child
-
-	return &l2
-}
-
-type argumentType int
-
-const (
-	_ argumentType = iota
-	argumentTypeString
-	argumentTypeIPv4
-	argumentTypeIPv6
-)
-
-func (t argumentType) String() string {
-	switch t {
-	case argumentTypeString:
-		return "string"
-	case argumentTypeIPv4:
-		return "ipv4"
-	case argumentTypeIPv6:
-		return "ipv6"
-	default:
-		panic("unknown param type")
-	}
-}
-
-type argument struct {
-	t                argumentType
-	description      string
-	handlerFunc      reflect.Value
-	autocompleteFunc AutocompleteFunc
-	child            Graph
-}
-
-func (p *argument) Name() string {
-	return "argument:" + p.t.String()
-}
-
-func (p *argument) SetDescription(description string) {
-	if p.child == nil {
-		p.description = description
+func (f *fork) Merge(other Node) Node {
+	if f2, ok := other.(*fork); ok {
+		return f.mergeFork(f2)
+	} else if u, ok := other.(UnaryNode); ok {
+		return f.mergeUnary(u)
 	} else {
-		p.child.SetDescription(description)
+		panic(fmt.Sprintf("unexpected type %T", other))
 	}
 }
 
-func (p *argument) SetHandlerFunc(handlerFunc reflect.Value) {
-	if p.child == nil {
-		p.handlerFunc = handlerFunc
+func (f *fork) mergeFork(f2 *fork) *fork {
+	grandchild := f.grandchild.Merge(f2.grandchild)
+
+	children := make(map[string]UnaryNode, len(f.children))
+	for id, child := range f.children {
+		children[id] = child.withChild(grandchild)
+	}
+
+	for id, c2 := range f2.children {
+		if c1, ok := children[id]; ok {
+			children[id] = c1.mergeAttributes(c2, grandchild)
+		} else {
+			children[id] = c2.withChild(grandchild)
+		}
+	}
+
+	return &fork{
+		grandchild: f.grandchild.Merge(f2.grandchild),
+		children:   children,
+	}
+}
+
+func (f *fork) mergeUnary(u UnaryNode) *fork {
+	if existing, ok := f.children[u.id()]; ok {
+		newChild := existing.Merge(u)
+		newUnary, ok := newChild.(UnaryNode)
+		if !ok {
+			panic(fmt.Sprintf("unexpected type %T", newChild))
+		}
+
+		grandchild := f.grandchild.Merge(newUnary.Child())
+
+		children := make(map[string]UnaryNode, len(f.children))
+		for id, child := range f.children {
+			if id == u.id() {
+				children[id] = newUnary.withChild(grandchild)
+			} else {
+				children[id] = child.withChild(grandchild)
+			}
+		}
+
+		return &fork{
+			grandchild: grandchild,
+			children:   children,
+		}
 	} else {
-		p.child.SetHandlerFunc(handlerFunc)
-	}
-}
+		grandchild := f.grandchild.Merge(u.Child())
 
-func (p *argument) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
-	if p.child == nil {
-		p.autocompleteFunc = autocompleteFunc
-	} else {
-		p.child.SetAutocompleteFunc(autocompleteFunc)
-	}
-}
-
-func (a *argument) Merge(other Graph) Graph {
-	if otherArgument, ok := other.(*argument); ok && otherArgument.t == a.t {
-		if otherArgument.description != "" && a.description != "" {
-			fmt.Printf("warning: overwriting description for argument %q:\nold: %s\nnew: %s", a.t, a.description, otherArgument.description)
-			a.description = otherArgument.description
+		children := make(map[string]UnaryNode, len(f.children)+1)
+		for id, child := range f.children {
+			children[id] = child.withChild(grandchild)
 		}
 
-		if otherArgument.handlerFunc.IsValid() && a.handlerFunc.IsValid() {
-			fmt.Printf("warning: overwriting handler for argument %q\n", a.t)
-			a.handlerFunc = otherArgument.handlerFunc
-		}
+		children[u.id()] = u.withChild(grandchild)
 
-		if otherArgument.autocompleteFunc != nil && a.autocompleteFunc != nil {
-			fmt.Printf("warning: overwriting autocomplete for argument %q\n", a.t)
-			a.autocompleteFunc = otherArgument.autocompleteFunc
-		}
-
-		if otherArgument.child != nil && a.child != nil {
-			a.child = a.child.Merge(otherArgument.child)
-		} else if otherArgument.child != nil {
-			a.child = otherArgument.child
+		return &fork{
+			grandchild: grandchild,
+			children:   children,
 		}
 	}
-
-	if fork, ok := other.(*fork); ok {
-		return fork.Merge(a)
-	}
-
-	return &fork{children: map[string]Graph{a.Name(): a, other.Name(): other}}
-}
-
-func (a *argument) Children() []Graph {
-	if a.child == nil {
-		return nil
-	}
-
-	return []Graph{a.child}
-}
-
-func (a *argument) withChild(child Graph) Graph {
-	a2 := *a
-	a2.child = child
-
-	return &a2
-}
-
-type fork struct {
-	children map[string]Graph
-}
-
-func (f *fork) Name() string {
-	return "fork"
-}
-
-func (f *fork) SetDescription(description string) {
-	for _, child := range f.children {
-		child.SetDescription(description)
-	}
-}
-
-func (f *fork) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
-	if len(f.children) == 0 {
-		panic("no children")
-	}
-
-	// We only call this on graphs that haven't been merged yet, so
-	// just take the first fork.
-	for _, child := range f.children {
-		child.SetAutocompleteFunc(autocompleteFunc)
-		return
-	}
-}
-
-func (f *fork) SetHandlerFunc(handlerFunc reflect.Value) {
-	if len(f.children) == 0 {
-		panic("no children")
-	}
-
-	// The handler func gets set on the join, so we just need to find it
-	// and set it there. We'll traverse the first child.
-	for _, child := range f.children {
-		child.SetHandlerFunc(handlerFunc)
-		return
-	}
-}
-
-func (f *fork) Merge(other Graph) Graph {
-	// if the other one is a fork, merge its children into us
-	if fork, ok := other.(*fork); ok {
-		for _, child := range fork.children {
-			f.Merge(child)
-		}
-		return f
-	}
-
-	// if the other has the same name of one of our children, merge it into that child
-	for name, child := range f.children {
-		if child.Name() == other.Name() {
-			f.children[name] = child.Merge(other)
-			return f
-		}
-	}
-
-	// otherwise, add it as a new child
-	f.children[other.Name()] = other
-	return f
-}
-
-func (f *fork) Children() []Graph {
-	children := make([]Graph, 0, len(f.children))
-	for _, child := range f.children {
-		children = append(children, child)
-	}
-
-	return children
-}
-
-func (f *fork) withChild(child Graph) Graph {
-	panic("can't call withChild on fork")
-}
-
-type join struct {
-	child Graph
-}
-
-func (j *join) Name() string {
-	return "join:" + j.child.Name()
-}
-
-func (j *join) SetDescription(description string) {
-	if j.child == nil {
-		panic("can't SetDescription on a join with no child")
-	}
-
-	j.child.SetDescription(description)
-}
-
-func (j *join) SetHandlerFunc(handlerFunc reflect.Value) {
-	if j.child == nil {
-		panic("can't SetHandlerFunc on a join with no child")
-	}
-
-	j.child.SetHandlerFunc(handlerFunc)
-}
-
-func (j *join) SetAutocompleteFunc(autocompleteFunc AutocompleteFunc) {
-	if j.child == nil {
-		panic("can't SetAutocompleteFunc on a join with no child")
-	}
-
-	j.child.SetAutocompleteFunc(autocompleteFunc)
-}
-
-func (j *join) Merge(other Graph) Graph {
-	panic("can't merge into a join")
-}
-
-func (j *join) Children() []Graph {
-	if j.child == nil {
-		return nil
-	}
-
-	return []Graph{j.child}
-}
-
-func (j *join) withChild(child Graph) Graph {
-	j2 := *j
-	j2.child = child
-
-	return &j2
-}
-
-func ParseDeclaration(s string) (Graph, reflect.Type, error) {
-	l := newLexer(s)
-
-	p := yyNewParser()
-	p.Parse(l)
-
-	if l.err != nil {
-		return nil, nil, l.err
-	}
-
-	return nil, nil, nil
 }
