@@ -4,61 +4,53 @@ import (
 	"testing"
 )
 
-func TestMergeLiterals(t *testing.T) {
-	l1 := &literal{value: "foo"}
-	l2 := &literal{value: "bar"}
-
-	merged := l1.Merge(l2)
-
-	_, ok := merged.(*fork)
-	if !ok {
-		t.Fatalf("expected *fork, got %T", merged)
+func TestParseCommand(t *testing.T) {
+	s := "show version"
+	spec := `
+		literal:show[literal:version]
+	`
+	cmd, err := parseCommand(s)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	// spec := `
-	// 	fork[
-	// 		literal:foo[
-	// 			join.1
-	// 		],
-	// 		literal:bar[
-	// 			join.1
-	// 		]
-	// 	]
-	// `
+	AssertMatchesSpec(t, spec, cmd)
+}
 
-	c := merged.Children()
+func TestParseCommandWithParam(t *testing.T) {
+	s := "show bgp neighbors A.B.C.D"
+	spec := `
+		literal:show[literal:bgp[literal:neighbors[param:ipv4]]]
+	`
 
-	if len(c) != 2 {
-		t.Fatalf("expected 2 children, got %d", len(c))
+	cmd, err := parseCommand(s)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if c[0].Name() != "literal:foo" {
-		t.Fatalf("expected child 0 to be literal:foo, got %q", c[0].Name())
+	AssertMatchesSpec(t, spec, cmd)
+}
+
+func TestParseCommandWithChoice(t *testing.T) {
+	s := "show bgp neighbors <A.B.C.D|X:X:X::X|all>"
+	spec := `
+		literal:show[
+			literal:bgp[
+				literal:neighbors[
+					choice[
+						param:ipv4,
+						param:ipv6,
+						literal:all
+					]
+				]
+			]
+		]
+	`
+
+	cmd, err := parseCommand(s)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if c[1].Name() != "literal:bar" {
-		t.Fatalf("expected child 1 to be literal:bar, got %q", c[1].Name())
-	}
-
-	if len(c[0].Children()) != 1 {
-		t.Fatalf("expected literal:foo to have 1 child, got %d", len(c[0].Children()))
-	}
-
-	if len(c[1].Children()) != 1 {
-		t.Fatalf("expected literal:bar to have 1 child, got %d", len(c[1].Children()))
-	}
-
-	j1, ok := c[0].Children()[0].(*join)
-	if !ok {
-		t.Fatalf("expected literal:foo to have a join child, got %T", c[0].Children()[0])
-	}
-
-	j2, ok := c[1].Children()[1].(*join)
-	if !ok {
-		t.Fatalf("expected literal:bar to have a join child, got %T", c[1].Children()[0])
-	}
-
-	if j1.child != j2.child {
-		t.Fatalf("expected join children to be the same, got %q and %q", j1.child.Name(), j2.child.Name())
-	}
+	AssertMatchesSpec(t, spec, cmd)
 }

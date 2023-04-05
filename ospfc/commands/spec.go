@@ -12,37 +12,41 @@ import (
 )
 
 // An example spec:
-// fork[
-//	  	literal:foo?"This is a description"[
-//			join.1
+// literal:show?"Show system information"[
+//		literal:version!Hfunc()?"Show version information",
+//		literal:ip[
+//			literal:route[
+//				paramter:ipv4!Hfunc(addr)?"Show route for IPv4 address",
+//			]
 //		],
-//		literal:bar!A[
-//			join.1
+//		literal:bgp[
+//			literal:neighbors!Hfunc()[
+//				parameter:ipv4!A!Hfunc(addr)?"Show BGP neighbor",
+//			]
 //		]
-//      literal:baz!Hfunc(string, ipv4)[
 // ]
 //
 // Whitespace between children is not significant. A rough grammar is:
 //
 // spec <- ws? name id? autocomplete? handler? description? children? ws?
-// name <- "fork" / "join" / "literal:" word / "argument:" argtype
+// name <- "choice" / "literal:" word / "param:" paramType
 // id <- '.' [1-9][0-9]*
 // autocomplete <- "!A"
 // handler <- "!H" signature
 // description <- '?' '"' [^"]* '"'
 // children <- '[' spec (',' spec)* ','? ws? ']'
-// signature <- "func(" argtype (ws? ',' argtype)* ")"
+// signature <- "func(" handlerParam (ws? ',' handlerParam)* ")"
 // word <- [a-zA-Z0-9]+
-// argtype <- "string" / "ipv4" / "ipv6"
+// paramType <- "string" / "ipv4" / "ipv6"
+// handlerParam <- "string" / "addr"
 // ws <- [ \t\r\n]*
 //
 // All nodes of the same type and ID (.1, .2, etc.) must be reference equal to each other.
 // You only need to specify other attributes on the first node of a given type and ID.
 
 type Spec struct {
-	typeName        string
+	t               nodeType
 	value           string
-	argType         argumentType
 	id              int
 	handler         *reflect.Type
 	hasAutocomplete bool
@@ -103,21 +107,12 @@ func (p *specParser) parseSpec() (*Spec, error) {
 }
 
 func (p *specParser) parseName(s *Spec) error {
-	if p.peek() == 'f' {
-		if !p.consume("fork") {
+	if p.peek() == 'c' {
+		if !p.consume("choice") {
 			return p.errorf("expected 'fork'")
 		}
 
-		s.typeName = "fork"
-		return nil
-	}
-
-	if p.peek() == 'j' {
-		if !p.consume("join") {
-			return p.errorf("expected 'join'")
-		}
-
-		s.typeName = "join"
+		s.t = ntChoice
 		return nil
 	}
 
@@ -126,7 +121,7 @@ func (p *specParser) parseName(s *Spec) error {
 			return p.errorf("expected 'literal:'")
 		}
 
-		s.typeName = "literal"
+		s.t = ntLiteral
 		if err := p.parseWord(s); err != nil {
 			return err
 		}
@@ -134,26 +129,25 @@ func (p *specParser) parseName(s *Spec) error {
 		return nil
 	}
 
-	if p.peek() == 'a' {
-		if !p.consume("argument:") {
-			return p.errorf("expected 'argument:'")
+	if p.peek() == 'p' {
+		if !p.consume("param:") {
+			return p.errorf("expected 'param:'")
 		}
 
-		s.typeName = "argument"
-		argtype, err := p.parseArgType()
+		paramType, err := p.parseParamType()
 		if err != nil {
 			return err
 		}
 
-		switch argtype {
-		case "string":
-			s.argType = argumentTypeString
+		switch paramType {
 		case "ipv4":
-			s.argType = argumentTypeIPv4
+			s.t = ntParamIPv4
 		case "ipv6":
-			s.argType = argumentTypeIPv6
+			s.t = ntParamIPv6
+		case "string":
+			s.t = ntParamString
 		default:
-			return p.errorf("invalid argument type %s", argtype)
+			return p.errorf("invalid parameter type %s", paramType)
 		}
 
 		return nil
@@ -275,7 +269,7 @@ func (p *specParser) parseSignature(s *Spec) error {
 	}
 
 	args := make([]string, 0)
-	arg, err := p.parseArgType()
+	arg, err := p.parseHandlerParam()
 	if err != nil {
 		return err
 	}
@@ -293,7 +287,7 @@ func (p *specParser) parseSignature(s *Spec) error {
 			break
 		}
 
-		arg, err := p.parseArgType()
+		arg, err := p.parseHandlerParam()
 		if err != nil {
 			return err
 		}
@@ -310,7 +304,7 @@ func (p *specParser) parseSignature(s *Spec) error {
 		switch arg {
 		case "string":
 			types[i] = reflect.TypeOf("")
-		case "ipv4", "ipv6":
+		case "addr":
 			types[i] = reflect.TypeOf(netip.Addr{})
 		default:
 			return p.errorf("invalid argument type %s", arg)
@@ -339,7 +333,7 @@ func (p *specParser) parseWord(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseArgType() (string, error) {
+func (p *specParser) parseParamType() (string, error) {
 	if p.peek() == 's' {
 		if !p.consume("string") {
 			return "", p.errorf("expected 'string'")
@@ -367,6 +361,26 @@ func (p *specParser) parseArgType() (string, error) {
 	}
 
 	return "", p.errorf("expected 'string', 'ipv4', or 'ipv6'")
+}
+
+func (p *specParser) parseHandlerParam() (string, error) {
+	if p.peek() == 's' {
+		if !p.consume("string") {
+			return "", p.errorf("expected 'string'")
+		}
+
+		return "string", nil
+	}
+
+	if p.peek() == 'a' {
+		if !p.consume("addr") {
+			return "", p.errorf("expected 'addr'")
+		}
+
+		return "addr", nil
+	}
+
+	return "", p.errorf("expected 'string' or 'addr'")
 }
 
 func (p *specParser) skipWhitespace() {
@@ -431,15 +445,17 @@ func parseSpec(s string) (*Spec, error) {
 func (s *Spec) pathComponent() string {
 	var name string
 
-	switch s.typeName {
-	case "literal":
+	switch s.t {
+	case ntLiteral:
 		name = "literal:" + s.value
-	case "argument":
-		name = "argument:" + s.argType.String()
-	case "fork":
-		name = "fork"
-	case "join":
-		name = "join"
+	case ntParamString:
+		name = "param:string"
+	case ntParamIPv4:
+		name = "param:ipv4"
+	case ntParamIPv6:
+		name = "param:ipv6"
+	case ntChoice:
+		name = "choice"
 	default:
 		panic("unreachable")
 	}
@@ -452,144 +468,79 @@ func (s *Spec) pathComponent() string {
 }
 
 type matcher struct {
-	references map[string]Graph
+	references map[string]*Node
 }
 
 func newMatcher() *matcher {
 	return &matcher{
-		references: make(map[string]Graph),
+		references: make(map[string]*Node),
 	}
 }
 
-func (m *matcher) match(path string, g Graph, s *Spec) error {
-	var ref Graph
+func (m *matcher) match(path string, n *Node, s *Spec) error {
+	var ref *Node
 
 	if s.id != 0 {
 		key := s.pathComponent()
 		var ok bool
-		ref, ok = m.references[key]
-		if !ok {
-			m.references[key] = g
+		if ref, ok = m.references[key]; ok {
+			if n != ref {
+				return fmt.Errorf("%s: expected %p to be equal to %p", path, n, ref)
+			}
+
+			return nil
+		} else {
+			m.references[key] = n
 		}
 	}
 
-	switch s.typeName {
-	case "literal":
-		lit, ok := g.(*literal)
-		if !ok {
-			return fmt.Errorf("%s: expected literal, got %T", path, g)
+	if s.t != n.t {
+		return fmt.Errorf("%s: expected type %v, got %v", path, s.t, n.t)
+	}
+
+	switch s.t {
+	case ntLiteral:
+		if n.value != s.value {
+			return fmt.Errorf("%s: expected literal:%s, got literal:%s", path, s.value, n.value)
 		}
 
-		if ref != nil {
-			litref, ok := ref.(*literal)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be literal, got %T", path, ref)
-			}
-
-			if lit != litref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, lit, litref)
-			}
-
-			return nil
+		if s.description != n.description {
+			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, n.description)
 		}
 
-		if lit.value != s.value {
-			return fmt.Errorf("%s: expected literal:%s, got literal:%s", path, s.value, lit.value)
+		if s.handler == nil && n.handlerFunc.IsValid() {
+			return fmt.Errorf("%s: expected no handler, got %v", path, n.handlerFunc.Type())
+		} else if s.handler != nil && (!n.handlerFunc.IsValid() || *s.handler != n.handlerFunc.Type()) {
+			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, n.handlerFunc.Type())
+		}
+	case ntParamString, ntParamIPv4, ntParamIPv6:
+		if s.description != n.description {
+			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, n.description)
 		}
 
-		if s.description != lit.description {
-			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, lit.description)
+		if s.handler == nil && n.handlerFunc.IsValid() {
+			return fmt.Errorf("%s: expected no handler, got %v", path, n.handlerFunc.Type())
+		} else if s.handler != nil && (!n.handlerFunc.IsValid() || *s.handler != n.handlerFunc.Type()) {
+			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, n.handlerFunc.Type())
 		}
 
-		if s.handler == nil && lit.handlerFunc.IsValid() {
-			return fmt.Errorf("%s: expected no handler, got %v", path, lit.handlerFunc.Type())
-		} else if s.handler != nil && (!lit.handlerFunc.IsValid() || *s.handler != lit.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, lit.handlerFunc.Type())
-		}
-	case "argument":
-		arg, ok := g.(*argument)
-		if !ok {
-			return fmt.Errorf("%s: expected argument, got %T", path, g)
-		}
-
-		if ref != nil {
-			argref, ok := ref.(*argument)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be argument, got %T", path, ref)
-			}
-
-			if arg != argref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, arg, argref)
-			}
-
-			return nil
-		}
-
-		if s.argType != arg.t {
-			return fmt.Errorf("%s: expected argument:%s, got argument:%s", path, s.argType, arg.t)
-		}
-
-		if s.description != arg.description {
-			return fmt.Errorf("%s: expected description %q, got %q", path, s.description, arg.description)
-		}
-
-		if s.handler == nil && arg.handlerFunc.IsValid() {
-			return fmt.Errorf("%s: expected no handler, got %v", path, arg.handlerFunc.Type())
-		} else if s.handler != nil && (!arg.handlerFunc.IsValid() || *s.handler != arg.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, arg.handlerFunc.Type())
-		}
-
-		if s.hasAutocomplete && arg.autocompleteFunc == nil {
+		if s.hasAutocomplete && n.autocompleteFunc == nil {
 			return fmt.Errorf("%s: expected autocomplete, got none", path)
-		} else if !s.hasAutocomplete && arg.autocompleteFunc != nil {
-			return fmt.Errorf("%s: expected no autocomplete, got %T", path, arg.autocompleteFunc)
+		} else if !s.hasAutocomplete && n.autocompleteFunc != nil {
+			return fmt.Errorf("%s: expected no autocomplete, got %T", path, n.autocompleteFunc)
 		}
-	case "fork":
-		fk, ok := g.(*fork)
-		if !ok {
-			return fmt.Errorf("%s: expected fork, got %T", path, g)
-		}
-
-		if ref != nil {
-			fkref, ok := ref.(*fork)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be fork, got %T", path, ref)
-			}
-
-			if fk != fkref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, fk, fkref)
-			}
-
-			return nil
-		}
-	case "join":
-		j, ok := g.(*join)
-		if !ok {
-			return fmt.Errorf("%s: expected join, got %T", path, g)
-		}
-
-		if ref != nil {
-			jref, ok := ref.(*join)
-			if !ok {
-				return fmt.Errorf("%s: expected previous identified to be join, got %T", path, ref)
-			}
-
-			if j != jref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, j, jref)
-			}
-
-			return nil
-		}
+	case ntChoice:
+		// noop, children are checked below
 	default:
-		return fmt.Errorf("%s: unknown type %q", path, s.typeName)
+		return fmt.Errorf("%s: unknown type %q", path, s.t)
 	}
 
-	if len(s.children) != len(g.Children()) {
-		return fmt.Errorf("%s: expected %d children, got %d", path, len(s.children), len(g.Children()))
+	if len(s.children) != len(n.children) {
+		return fmt.Errorf("%s: expected %d children, got %d", path, len(s.children), len(n.children))
 	}
 
 	for i, child := range s.children {
-		err := m.match(path+"/"+child.pathComponent(), g.Children()[i], child)
+		err := m.match(path+"/"+child.pathComponent(), n.Children()[i], child)
 		if err != nil {
 			return err
 		}
@@ -598,7 +549,7 @@ func (m *matcher) match(path string, g Graph, s *Spec) error {
 	return nil
 }
 
-func AssertMatches(t *testing.T, s string, g Graph) {
+func AssertMatchesSpec(t *testing.T, s string, n *Node) {
 	t.Helper()
 
 	spec, err := parseSpec(s)
@@ -607,7 +558,7 @@ func AssertMatches(t *testing.T, s string, g Graph) {
 	}
 
 	m := newMatcher()
-	err = m.match("/"+spec.pathComponent(), g, spec)
+	err = m.match("/"+spec.pathComponent(), n, spec)
 	if err != nil {
 		t.Fatal(err)
 	}
