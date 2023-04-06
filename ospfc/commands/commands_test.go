@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"net/netip"
 	"reflect"
 	"testing"
 )
@@ -95,27 +94,7 @@ func TestMatchLiteral(t *testing.T) {
 		t.Fatal("expected match")
 	}
 
-	if len(matches) != 1 {
-		t.Fatal("expected 1 match")
-	}
-
-	match := matches[0]
-
-	if match.input != "show" {
-		t.Fatal("expected input to be 'show'")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.IsValid() {
-		t.Fatal("expected addr to be unset")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "show", matches)
 }
 
 func TestMatchLiteralNoHandler(t *testing.T) {
@@ -144,23 +123,7 @@ func TestMatchLiteralPrefix(t *testing.T) {
 		t.Fatal("expected 1 match")
 	}
 
-	match := matches[0]
-
-	if match.input != "sh" {
-		t.Fatal("expected input to be 'sh'")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.IsValid() {
-		t.Fatal("expected addr to be unset")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "show", matches)
 }
 
 func TestMatchLiteralInvalid(t *testing.T) {
@@ -192,23 +155,7 @@ func TestMatchString(t *testing.T) {
 		t.Fatal("expected match")
 	}
 
-	match := matches[0]
-
-	if match.input != "foobar" {
-		t.Fatal("expected input to be 'foobar'")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.IsValid() {
-		t.Fatal("expected addr to be unset")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "string:foobar", matches)
 }
 
 func TestMatchStringNoHandler(t *testing.T) {
@@ -238,19 +185,7 @@ func TestMatchIPv4(t *testing.T) {
 		t.Fatal("expected match")
 	}
 
-	match := matches[0]
-
-	if match.input != "192.168.0.1" {
-		t.Fatal("expected input to be '192.168.0.1'")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.Compare(netip.MustParseAddr("192.168.0.1")) != 0 {
-		t.Fatal("expected addr to be '192.168.0.1'")
-	}
+	AssertMatchesMatchSpec(t, "ipv4:192.168.0.1", matches)
 }
 
 func TestMatchIPv4NoHandler(t *testing.T) {
@@ -340,23 +275,7 @@ func TestMatchIPv6(t *testing.T) {
 		t.Fatal("expected match")
 	}
 
-	match := matches[0]
-
-	if match.input != "2001:db8::68" {
-		t.Fatal("expected input to be '2001:db8::68'")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.Compare(netip.MustParseAddr("2001:db8::68")) != 0 {
-		t.Fatal("expected addr to be '2001:db8::68'")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "ipv6:2001:db8::68", matches)
 }
 
 func TestMatchIPv6NoHandler(t *testing.T) {
@@ -446,23 +365,7 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 		t.Fatal("expected match")
 	}
 
-	match := matches[0]
-
-	if match.input != "::ffff:192.168.0.1" {
-		t.Fatal("expected input to be '::ffff:192.168.0.1")
-	}
-
-	if match.node != cmd {
-		t.Fatal("expected node to be cmd")
-	}
-
-	if match.addr.Compare(netip.MustParseAddr("::ffff:192.168.0.1")) != 0 {
-		t.Fatal("expected addr to be '::ffff:192.168.0.1'")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "ipv6:::ffff:192.168.0.1", matches)
 }
 
 func TestMatchChoiceLiteral(t *testing.T) {
@@ -476,51 +379,10 @@ func TestMatchChoiceLiteral(t *testing.T) {
 	cmd.children[1].handlerFunc = reflect.ValueOf(func() {})
 
 	matches := cmd.Match("foo")
-	if len(matches) != 1 {
-		t.Fatal("expected match")
-	}
-
-	match := matches[0]
-
-	if match.input != "foo" {
-		t.Fatal("expected input to be 'foo'")
-	}
-
-	if match.node != cmd.children[0] {
-		t.Fatal("expected node to be cmd.Children()[0]")
-	}
-
-	if match.addr.IsValid() {
-		t.Fatal("expected addr to be unset")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "foo", matches)
 
 	matches = cmd.Match("bar")
-
-	if len(matches) != 1 {
-		t.Fatal("expected match")
-	}
-
-	match = matches[0]
-
-	if match.input != "bar" {
-		t.Fatal("expected input to be 'bar'")
-	}
-
-	if match.node != cmd.children[1] {
-		t.Fatal("expected node to be cmd.Children()[1]")
-	}
-
-	if match.addr.IsValid() {
-		t.Fatal("expected addr to be unset")
-	}
-
-	if match.next != nil {
-		t.Fatal("expected next to be nil")
-	}
+	AssertMatchesMatchSpec(t, "bar", matches)
 
 	matches = cmd.Match("baz")
 	if len(matches) != 0 {
@@ -564,18 +426,23 @@ func TestMatchMultipleWithString(t *testing.T) {
 
 	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
 
-	matches := cmd.Match("foo bar baz")
-	AssertMatchesMatchSpec(t, "foo string:bar baz", matches)
+	matches := cmd.Match("before foo after")
+	AssertMatchesMatchSpec(t, "before string:foo after", matches)
 
-	matches = cmd.Match("foo qux baz")
-	AssertMatchesMatchSpec(t, "foo string:qux baz", matches)
+	matches = cmd.Match("before bar after")
+	AssertMatchesMatchSpec(t, "before string:bar after", matches)
 
-	matches = cmd.Match("foo bar")
+	matches = cmd.Match("before foo")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
 	}
 
-	matches = cmd.Match("foo bar baz qux")
+	matches = cmd.Match("before bar baz after")
+	if len(matches) != 0 {
+		t.Fatal("expected no match")
+	}
+
+	matches = cmd.Match("after foo before")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
 	}
