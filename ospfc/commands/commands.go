@@ -117,8 +117,15 @@ type Match struct {
 
 func (n *Node) matchTokens(tokens []string) []*Match {
 	if n.t == ntChoice {
-		// TODO
-		panic("unimplemented")
+		var matches []*Match
+		for _, child := range n.children {
+			ms := child.matchTokens(tokens)
+			if len(ms) > 0 {
+				matches = append(matches, ms...)
+			}
+		}
+
+		return matches
 	} else {
 		var match *Match
 		if n.t == ntLiteral {

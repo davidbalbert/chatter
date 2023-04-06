@@ -464,3 +464,66 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 		t.Fatal("expected next to be nil")
 	}
 }
+
+func TestMatchChoiceLiteral(t *testing.T) {
+	s := "<foo|bar>"
+	cmd, err := parseCommand(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.Children()[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.Children()[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("foo")
+	if len(matches) != 1 {
+		t.Fatal("expected match")
+	}
+
+	match := matches[0]
+
+	if match.input != "foo" {
+		t.Fatal("expected input to be 'foo'")
+	}
+
+	if match.node != cmd.Children()[0] {
+		t.Fatal("expected node to be cmd.Children()[0]")
+	}
+
+	if match.addr.IsValid() {
+		t.Fatal("expected addr to be unset")
+	}
+
+	if match.next != nil {
+		t.Fatal("expected next to be nil")
+	}
+
+	matches = cmd.Match("bar")
+
+	if len(matches) != 1 {
+		t.Fatal("expected match")
+	}
+
+	match = matches[0]
+
+	if match.input != "bar" {
+		t.Fatal("expected input to be 'bar'")
+	}
+
+	if match.node != cmd.Children()[1] {
+		t.Fatal("expected node to be cmd.Children()[1]")
+	}
+
+	if match.addr.IsValid() {
+		t.Fatal("expected addr to be unset")
+	}
+
+	if match.next != nil {
+		t.Fatal("expected next to be nil")
+	}
+
+	matches = cmd.Match("baz")
+	if len(matches) != 0 {
+		t.Fatal("expected no match")
+	}
+}
