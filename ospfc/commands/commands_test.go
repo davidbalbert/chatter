@@ -16,7 +16,7 @@ func TestParseCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	AssertMatchesSpec(t, spec, cmd)
+	AssertMatchesCommandSpec(t, spec, cmd)
 }
 
 func TestParseCommandWithParam(t *testing.T) {
@@ -30,7 +30,7 @@ func TestParseCommandWithParam(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	AssertMatchesSpec(t, spec, cmd)
+	AssertMatchesCommandSpec(t, spec, cmd)
 }
 
 func TestParseCommandWithChoice(t *testing.T) {
@@ -54,7 +54,7 @@ func TestParseCommandWithChoice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	AssertMatchesSpec(t, spec, cmd)
+	AssertMatchesCommandSpec(t, spec, cmd)
 }
 
 func TestParseCommandWithChoiceAndTrailingLiteral(t *testing.T) {
@@ -78,7 +78,7 @@ func TestParseCommandWithChoiceAndTrailingLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	AssertMatchesSpec(t, spec, cmd)
+	AssertMatchesCommandSpec(t, spec, cmd)
 }
 
 func TestMatchLiteral(t *testing.T) {
@@ -526,4 +526,69 @@ func TestMatchChoiceLiteral(t *testing.T) {
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
 	}
+}
+
+func TestMatchMultiple(t *testing.T) {
+	cmd, err := parseCommand("foo bar baz")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("foo bar baz")
+	AssertMatchesMatchSpec(t, "foo bar baz", matches)
+}
+
+func TestMatchMultipleWithChoice(t *testing.T) {
+	cmd, err := parseCommand("foo <bar|baz> qux")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[1].children[0].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("foo bar qux")
+	AssertMatchesMatchSpec(t, "foo bar qux", matches)
+
+	matches = cmd.Match("foo baz qux")
+	AssertMatchesMatchSpec(t, "foo baz qux", matches)
+}
+
+func TestMatchMultipleWithString(t *testing.T) {
+	cmd, err := parseCommand("before WORD after")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("foo bar baz")
+	AssertMatchesMatchSpec(t, "foo string:bar baz", matches)
+
+	matches = cmd.Match("foo qux baz")
+	AssertMatchesMatchSpec(t, "foo string:qux baz", matches)
+
+	matches = cmd.Match("foo bar")
+	if len(matches) != 0 {
+		t.Fatal("expected no match")
+	}
+
+	matches = cmd.Match("foo bar baz qux")
+	if len(matches) != 0 {
+		t.Fatal("expected no match")
+	}
+}
+
+func TestMatchMultipleWithIPv4(t *testing.T) {
+	cmd, err := parseCommand("show ip route A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("show ip route 1.2.3.4")
+	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
 }

@@ -83,28 +83,19 @@ func (n1 *Node) Merge(n2 *Node) *Node {
 	return n1.mergeWithPath("", n2)
 }
 
-func (n *Node) id() string {
-	switch n.t {
-	case ntLiteral:
-		return "literal:" + n.value
-	case ntParamString:
-		return "param:string"
-	case ntParamIPv4:
-		return "param:ipv4"
-	case ntParamIPv6:
-		return "param:ipv6"
-	case ntChoice:
-		return "choice"
-	default:
-		panic("unreachable")
-	}
-}
-
 type Match struct {
 	node  *Node
 	next  *Match
 	input string     // the input that matched this node
 	addr  netip.Addr // address for IPv4/IPv6 parameters
+}
+
+func (m *Match) length() int {
+	if m == nil {
+		return 0
+	}
+
+	return 1 + m.next.length()
 }
 
 func (n *Node) matchTokens(tokens []string) []*Match {
@@ -447,7 +438,7 @@ func (p *commandParser) reset(pos int) {
 	p.pos = pos
 }
 
-func (p *commandParser) errorf(format string, args ...interface{}) error {
+func (p *commandParser) errorf(format string, args ...any) error {
 	line := strings.Split(p.s, "\n")[0]
 	marker := strings.Repeat(" ", p.pos) + "^"
 

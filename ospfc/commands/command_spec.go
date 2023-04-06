@@ -425,7 +425,7 @@ func (p *commandSpecParser) consume(s string) bool {
 	return true
 }
 
-func (p *commandSpecParser) errorf(format string, args ...interface{}) error {
+func (p *commandSpecParser) errorf(format string, args ...any) error {
 	lines := strings.Split(p.s, "\n")
 	line := lines[p.line-1]
 	marker := strings.Repeat(" ", p.col) + "^"
