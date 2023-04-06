@@ -459,3 +459,156 @@ func TestMatchMultipleWithIPv4(t *testing.T) {
 	matches := cmd.Match("show ip route 1.2.3.4")
 	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
 }
+
+func TestMatchChoice(t *testing.T) {
+	cmd, err := parseCommand("<foo|bar>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("foo")
+	AssertMatchesMatchSpec(t, "foo", matches)
+
+	matches = cmd.Match("bar")
+	AssertMatchesMatchSpec(t, "bar", matches)
+
+	matches = cmd.Match("baz")
+	if len(matches) != 0 {
+		t.Fatal("expected no match")
+	}
+}
+
+func TestMatchAmbiguousMatch(t *testing.T) {
+	cmd, err := parseCommand("show <ip|interface>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("sh i")
+	AssertMatchesMatchSpec(t, "show ip\nshow interface", matches)
+}
+
+func TestMatchDisambiguateWithLaterToken(t *testing.T) {
+	cmd, err := parseCommand("show ip route <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[0].children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("sh i ro 1.2.3.4")
+	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
+}
+
+func TestMatchCommonPrefixesAreAmbiguous(t *testing.T) {
+	cmd, err := parseCommand("show <ip|ipv6>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("sh i")
+	AssertMatchesMatchSpec(t, "show ip\nshow ipv6", matches)
+}
+
+func TestMatchExactMatchesAreNonAmbiguous(t *testing.T) {
+	cmd, err := parseCommand("show <ip|ipv6>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("sh ip")
+	AssertMatchesMatchSpec(t, "show ip", matches)
+}
+
+func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
+	cmd, err := parseCommand("show <ip|ipv6> <route|routes>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd.children[0].children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].children[0].children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+
+	matches := cmd.Match("sh i r")
+	spec := `
+		show ip route
+		show ip routes
+		show ipv6 route
+		show ipv6 routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ip r")
+	spec = `
+		show ip route
+		show ip routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ipv r")
+	spec = `
+		show ipv6 route
+		show ipv6 routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh i rout")
+	spec = `
+		show ip route
+		show ip routes
+		show ipv6 route
+		show ipv6 routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh i route")
+	spec = `
+		show ip route
+		show ipv6 route
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh i routes")
+	spec = `
+		show ip routes
+		show ipv6 routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ip route")
+	spec = `
+		show ip route
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ip routes")
+	spec = `
+		show ip routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ipv route")
+	spec = `
+		show ipv6 route
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd.Match("sh ipv routes")
+	spec = `
+		show ipv6 routes
+	`
+	AssertMatchesMatchSpec(t, spec, matches)
+}

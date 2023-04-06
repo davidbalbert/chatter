@@ -176,8 +176,75 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 func (n *Node) Match(input string) []*Match {
 	tokens := strings.Fields(input)
 
-	// TODO: disambiguate based on exact matches
-	return n.matchTokens(tokens)
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	matches := n.matchTokens(tokens)
+
+	if len(matches) <= 1 {
+		return matches
+	}
+
+	// If there is more than one match, then our matches are ambiguous. There's one special case disambiguation
+	// that we perform: if a literal token matches exactly, we pick that match.
+	//
+	// Some examples:
+	// "show <ip|ipv6>"
+	// "sh i" -> ["show ip", "show ipv6"]
+	// "sh ip" -> ["show ip"]
+	// "sh ipv" -> ["show ipv6"]
+	// "sh ipv6" -> ["show ipv6"]
+	//
+	// "show <ip|ipv6> <route|routes>"
+	// "sh i r" -> ["show ip route", "show ip routes", "show ipv6 route", "show ipv6 routes"]
+	// "sh ip r" -> ["show ip route", "show ip routes"]
+	// "sh ipv r" -> ["show ipv6 route", "show ipv6 routes"]
+	// "sh ipv6 r" -> ["show ipv6 route", "show ipv6 routes"]
+	// "sh ipv6 rout" -> ["show ipv6 route", "show ipv6 routes"]
+	// "sh ipv6 route" -> ["show ipv6 route"]
+	// "sh ipv6 routes" -> ["show ipv6 routes"]
+	// "sh i rout" -> ["show ip route", "show ip routes", "show ipv6 route", "show ipv6 routes"]
+	// "sh i route" -> ["show ip route", "show ipv6 route"]
+	// "sh i routes" -> ["show ip routes", "show ipv6 routes"]
+	// "sh ip route" -> ["show ip route"]
+	// "sh ip routes" -> ["show ip routes"]
+
+	var disambiguated []*Match
+
+	ms := make([]*Match, len(matches))
+	copy(ms, matches)
+
+	for _, token := range tokens {
+		var exactRoots []*Match
+		var nonExactRoots []*Match
+		var exactMatches []*Match
+		var nonExactMatches []*Match
+
+		for i, m := range ms {
+			if m.node.t == ntLiteral && m.node.value == token {
+				exactRoots = append(exactRoots, matches[i])
+				exactMatches = append(exactMatches, m.next)
+			} else {
+				nonExactRoots = append(nonExactRoots, matches[i])
+				nonExactMatches = append(nonExactMatches, m.next)
+			}
+		}
+
+		if len(exactRoots) > 0 {
+			disambiguated = exactRoots
+			ms = exactMatches
+		} else {
+			disambiguated = nonExactRoots
+			ms = nonExactMatches
+		}
+
+		if len(disambiguated) <= 1 {
+			break
+		}
+	}
+
+	return disambiguated
 }
 
 type commandParser struct {
