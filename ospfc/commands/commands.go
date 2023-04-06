@@ -123,11 +123,22 @@ func (p *commandParser) parseCommand() (*Node, error) {
 			return nil, err
 		}
 
-		if n.children == nil {
-			n.children = make(map[string]*Node)
+		if n.t == ntChoice {
+			for _, option := range n.children {
+				if option.children == nil {
+					option.children = make(map[string]*Node)
+				}
+
+				option.children[child.id()] = child
+			}
+		} else {
+			if n.children == nil {
+				n.children = make(map[string]*Node)
+			}
+
+			n.children[child.id()] = child
 		}
 
-		n.children[child.id()] = child
 		n = child
 	}
 

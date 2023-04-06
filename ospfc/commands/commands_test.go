@@ -54,3 +54,27 @@ func TestParseCommandWithChoice(t *testing.T) {
 
 	AssertMatchesSpec(t, spec, cmd)
 }
+
+func TestParseCommandWithChoiceAndTrailingLiteral(t *testing.T) {
+	s := "show bgp neighbors <A.B.C.D|X:X:X::X|all> detail"
+	spec := `
+		literal:show[
+			literal:bgp[
+				literal:neighbors[
+					choice[
+						param:ipv4[literal:detail.1],
+						param:ipv6[literal:detail.1],
+						literal:all[literal:detail.1],
+					]
+				]
+			]
+		]
+	`
+
+	cmd, err := parseCommand(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesSpec(t, spec, cmd)
+}
