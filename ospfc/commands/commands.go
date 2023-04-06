@@ -64,7 +64,7 @@ type Node struct {
 	description      string
 	handlerFunc      reflect.Value
 	autocompleteFunc AutocompleteFunc
-	children         map[string]*Node
+	children         []*Node
 }
 
 func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
@@ -81,14 +81,6 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 
 func (n1 *Node) Merge(n2 *Node) *Node {
 	return n1.mergeWithPath("", n2)
-}
-
-func (n *Node) Children() []*Node {
-	var children []*Node
-	for _, child := range n.children {
-		children = append(children, child)
-	}
-	return children
 }
 
 func (n *Node) id() string {
@@ -179,8 +171,7 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 		}
 
 		var matches []*Match
-		// TODO: change children to a slice and remove Children()
-		child := n.Children()[0]
+		child := n.children[0]
 		for _, childMatch := range child.matchTokens(tokens[1:]) {
 			dupedMatch := *match
 			dupedMatch.next = childMatch
@@ -232,18 +223,10 @@ func (p *commandParser) parseCommand() (*Node, error) {
 
 		if n.t == ntChoice {
 			for _, option := range n.children {
-				if option.children == nil {
-					option.children = make(map[string]*Node)
-				}
-
-				option.children[child.id()] = child
+				option.children = append(option.children, child)
 			}
 		} else {
-			if n.children == nil {
-				n.children = make(map[string]*Node)
-			}
-
-			n.children[child.id()] = child
+			n.children = append(n.children, child)
 		}
 
 		n = child
@@ -298,7 +281,7 @@ func (p *commandParser) parseChoice() (*Node, error) {
 
 	n := &Node{
 		t:        ntChoice,
-		children: map[string]*Node{child.id(): child},
+		children: []*Node{child},
 	}
 
 	for {
@@ -315,7 +298,7 @@ func (p *commandParser) parseChoice() (*Node, error) {
 			return nil, err
 		}
 
-		n.children[child.id()] = child
+		n.children = append(n.children, child)
 	}
 
 	p.skipWhitespace()

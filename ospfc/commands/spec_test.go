@@ -576,14 +576,9 @@ func TestMatcher(t *testing.T) {
 	]`
 
 	g := &Node{
-		t:     ntLiteral,
-		value: "show",
-		children: map[string]*Node{
-			"literal:version": {
-				t:     ntLiteral,
-				value: "version",
-			},
-		},
+		t:        ntLiteral,
+		value:    "show",
+		children: []*Node{{t: ntLiteral, value: "version"}},
 	}
 
 	spec, err := parseSpec(s)
@@ -609,14 +604,9 @@ func TestMatcherError(t *testing.T) {
 	]`
 
 	g := &Node{
-		t:     ntLiteral,
-		value: "show",
-		children: map[string]*Node{
-			"literal:version": {
-				t:     ntLiteral,
-				value: "version",
-			},
-		},
+		t:        ntLiteral,
+		value:    "show",
+		children: []*Node{{t: ntLiteral, value: "version"}},
 	}
 
 	spec, err := parseSpec(s)
@@ -646,14 +636,9 @@ func TestMatcherErrorDifferentType(t *testing.T) {
 	]`
 
 	g := &Node{
-		t:     ntLiteral,
-		value: "show",
-		children: map[string]*Node{
-			"literal:version": {
-				t:     ntLiteral,
-				value: "version",
-			},
-		},
+		t:        ntLiteral,
+		value:    "show",
+		children: []*Node{{t: ntLiteral, value: "version"}},
 	}
 
 	spec, err := parseSpec(s)
@@ -683,13 +668,9 @@ func TestMatcherErrorDifferentArgType(t *testing.T) {
 	]`
 
 	g := &Node{
-		t:     ntLiteral,
-		value: "show",
-		children: map[string]*Node{
-			"param:ipv6": {
-				t: ntParamIPv6,
-			},
-		},
+		t:        ntLiteral,
+		value:    "show",
+		children: []*Node{{t: ntParamIPv6}},
 	}
 
 	spec, err := parseSpec(s)
@@ -718,14 +699,9 @@ func TestMatcherErrorNoChildren(t *testing.T) {
 	`
 
 	g := &Node{
-		t:     ntLiteral,
-		value: "show",
-		children: map[string]*Node{
-			"literal:version": {
-				t:     ntLiteral,
-				value: "version",
-			},
-		},
+		t:        ntLiteral,
+		value:    "show",
+		children: []*Node{{t: ntLiteral, value: "version"}},
 	}
 
 	spec, err := parseSpec(s)
@@ -757,10 +733,10 @@ func TestMatcherErrorTooManyChildren(t *testing.T) {
 
 	g := &Node{
 		t: ntChoice,
-		children: map[string]*Node{
-			"literal:foo": {t: ntLiteral, value: "foo"},
-			"literal:bar": {t: ntLiteral, value: "bar"},
-			"literal:baz": {t: ntLiteral, value: "baz"},
+		children: []*Node{
+			{t: ntLiteral, value: "foo"},
+			{t: ntLiteral, value: "bar"},
+			{t: ntLiteral, value: "baz"},
 		},
 	}
 
@@ -792,10 +768,8 @@ func TestMatcherErrorMissingChild(t *testing.T) {
 	]`
 
 	g := &Node{
-		t: ntChoice,
-		children: map[string]*Node{
-			"literal:foo": {t: ntLiteral, value: "foo"},
-		},
+		t:        ntChoice,
+		children: []*Node{{t: ntLiteral, value: "foo"}},
 	}
 
 	spec, err := parseSpec(s)
@@ -821,8 +795,6 @@ func TestMatcherErrorMissingChild(t *testing.T) {
 // TODO: go maps don't guarantee order. Either make Node.Children() return children in a guaranteed order,
 // remove this test, or make specs stored in a map as well.
 func TestMatcherErrorChildOrder(t *testing.T) {
-	t.Skip()
-
 	s := `
 	choice[
 		literal:foo,
@@ -831,9 +803,9 @@ func TestMatcherErrorChildOrder(t *testing.T) {
 
 	g := &Node{
 		t: ntChoice,
-		children: map[string]*Node{
-			"literal:bar": {t: ntLiteral, value: "bar"},
-			"literal:foo": {t: ntLiteral, value: "foo"},
+		children: []*Node{
+			{t: ntLiteral, value: "bar"},
+			{t: ntLiteral, value: "foo"},
 		}}
 
 	spec, err := parseSpec(s)
@@ -874,21 +846,9 @@ func TestMatcherReferenceIdentity(t *testing.T) {
 
 	g := &Node{
 		t: ntChoice,
-		children: map[string]*Node{
-			"literal:foo": {
-				t:     ntLiteral,
-				value: "foo",
-				children: map[string]*Node{
-					"literal:baz": baz,
-				},
-			},
-			"literal:bar": {
-				t:     ntLiteral,
-				value: "bar",
-				children: map[string]*Node{
-					"literal:baz": baz,
-				},
-			},
+		children: []*Node{
+			{t: ntLiteral, value: "foo", children: []*Node{baz}},
+			{t: ntLiteral, value: "bar", children: []*Node{baz}},
 		},
 	}
 
@@ -940,21 +900,9 @@ func TestMatcherReferenceIdentitySeparate(t *testing.T) {
 
 	g := &Node{
 		t: ntChoice,
-		children: map[string]*Node{
-			"literal:foo": {
-				t:     ntLiteral,
-				value: "foo",
-				children: map[string]*Node{
-					"literal:baz": baz1,
-				},
-			},
-			"literal:bar": {
-				t:     ntLiteral,
-				value: "bar",
-				children: map[string]*Node{
-					"literal:baz": baz2,
-				},
-			},
+		children: []*Node{
+			{t: ntLiteral, value: "foo", children: []*Node{baz1}},
+			{t: ntLiteral, value: "bar", children: []*Node{baz2}},
 		},
 	}
 
@@ -997,8 +945,6 @@ func TestMatcherReferenceIdentitySeparate(t *testing.T) {
 }
 
 func TestMatcherReferenceIdentitySkipsOtherAssertions(t *testing.T) {
-	t.Skip() // TODO: child order is not guaranteed
-
 	s := `
 	choice[
 		literal:foo[
@@ -1010,33 +956,16 @@ func TestMatcherReferenceIdentitySkipsOtherAssertions(t *testing.T) {
 	]`
 
 	baz := &Node{
-		t:     ntLiteral,
-		value: "baz",
-		children: map[string]*Node{
-			"literal:qux": {
-				t:     ntLiteral,
-				value: "qux",
-			},
-		},
+		t:        ntLiteral,
+		value:    "baz",
+		children: []*Node{{t: ntLiteral, value: "qux"}},
 	}
 
 	g := &Node{
 		t: ntChoice,
-		children: map[string]*Node{
-			"literal:foo": {
-				t:     ntLiteral,
-				value: "foo",
-				children: map[string]*Node{
-					"literal:baz": baz,
-				},
-			},
-			"literal:bar": {
-				t:     ntLiteral,
-				value: "bar",
-				children: map[string]*Node{
-					"literal:baz": baz,
-				},
-			},
+		children: []*Node{
+			{t: ntLiteral, value: "foo", children: []*Node{baz}},
+			{t: ntLiteral, value: "bar", children: []*Node{baz}},
 		},
 	}
 
@@ -1055,7 +984,7 @@ func TestMatcherReferenceIdentitySkipsOtherAssertions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ref, ok := m.references["baz.1"]
+	ref, ok := m.references["literal:baz.1"]
 	if !ok {
 		t.Fatal("expected baz to be referenced")
 	}

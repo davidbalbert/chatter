@@ -472,8 +472,8 @@ func TestMatchChoiceLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.Children()[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.Children()[1].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[0].handlerFunc = reflect.ValueOf(func() {})
+	cmd.children[1].handlerFunc = reflect.ValueOf(func() {})
 
 	matches := cmd.Match("foo")
 	if len(matches) != 1 {
@@ -486,7 +486,7 @@ func TestMatchChoiceLiteral(t *testing.T) {
 		t.Fatal("expected input to be 'foo'")
 	}
 
-	if match.node != cmd.Children()[0] {
+	if match.node != cmd.children[0] {
 		t.Fatal("expected node to be cmd.Children()[0]")
 	}
 
@@ -510,7 +510,7 @@ func TestMatchChoiceLiteral(t *testing.T) {
 		t.Fatal("expected input to be 'bar'")
 	}
 
-	if match.node != cmd.Children()[1] {
+	if match.node != cmd.children[1] {
 		t.Fatal("expected node to be cmd.Children()[1]")
 	}
 

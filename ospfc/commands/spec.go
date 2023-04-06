@@ -540,7 +540,7 @@ func (m *matcher) match(path string, n *Node, s *Spec) error {
 	}
 
 	for i, child := range s.children {
-		err := m.match(path+"/"+child.pathComponent(), n.Children()[i], child)
+		err := m.match(path+"/"+child.pathComponent(), n.children[i], child)
 		if err != nil {
 			return err
 		}
