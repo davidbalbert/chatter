@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"net/netip"
 	"reflect"
 	"strings"
 	"unicode/utf8"
@@ -66,6 +67,22 @@ type Node struct {
 	children         map[string]*Node
 }
 
+func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
+	if n1 == nil {
+		return n2
+	}
+
+	if n2 == nil {
+		return n1
+	}
+
+	return nil
+}
+
+func (n1 *Node) Merge(n2 *Node) *Node {
+	return n1.mergeWithPath("", n2)
+}
+
 func (n *Node) Children() []*Node {
 	var children []*Node
 	for _, child := range n.children {
@@ -89,6 +106,89 @@ func (n *Node) id() string {
 	default:
 		panic("unreachable")
 	}
+}
+
+type Match struct {
+	node  *Node
+	next  *Match
+	input string     // the input that matched this node
+	addr  netip.Addr // address for IPv4/IPv6 parameters
+}
+
+func (n *Node) matchTokens(tokens []string) []*Match {
+	if n.t == ntChoice {
+		// TODO
+		panic("unimplemented")
+	} else {
+		var match *Match
+		if n.t == ntLiteral {
+			if strings.HasPrefix(n.value, tokens[0]) {
+				match = &Match{
+					node:  n,
+					input: tokens[0],
+				}
+			}
+		} else if n.t == ntParamString {
+			match = &Match{
+				node:  n,
+				input: tokens[0],
+			}
+		} else if n.t == ntParamIPv4 {
+			addr, err := netip.ParseAddr(tokens[0])
+			if err == nil && addr.Is4() {
+				match = &Match{
+					node:  n,
+					input: tokens[0],
+					addr:  addr,
+				}
+			}
+		} else if n.t == ntParamIPv6 {
+			addr, err := netip.ParseAddr(tokens[0])
+			if err == nil && addr.Is6() {
+				match = &Match{
+					node:  n,
+					input: tokens[0],
+					addr:  addr,
+				}
+			}
+		} else {
+			panic("unreachable")
+		}
+
+		if match == nil {
+			return nil
+		}
+
+		if len(tokens) == 1 && n.handlerFunc.IsValid() {
+			return []*Match{match}
+		} else if len(tokens) == 1 {
+			return nil
+		}
+
+		if len(n.children) == 0 {
+			return nil
+		} else if len(n.children) > 1 {
+			panic("non-choice node with multiple children")
+		}
+
+		var matches []*Match
+		// TODO: change children to a slice and remove Children()
+		child := n.Children()[0]
+		for _, childMatch := range child.matchTokens(tokens[1:]) {
+			dupedMatch := *match
+			dupedMatch.next = childMatch
+			matches = append(matches, &dupedMatch)
+		}
+
+		return matches
+	}
+}
+
+func (n *Node) Match(input string) []*Match {
+	tokens := strings.Fields(input)
+
+	// TODO: disambiguate based on exact matches
+	return n.matchTokens(tokens)
 }
 
 type commandParser struct {
