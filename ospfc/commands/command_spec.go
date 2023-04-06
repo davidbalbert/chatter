@@ -44,25 +44,25 @@ import (
 // All nodes of the same type and ID (.1, .2, etc.) must be reference equal to each other.
 // You only need to specify other attributes on the first node of a given type and ID.
 
-type Spec struct {
+type commandSpec struct {
 	t               nodeType
 	value           string
 	id              int
 	handler         *reflect.Type
 	hasAutocomplete bool
 	description     string
-	children        []*Spec
+	children        []*commandSpec
 }
 
-type specParser struct {
+type commandSpecParser struct {
 	s    string
 	pos  int
 	line int
 	col  int
 }
 
-func (p *specParser) parseSpec() (*Spec, error) {
-	s := &Spec{}
+func (p *commandSpecParser) parseSpec() (*commandSpec, error) {
+	s := &commandSpec{}
 
 	p.skipWhitespace()
 
@@ -106,7 +106,7 @@ func (p *specParser) parseSpec() (*Spec, error) {
 	return s, nil
 }
 
-func (p *specParser) parseName(s *Spec) error {
+func (p *commandSpecParser) parseName(s *commandSpec) error {
 	if p.peek() == 'c' {
 		if !p.consume("choice") {
 			return p.errorf("expected 'fork'")
@@ -156,7 +156,7 @@ func (p *specParser) parseName(s *Spec) error {
 	return p.errorf("expected 'fork', 'join', 'literal:', or 'argument:'")
 }
 
-func (p *specParser) parseID(s *Spec) error {
+func (p *commandSpecParser) parseID(s *commandSpec) error {
 	p.next() // consume the '.'
 
 	var num string
@@ -180,7 +180,7 @@ func (p *specParser) parseID(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseHandler(s *Spec) error {
+func (p *commandSpecParser) parseHandler(s *commandSpec) error {
 	p.next() // consume the '!'
 	p.next() // consume the 'H'
 
@@ -191,7 +191,7 @@ func (p *specParser) parseHandler(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseAutocomplete(s *Spec) error {
+func (p *commandSpecParser) parseAutocomplete(s *commandSpec) error {
 	p.next() // consume the '!'
 	p.next() // consume the 'A'
 
@@ -200,7 +200,7 @@ func (p *specParser) parseAutocomplete(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseDescription(s *Spec) error {
+func (p *commandSpecParser) parseDescription(s *commandSpec) error {
 	p.next() // consume the '?'
 
 	if p.next() != '"' {
@@ -225,7 +225,7 @@ func (p *specParser) parseDescription(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseChildren(s *Spec) error {
+func (p *commandSpecParser) parseChildren(s *commandSpec) error {
 	if p.next() != '[' {
 		return p.errorf("expected '['")
 	}
@@ -263,7 +263,7 @@ func (p *specParser) parseChildren(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseSignature(s *Spec) error {
+func (p *commandSpecParser) parseSignature(s *commandSpec) error {
 	if !p.consume("func(") {
 		return p.errorf("expected 'func('")
 	}
@@ -318,7 +318,7 @@ func (p *specParser) parseSignature(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseWord(s *Spec) error {
+func (p *commandSpecParser) parseWord(s *commandSpec) error {
 	var word string
 	for p.peek() >= 'a' && p.peek() <= 'z' || p.peek() >= 'A' && p.peek() <= 'Z' || p.peek() >= '0' && p.peek() <= '9' {
 		word += string(p.next())
@@ -333,7 +333,7 @@ func (p *specParser) parseWord(s *Spec) error {
 	return nil
 }
 
-func (p *specParser) parseParamType() (string, error) {
+func (p *commandSpecParser) parseParamType() (string, error) {
 	if p.peek() == 's' {
 		if !p.consume("string") {
 			return "", p.errorf("expected 'string'")
@@ -363,7 +363,7 @@ func (p *specParser) parseParamType() (string, error) {
 	return "", p.errorf("expected 'string', 'ipv4', or 'ipv6'")
 }
 
-func (p *specParser) parseHandlerParam() (string, error) {
+func (p *commandSpecParser) parseHandlerParam() (string, error) {
 	if p.peek() == 's' {
 		if !p.consume("string") {
 			return "", p.errorf("expected 'string'")
@@ -383,19 +383,19 @@ func (p *specParser) parseHandlerParam() (string, error) {
 	return "", p.errorf("expected 'string' or 'addr'")
 }
 
-func (p *specParser) skipWhitespace() {
+func (p *commandSpecParser) skipWhitespace() {
 	for p.peek() == ' ' || p.peek() == '\t' || p.peek() == '\r' || p.peek() == '\n' {
 		p.next()
 	}
 }
 
-func (p *specParser) peek() rune {
+func (p *commandSpecParser) peek() rune {
 	r, _ := utf8.DecodeRuneInString(p.s[p.pos:])
 
 	return r
 }
 
-func (p *specParser) next() rune {
+func (p *commandSpecParser) next() rune {
 	r, size := utf8.DecodeRuneInString(p.s[p.pos:])
 	p.pos += size
 
@@ -409,11 +409,11 @@ func (p *specParser) next() rune {
 	return r
 }
 
-func (p *specParser) startsWith(s string) bool {
+func (p *commandSpecParser) startsWith(s string) bool {
 	return strings.HasPrefix(p.s[p.pos:], s)
 }
 
-func (p *specParser) consume(s string) bool {
+func (p *commandSpecParser) consume(s string) bool {
 	if !strings.HasPrefix(p.s[p.pos:], s) {
 		return false
 	}
@@ -425,7 +425,7 @@ func (p *specParser) consume(s string) bool {
 	return true
 }
 
-func (p *specParser) errorf(format string, args ...interface{}) error {
+func (p *commandSpecParser) errorf(format string, args ...interface{}) error {
 	lines := strings.Split(p.s, "\n")
 	line := lines[p.line-1]
 	marker := strings.Repeat(" ", p.col) + "^"
@@ -433,8 +433,8 @@ func (p *specParser) errorf(format string, args ...interface{}) error {
 	return fmt.Errorf("%d:%d: %s\n\t%s\n\t%s", p.line, p.col, fmt.Sprintf(format, args...), line, marker)
 }
 
-func parseSpec(s string) (*Spec, error) {
-	p := &specParser{
+func parseSpec(s string) (*commandSpec, error) {
+	p := &commandSpecParser{
 		s:    s,
 		line: 1,
 	}
@@ -442,7 +442,7 @@ func parseSpec(s string) (*Spec, error) {
 	return p.parseSpec()
 }
 
-func (s *Spec) pathComponent() string {
+func (s *commandSpec) pathComponent() string {
 	var name string
 
 	switch s.t {
@@ -467,17 +467,17 @@ func (s *Spec) pathComponent() string {
 	return name
 }
 
-type matcher struct {
+type commandSpecMatcher struct {
 	references map[string]*Node
 }
 
-func newMatcher() *matcher {
-	return &matcher{
+func newCommandSpecMatcher() *commandSpecMatcher {
+	return &commandSpecMatcher{
 		references: make(map[string]*Node),
 	}
 }
 
-func (m *matcher) match(path string, n *Node, s *Spec) error {
+func (m *commandSpecMatcher) match(path string, n *Node, s *commandSpec) error {
 	var ref *Node
 
 	if s.id != 0 {
@@ -549,7 +549,7 @@ func (m *matcher) match(path string, n *Node, s *Spec) error {
 	return nil
 }
 
-func AssertMatchesSpec(t *testing.T, s string, n *Node) {
+func AssertMatchesCommandSpec(t *testing.T, s string, n *Node) {
 	t.Helper()
 
 	spec, err := parseSpec(s)
@@ -557,7 +557,7 @@ func AssertMatchesSpec(t *testing.T, s string, n *Node) {
 		t.Fatal(err)
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), n, spec)
 	if err != nil {
 		t.Fatal(err)

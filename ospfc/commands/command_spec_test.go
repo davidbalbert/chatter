@@ -590,7 +590,7 @@ func TestMatcher(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match(spec.pathComponent(), g, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -618,7 +618,7 @@ func TestMatcherError(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -650,7 +650,7 @@ func TestMatcherErrorDifferentType(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -682,7 +682,7 @@ func TestMatcherErrorDifferentArgType(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -713,7 +713,7 @@ func TestMatcherErrorNoChildren(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -749,7 +749,7 @@ func TestMatcherErrorTooManyChildren(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -781,7 +781,7 @@ func TestMatcherErrorMissingChild(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -817,7 +817,7 @@ func TestMatcherErrorChildOrder(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err == nil {
 		t.Fatal("expected error")
@@ -861,7 +861,7 @@ func TestMatcherReferenceIdentity(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -915,7 +915,7 @@ func TestMatcherReferenceIdentitySeparate(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err != nil {
 		t.Fatal(err)
@@ -978,7 +978,7 @@ func TestMatcherReferenceIdentitySkipsOtherAssertions(t *testing.T) {
 		t.Fatal("expected spec")
 	}
 
-	m := newMatcher()
+	m := newCommandSpecMatcher()
 	err = m.match("/"+spec.pathComponent(), g, spec)
 	if err != nil {
 		t.Fatal(err)
