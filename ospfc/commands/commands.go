@@ -93,7 +93,7 @@ func findIndex(n *Node, ns []*Node) int {
 	return -1
 }
 
-func (n1 *Node) mergeAttributes(n2 *Node) {
+func (n1 *Node) mergeAttributes(path string, n2 *Node) {
 	if n1.description != "" && n2.description != "" {
 		fmt.Printf("Warning: overwriting description for %s from %q to %q\n", path+"/"+n1.id(), n1.description, n2.description)
 	}
@@ -126,21 +126,35 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 	}
 
 	if n1.t == ntChoice && n2.t == ntChoice {
-		for _, child := range n2.children {
-			i := findIndex(child, n1.children)
+		for _, child2 := range n2.children {
+			// If child2 has a child and it's a grandchild of n1, we need to create a new grandchild.
+			var grandchild *Node
+			if len(child2.children) > 0 {
+				for _, child1 := range n1.children {
+					if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
+						if grandchild == nil {
+							grandchild = child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+						}
+
+						child1.children[0] = grandchild
+					}
+				}
+
+				if grandchild != nil {
+					child2.children[0] = grandchild
+				}
+			}
+
+			i := findIndex(child2, n1.children)
 
 			if i == -1 {
-				n1.children = append(n1.children, child)
-				continue
+				n1.children = append(n1.children, child2)
+			} else {
+				n1.children[i].mergeAttributes(path+"/"+n1.children[i].id(), child2)
 			}
+		}
 
-			if len(n1.children[i].children) == 0 {
-				n1.children[i] = n1.children[i].mergeAttributes(child)
-				n1.children[i].children = append(n1.children[i].children, child.children...)
-			}
-
-
-
+		return n1
 	} else if n1.t == ntChoice {
 		c2 := &Node{t: ntChoice, children: []*Node{n2}}
 		return n1.mergeWithPath(path, c2)
@@ -149,8 +163,8 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 		return c1.mergeWithPath(path, n2)
 	} else { // n1 and n2 are non-choice nodes
 		if n1.id() == n2.id() {
-			n1.mergeAttributes(n2)
-			
+			n1.mergeAttributes(path+"/"+n1.id(), n2)
+
 			if len(n1.children) > 1 || len(n2.children) > 1 {
 				panic("non-choice nodes should have at most one child")
 			}

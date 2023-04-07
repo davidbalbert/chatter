@@ -179,6 +179,418 @@ func TestMergeAutocomplete(t *testing.T) {
 	AssertMatchesCommandSpec(t, spec3, cmd3)
 }
 
+func TestMergeDifferentLiterals(t *testing.T) {
+	cmd1, err := parseCommand("show")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := parseCommand("hide")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	AssertMatchesCommandSpec(t, `choice[literal:show,literal:hide]`, cmd3)
+}
+
+func TestMergeDifferentAllAtoms(t *testing.T) {
+	cmd1, err := parseCommand("show A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := parseCommand("show X:X:X::X")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := parseCommand("show IFACE")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd4, err := parseCommand("show all")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd5 := cmd1.Merge(cmd2).Merge(cmd3).Merge(cmd4)
+	if cmd5 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6,
+				param:string,
+				literal:all
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd5)
+}
+
+func TestMergeChoiceAndLiteral(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6
+			]
+		]
+	`
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[literal:version]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6,
+				literal:version
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeKeepsCommonReferences(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1
+				],
+				param:ipv6[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show all detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].children[0].description = "Show all details"
+
+	spec = `
+		literal:show[
+			literal:all[
+				literal:detail?"Show all details"
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1?"Show all details"
+				],
+				param:ipv6[
+					literal:detail.1
+				],
+				literal:all[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeTwoChoicesWithCommonReferences(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1?"Hello"
+				],
+				param:ipv6[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	cmd1.children[0].children[0].children[0].description = "Hello"
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <IFACE|all> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:string[
+					literal:detail.1
+				],
+				literal:all[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1?"Hello"
+				],
+				param:ipv6[
+					literal:detail.1
+				],
+				param:string[
+					literal:detail.1
+				],
+				literal:all[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeTwoChoicesWithDifferentLeaves(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1
+				],
+				param:ipv6[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <IFACE|all> summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:string[
+					literal:summary.1
+				],
+				literal:all[
+					literal:summary.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1
+				],
+				param:ipv6[
+					literal:detail.1
+				],
+				param:string[
+					literal:summary.1
+				],
+				literal:all[
+					literal:summary.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+func TestMergeSuffix(t *testing.T) {
+	// merge "show ip route" into "show ip", making sure to set a description on "show ip" in the second command
+	cmd1, err := parseCommand("show ip route")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			literal:ip[
+				literal:route
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].description = "Show IP information"
+
+	spec = `
+		literal:show[
+			literal:ip?"Show IP information"
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd2.Merge(cmd1)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			literal:ip?"Show IP information"[
+				literal:route
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeChoiceIntoAtom(t *testing.T) {
+	// merge "show <X:X:X::X|all> summary" into "show A.B.C.D summary"
+	cmd1, err := parseCommand("show A.B.C.D summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			param:ipv4[
+				literal:summary
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <X:X:X::X|all> summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv6[
+					literal:summary.1
+				],
+				literal:all[
+					literal:summary.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:summary.1
+				],
+				param:ipv6[
+					literal:summary.1
+				],
+				literal:all[
+					literal:summary.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
 func TestMatchLiteral(t *testing.T) {
 	s := "show"
 	cmd, err := parseCommand(s)
