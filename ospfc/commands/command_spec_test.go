@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -560,12 +559,51 @@ func TestHandler(t *testing.T) {
 		t.Fatal("expected handler to not be empty")
 	}
 
-	in := []reflect.Type{reflect.TypeOf(netip.Addr{}), reflect.TypeOf(netip.Addr{})}
-	out := []reflect.Type{reflect.TypeOf(errors.New(""))}
-	signature := reflect.FuncOf(in, out, false)
+	signature := reflect.TypeOf(func(netip.Addr, netip.Addr) error { return nil })
 
 	if *c2.handler != signature {
-		t.Fatalf("expected handler to be %v, got %v", signature, c1.handler)
+		t.Fatalf("expected handler to be %v, got %v", signature, *c2.handler)
+	}
+}
+
+func TestEmptyHandler(t *testing.T) {
+	s := `literal:show!Hfunc()?"Has empty handler"`
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	if spec.t != ntLiteral {
+		t.Fatalf("expected literal, got %q", spec.t)
+	}
+
+	if spec.value != "show" {
+		t.Fatalf("expected value show, got %q", spec.value)
+	}
+
+	if spec.id != 0 {
+		t.Fatalf("expected id 0, got %d", spec.id)
+	}
+
+	if spec.description != "Has empty handler" {
+		t.Fatalf("expected description 'Has empty handler', got %q", spec.description)
+	}
+
+	if spec.hasAutocomplete != false {
+		t.Fatal("expected hasAutocomplete to be false")
+	}
+
+	if spec.handler == nil {
+		t.Fatal("expected handler to not be empty")
+	}
+
+	if *spec.handler != reflect.TypeOf(func() error { return nil }) {
+		t.Fatalf("expected handler to be %v, got %v", reflect.TypeOf(func() error { return nil }), *spec.handler)
 	}
 }
 

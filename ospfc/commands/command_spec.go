@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"errors"
 	"fmt"
 	"net/netip"
 	"reflect"
@@ -35,7 +34,7 @@ import (
 // handler <- "!H" signature
 // description <- '?' '"' [^"]* '"'
 // children <- '[' spec (',' spec)* ','? ws? ']'
-// signature <- "func(" handlerParam (ws? ',' handlerParam)* ")"
+// signature <- "func(" handlerParam? ws? (ws? ',' handlerParam)* ws? ")"
 // word <- [a-zA-Z0-9]+
 // paramType <- "string" / "ipv4" / "ipv6"
 // handlerParam <- "string" / "addr"
@@ -109,7 +108,7 @@ func (p *commandSpecParser) parseSpec() (*commandSpec, error) {
 func (p *commandSpecParser) parseName(s *commandSpec) error {
 	if p.peek() == 'c' {
 		if !p.consume("choice") {
-			return p.errorf("expected 'fork'")
+			return p.errorf("expected 'choice'")
 		}
 
 		s.t = ntChoice
@@ -268,6 +267,17 @@ func (p *commandSpecParser) parseSignature(s *commandSpec) error {
 		return p.errorf("expected 'func('")
 	}
 
+	errorType := reflect.TypeOf((*error)(nil)).Elem()
+
+	p.skipWhitespace()
+
+	if p.peek() == ')' {
+		p.next()
+		handler := reflect.FuncOf(nil, []reflect.Type{errorType}, false)
+		s.handler = &handler
+		return nil
+	}
+
 	args := make([]string, 0)
 	arg, err := p.parseHandlerParam()
 	if err != nil {
@@ -311,7 +321,7 @@ func (p *commandSpecParser) parseSignature(s *commandSpec) error {
 		}
 	}
 
-	ret := []reflect.Type{reflect.TypeOf(errors.New(""))}
+	ret := []reflect.Type{errorType}
 	handler := reflect.FuncOf(types, ret, false)
 	s.handler = &handler
 
@@ -511,7 +521,7 @@ func (m *commandSpecMatcher) match(path string, n *Node, s *commandSpec) error {
 		if s.handler == nil && n.handlerFunc.IsValid() {
 			return fmt.Errorf("%s: expected no handler, got %v", path, n.handlerFunc.Type())
 		} else if s.handler != nil && (!n.handlerFunc.IsValid() || *s.handler != n.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, n.handlerFunc.Type())
+			return fmt.Errorf("%s: expected handler %v, got %v", path, *s.handler, n.handlerFunc.Type())
 		}
 	case ntParamString, ntParamIPv4, ntParamIPv6:
 		if s.description != n.description {
@@ -521,7 +531,7 @@ func (m *commandSpecMatcher) match(path string, n *Node, s *commandSpec) error {
 		if s.handler == nil && n.handlerFunc.IsValid() {
 			return fmt.Errorf("%s: expected no handler, got %v", path, n.handlerFunc.Type())
 		} else if s.handler != nil && (!n.handlerFunc.IsValid() || *s.handler != n.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, s.handler, n.handlerFunc.Type())
+			return fmt.Errorf("%s: expected handler %v, got %v", path, *s.handler, n.handlerFunc.Type())
 		}
 
 		if s.hasAutocomplete && n.autocompleteFunc == nil {
