@@ -452,23 +452,25 @@ func parseSpec(s string) (*commandSpec, error) {
 	return p.parseSpec()
 }
 
-func (s *commandSpec) pathComponent() string {
-	var name string
-
+func (s *commandSpec) pathName() string {
 	switch s.t {
 	case ntLiteral:
-		name = "literal:" + s.value
+		return "literal:" + s.value
 	case ntParamString:
-		name = "param:string"
+		return "param:string"
 	case ntParamIPv4:
-		name = "param:ipv4"
+		return "param:ipv4"
 	case ntParamIPv6:
-		name = "param:ipv6"
+		return "param:ipv6"
 	case ntChoice:
-		name = "choice"
+		return "choice"
 	default:
 		panic("unreachable")
 	}
+}
+
+func (s *commandSpec) pathComponent() string {
+	name := s.pathName()
 
 	if s.id != 0 {
 		name += "." + strconv.Itoa(s.id)
@@ -491,11 +493,19 @@ func (m *commandSpecMatcher) match(path string, n *Node, s *commandSpec) error {
 	var ref *Node
 
 	if s.id != 0 {
+		keyPrefix := s.pathName() + "."
 		key := s.pathComponent()
+
+		for k, ref := range m.references {
+			if strings.HasPrefix(k, keyPrefix) && k != key && ref == n {
+				return fmt.Errorf("%s expected %s (%p) to be different from %s (%p)", path, key, n, k, ref)
+			}
+		}
+
 		var ok bool
 		if ref, ok = m.references[key]; ok {
 			if n != ref {
-				return fmt.Errorf("%s: expected %p to be equal to %p", path, n, ref)
+				return fmt.Errorf("%s: expected %s (%p) to be equal to %s (%p)", path, key, n, key, ref)
 			}
 
 			return nil

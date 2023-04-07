@@ -982,6 +982,43 @@ func TestMatcherReferenceIdentitySeparate(t *testing.T) {
 	}
 }
 
+func TestReferenceIdentitySeparateIncorrect(t *testing.T) {
+	s := `
+		choice[
+			literal:foo.1,
+			literal:foo.2,
+		]
+	`
+
+	foo1 := &Node{
+		t:     ntLiteral,
+		value: "foo",
+	}
+
+	c := &Node{
+		t: ntChoice,
+		children: []*Node{
+			foo1,
+			foo1,
+		},
+	}
+
+	spec, err := parseSpec(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if spec == nil {
+		t.Fatal("expected spec")
+	}
+
+	m := newCommandSpecMatcher()
+	err = m.match("/"+spec.pathComponent(), c, spec)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+}
+
 func TestMatcherReferenceIdentitySkipsOtherAssertions(t *testing.T) {
 	s := `
 	choice[
