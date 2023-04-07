@@ -554,6 +554,9 @@ func TestMergePiecemeal(t *testing.T) {
 		t.Fatal("expected merge")
 	}
 
+	// Note: the two literal:summary nodes are not merged because of limitations to
+	// the merging algorithm. I think this is probably not a big deal.
+
 	spec = `
 		literal:show[
 			choice[
@@ -571,6 +574,44 @@ func TestMergePiecemeal(t *testing.T) {
 	`
 
 	AssertMatchesCommandSpec(t, spec, cmd5)
+
+	cmd6, err := parseCommand("show X:X:X::X detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			param:ipv6[
+				literal:detail
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd6)
+
+	cmd7 := cmd5.Merge(cmd6)
+	if cmd7 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					choice.1[
+						literal:summary
+						literal:detail,
+					]
+				],
+				param:ipv6[
+					choice.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd7)
 }
 
 func TestMergePrefix(t *testing.T) {
