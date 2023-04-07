@@ -189,13 +189,13 @@ func (n1 *Node) mergeAttributes(path string, n2 *Node) {
 	}
 }
 
-func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
+func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 	if n1 == nil {
-		return n2
+		return n2, nil
 	}
 
 	if n2 == nil {
-		return n1
+		return n1, nil
 	}
 
 	if n1.t == ntChoice && n2.t == ntChoice {
@@ -214,7 +214,12 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 			} else if len(child2.children) == 1 {
 				for _, child1 := range n1.children {
 					if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
-						grandchild = child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+						gc, err := child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+						if err != nil {
+							return nil, err
+						}
+
+						grandchild = gc
 						break
 					}
 				}
@@ -229,7 +234,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 			}
 		}
 
-		return n1
+		return n1, nil
 	} else if n1.t == ntChoice {
 		c2 := &Node{t: ntChoice, children: []*Node{n2}}
 		return n1.mergeWithPath(path, c2)
@@ -245,12 +250,16 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 			}
 
 			if len(n1.children) == 1 && len(n2.children) == 1 {
-				n1.children[0] = n1.children[0].mergeWithPath(path+"/"+n1.id(), n2.children[0])
+				c, err := n1.children[0].mergeWithPath(path+"/"+n1.id(), n2.children[0])
+				if err != nil {
+					return nil, err
+				}
+				n1.children[0] = c
 			} else if len(n2.children) == 1 {
 				n1.children = append(n1.children, n2.children[0])
 			}
 
-			return n1
+			return n1, nil
 		} else {
 			c1 := &Node{t: ntChoice, children: []*Node{n1}}
 			c2 := &Node{t: ntChoice, children: []*Node{n2}}
@@ -260,8 +269,16 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 	}
 }
 
-func (n1 *Node) Merge(n2 *Node) *Node {
-	return n1.mergeWithPath("", n2)
+func (n1 *Node) Merge(nodes ...*Node) (*Node, error) {
+	for _, n2 := range nodes {
+		var err error
+		n1, err = n1.mergeWithPath("", n2)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return n1, nil
 }
 
 func containsNode(ns []*Node, n *Node) bool {

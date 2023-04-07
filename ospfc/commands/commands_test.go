@@ -111,7 +111,10 @@ func TestMergeDescription(t *testing.T) {
 		literal:show[literal:version?"Show version information"]
 	`
 
-	cmd3 := cmd1.Merge(cmd2)
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	AssertMatchesCommandSpec(t, spec3, cmd3)
 }
 
@@ -144,7 +147,10 @@ func TestMergeHandler(t *testing.T) {
 		literal:show[literal:version!Hfunc()]
 	`
 
-	cmd3 := cmd1.Merge(cmd2)
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	AssertMatchesCommandSpec(t, spec3, cmd3)
 }
 
@@ -177,7 +183,10 @@ func TestMergeAutocomplete(t *testing.T) {
 		literal:show[param:ipv4!A]
 	`
 
-	cmd3 := cmd1.Merge(cmd2)
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
 	AssertMatchesCommandSpec(t, spec3, cmd3)
 }
 
@@ -192,9 +201,9 @@ func TestMergeDifferentLiterals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	AssertMatchesCommandSpec(t, `choice[literal:show,literal:hide]`, cmd3)
@@ -221,9 +230,9 @@ func TestMergeDifferentAllAtoms(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd5 := cmd1.Merge(cmd2).Merge(cmd3).Merge(cmd4)
-	if cmd5 == nil {
-		t.Fatal("expected merge")
+	cmd5, err := cmd1.Merge(cmd2, cmd3, cmd4)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec := `
@@ -267,9 +276,9 @@ func TestMergeChoiceAndLiteral(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -323,9 +332,9 @@ func TestMergeKeepsCommonReferences(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -390,9 +399,9 @@ func TestMergeTwoChoicesWithCommonReferences(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -458,9 +467,9 @@ func TestMergeTwoChoicesWithDifferentLeaves(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -516,9 +525,9 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -551,9 +560,9 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd4)
 
-	cmd5 := cmd3.Merge(cmd4)
-	if cmd5 == nil {
-		t.Fatal("expected merge")
+	cmd5, err := cmd3.Merge(cmd4)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Note: the two literal:summary nodes are not merged because of limitations to
@@ -592,9 +601,9 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd6)
 
-	cmd7 := cmd5.Merge(cmd6)
-	if cmd7 == nil {
-		t.Fatal("expected merge")
+	cmd7, err := cmd5.Merge(cmd6)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -647,9 +656,9 @@ func TestMergePrefix(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -695,9 +704,9 @@ func TestMergeSuffix(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd2.Merge(cmd1)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd2.Merge(cmd1)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -748,9 +757,9 @@ func TestMergeChoiceIntoAtom(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd2)
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	spec = `
@@ -1710,9 +1719,9 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 		t.Fatal("expected 0 params")
 	}
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge to succeed")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	leaves = cmd3.Leaves()
@@ -1769,9 +1778,9 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 		t.Fatal("expected 1 params")
 	}
 
-	cmd3 := cmd1.Merge(cmd2)
-	if cmd3 == nil {
-		t.Fatal("expected merge to succeed")
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	leaves = cmd3.Leaves()
