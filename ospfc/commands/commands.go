@@ -85,6 +85,10 @@ type Node struct {
 	autocompleteFunc AutocompleteFunc
 	children         []*Node
 	paramTypes       []reflect.Type
+
+	// true if this node was explicitly declared as a choice (e.g. "<A.B.C.D|X:X:X::X>") as
+	// compared to a choice that was implictly created by merging two literals
+	explicitChoice bool
 }
 
 func (n *Node) id() string {
@@ -99,6 +103,30 @@ func (n *Node) id() string {
 		return "param:ipv6"
 	case ntChoice:
 		return "choice"
+	default:
+		panic("unreachable")
+	}
+}
+
+func (n *Node) String() string {
+	switch n.t {
+	case ntLiteral, ntParamString:
+		return n.value
+	case ntParamIPv4:
+		return "A.B.C.D"
+	case ntParamIPv6:
+		return "X:X:X::X"
+	case ntChoice:
+		var b strings.Builder
+		b.WriteString("<")
+		for i, child := range n.children {
+			if i > 0 {
+				b.WriteString("|")
+			}
+			b.WriteString(child.String())
+		}
+		b.WriteString(">")
+		return b.String()
 	default:
 		panic("unreachable")
 	}
@@ -199,6 +227,12 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 	}
 
 	if n1.t == ntChoice && n2.t == ntChoice {
+		if n1.explicitChoice {
+			return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+		} else if n2.explicitChoice {
+			return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)
+		}
+
 		for _, child2 := range n2.children {
 			i := findIndex(child2, n1.children)
 
@@ -236,9 +270,17 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 
 		return n1, nil
 	} else if n1.t == ntChoice {
+		if n1.explicitChoice {
+			return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+		}
+
 		c2 := &Node{t: ntChoice, children: []*Node{n2}}
 		return n1.mergeWithPath(path, c2)
 	} else if n2.t == ntChoice {
+		if n2.explicitChoice {
+			return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)
+		}
+
 		c1 := &Node{t: ntChoice, children: []*Node{n1}}
 		return c1.mergeWithPath(path, n2)
 	} else { // n1 and n2 are non-choice nodes
@@ -594,8 +636,9 @@ func (p *commandParser) parseChoice() (*Node, error) {
 	}
 
 	n := &Node{
-		t:        ntChoice,
-		children: []*Node{child},
+		t:              ntChoice,
+		children:       []*Node{child},
+		explicitChoice: true,
 	}
 
 	for {
