@@ -56,6 +56,25 @@ func (t nodeType) String() string {
 	}
 }
 
+func (t nodeType) paramType(inChoice bool) reflect.Type {
+	switch t {
+	case ntParamString:
+		return reflect.TypeOf("")
+	case ntParamIPv4:
+		return reflect.TypeOf(netip.Addr{})
+	case ntParamIPv6:
+		return reflect.TypeOf(netip.Addr{})
+	case ntLiteral:
+		if inChoice {
+			return reflect.TypeOf(false)
+		} else {
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
 type AutocompleteFunc (func(string) []string)
 
 type Node struct {
@@ -65,6 +84,7 @@ type Node struct {
 	handlerFunc      reflect.Value
 	autocompleteFunc AutocompleteFunc
 	children         []*Node
+	paramTypes       []reflect.Type
 }
 
 func (n *Node) id() string {
@@ -82,6 +102,59 @@ func (n *Node) id() string {
 	default:
 		panic("unreachable")
 	}
+}
+
+func containsType(types []reflect.Type, t reflect.Type) bool {
+	for _, t2 := range types {
+		if t2 == t {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *Node) updateParamTypesWithTypes(types []reflect.Type) {
+	clonedTypes := make([]reflect.Type, len(types))
+	copy(clonedTypes, types)
+
+	if n.t == ntChoice {
+		for _, child := range n.children {
+			t := child.t.paramType(true)
+			// Only add the type if it's not already in the list, but boolean types,
+			// which represent literals, are always added.
+			//
+			// Examples:
+			// 1. "show <A.B.C.D|X:X:X::X|all>" -> func(addr netip.Addr, all bool)
+			// 2. "show <A.B.C.D|X:X:X::X>" -> func(addr netip.Addr)
+			// 3. "show <ip|ipv6>" -> func(ip, ipv6 bool)
+			if t != nil && (!containsType(clonedTypes, t) || t == reflect.TypeOf(false)) {
+				clonedTypes = append(clonedTypes, t)
+			}
+		}
+
+		for _, child := range n.children {
+			child.paramTypes = clonedTypes
+
+			for _, child2 := range child.children {
+				child2.updateParamTypesWithTypes(clonedTypes)
+			}
+		}
+	} else {
+		t := n.t.paramType(false)
+		if t != nil {
+			clonedTypes = append(clonedTypes, t)
+		}
+
+		n.paramTypes = clonedTypes
+
+		for _, child := range n.children {
+			child.updateParamTypesWithTypes(clonedTypes)
+		}
+	}
+}
+
+func (n *Node) updateParamTypes() {
+	n.updateParamTypesWithTypes(nil)
 }
 
 func findIndex(n *Node, ns []*Node) int {
@@ -189,6 +262,57 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 
 func (n1 *Node) Merge(n2 *Node) *Node {
 	return n1.mergeWithPath("", n2)
+}
+
+func containsNode(ns []*Node, n *Node) bool {
+	for _, child := range ns {
+		if child.id() == n.id() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (n *Node) Leaves() []*Node {
+	if n.t == ntChoice {
+		var leaves []*Node
+		for _, child := range n.children {
+			ls := child.Leaves()
+
+			for _, l := range ls {
+				if !containsNode(leaves, l) {
+					leaves = append(leaves, l)
+				}
+			}
+		}
+
+		return leaves
+	} else {
+		if len(n.children) == 0 {
+			return []*Node{n}
+		} else {
+			return n.children[0].Leaves()
+		}
+	}
+}
+
+func (n *Node) SetHandlerFunc(f any) error {
+	if n.t == ntChoice {
+		return fmt.Errorf("cannot set handler function for choice node")
+	}
+
+	in := n.paramTypes
+	out := []reflect.Type{reflect.TypeOf((*error)(nil)).Elem()}
+	expected := reflect.FuncOf(in, out, false)
+
+	if reflect.TypeOf(f) != expected {
+		return fmt.Errorf("handler function has wrong type: expected %s, got %s", expected, reflect.TypeOf(f))
+	}
+
+	n.handlerFunc = reflect.ValueOf(f)
+
+	return nil
 }
 
 type Match struct {
@@ -362,7 +486,14 @@ type commandParser struct {
 
 func parseCommand(s string) (*Node, error) {
 	p := &commandParser{s: s}
-	return p.parseCommand()
+	n, err := p.parseCommand()
+	if err != nil {
+		return nil, err
+	}
+
+	n.updateParamTypes()
+
+	return n, nil
 }
 
 func (p *commandParser) parseCommand() (*Node, error) {

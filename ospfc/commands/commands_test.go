@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"net/netip"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -1301,4 +1303,374 @@ func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
 		show ipv6 routes
 	`
 	AssertMatchesMatchSpec(t, spec, matches)
+}
+
+func TestHandlerNoArgs(t *testing.T) {
+	cmd, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaf")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func() error {
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerWrongArgs(t *testing.T) {
+	cmd, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaf")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if !strings.Contains(err.Error(), "expected func() error, got func(netip.Addr) error") {
+		t.Fatal("error should contain 'expected func() error, got func(netip.Addr) error'")
+	}
+}
+
+func TestHandlerWrongReturnValue(t *testing.T) {
+	cmd, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaf")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func() {})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if !strings.Contains(err.Error(), "expected func() error, got func()") {
+		t.Fatal("error should contain 'expected func() error, got func()'")
+	}
+}
+
+func TestHandlerArgs(t *testing.T) {
+	cmd, err := parseCommand("show WORD")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaf")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(word string) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerWrongArgType(t *testing.T) {
+	cmd, err := parseCommand("show WORD")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaf")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(word int) error {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if !strings.Contains(err.Error(), "expected func(string) error, got func(int) error") {
+		t.Fatal("error should contain 'expected func(string) error, got func(int) error'")
+	}
+}
+
+func TestHandlerChoice(t *testing.T) {
+	cmd, err := parseCommand("show <ip|ipv6>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 2 {
+		t.Fatal("expected 2 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(ip, ipv6 bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+	err = leaf.SetHandlerFunc(func(ip, ipv6 bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithParam(t *testing.T) {
+	cmd, err := parseCommand("show <IFACE|all>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 2 {
+		t.Fatal("expected 2 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(iface string, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+	err = leaf.SetHandlerFunc(func(iface string, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
+	cmd, err := parseCommand("show <A.B.C.D|X:X:X::X|all>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 3 {
+		t.Fatal("expected 3 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[2]
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
+	cmd, err := parseCommand("show <all|A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 3 {
+		t.Fatal("expected 3 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+
+	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[2]
+
+	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
+	cmd, err := parseCommand("show <A.B.C.D|all|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 3 {
+		t.Fatal("expected 3 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[2]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithLiteralAfter(t *testing.T) {
+	cmd, err := parseCommand("show <A.B.C.D|all> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithParameterAfter(t *testing.T) {
+	cmd, err := parseCommand("show <A.B.C.D|all> IFACE")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, iface string) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
+	cmd, err := parseCommand("show <A.B.C.D|all> <detail|IFACE>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd.Leaves()
+
+	if len(leaves) != 2 {
+		t.Fatal("expected 2 leaves")
+	}
+
+	leaf := leaves[0]
+
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, detail bool, iface string) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaf = leaves[1]
+	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, detail bool, iface string) error {
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
