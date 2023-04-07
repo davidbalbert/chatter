@@ -127,30 +127,32 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 
 	if n1.t == ntChoice && n2.t == ntChoice {
 		for _, child2 := range n2.children {
-			// If child2 has a child and it's a grandchild of n1, we need to create a new grandchild.
-			var grandchild *Node
-			if len(child2.children) > 0 {
-				for _, child1 := range n1.children {
-					if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
-						if grandchild == nil {
-							grandchild = child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
-						}
-
-						child1.children[0] = grandchild
-					}
-				}
-
-				if grandchild != nil {
-					child2.children[0] = grandchild
-				}
-			}
-
 			i := findIndex(child2, n1.children)
 
 			if i == -1 {
 				n1.children = append(n1.children, child2)
 			} else {
-				n1.children[i].mergeAttributes(path+"/"+n1.children[i].id(), child2)
+				n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2)
+			}
+
+			var grandchild *Node
+			if len(child2.children) == 1 && i != -1 {
+				grandchild = n1.children[i].children[0]
+			} else if len(child2.children) == 1 {
+				for _, child1 := range n1.children {
+					if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
+						grandchild = child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+						break
+					}
+				}
+			}
+
+			if grandchild != nil {
+				for _, child1 := range n1.children {
+					if len(child1.children) > 0 && child1.children[0].id() == grandchild.id() {
+						child1.children[0] = grandchild
+					}
+				}
 			}
 		}
 

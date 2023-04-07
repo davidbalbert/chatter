@@ -482,6 +482,144 @@ func TestMergeTwoChoicesWithDifferentLeaves(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd3)
 }
+
+func TestMergePiecemeal(t *testing.T) {
+	cmd1, err := parseCommand("show A.B.C.D detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			param:ipv4[
+				literal:detail
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show X:X:X::X summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			param:ipv6[
+				literal:summary
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail
+				],
+				param:ipv6[
+					literal:summary
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+
+	cmd4, err := parseCommand("show A.B.C.D summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			param:ipv4[
+				literal:summary
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd4)
+
+	cmd5 := cmd3.Merge(cmd4)
+	if cmd5 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					choice[
+						literal:detail,
+						literal:summary
+					]
+				],
+				param:ipv6[
+					literal:summary
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd5)
+}
+
+func TestMergePrefix(t *testing.T) {
+	cmd1, err := parseCommand("show ip route")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			literal:ip[
+				literal:route
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].description = "Show IP information"
+
+	spec = `
+		literal:show[
+			literal:ip?"Show IP information"
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge")
+	}
+
+	spec = `
+		literal:show[
+			literal:ip?"Show IP information"[
+				literal:route
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
 func TestMergeSuffix(t *testing.T) {
 	// merge "show ip route" into "show ip", making sure to set a description on "show ip" in the second command
 	cmd1, err := parseCommand("show ip route")
