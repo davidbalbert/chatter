@@ -1674,3 +1674,157 @@ func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParamTypesAfterMergeNoParams(t *testing.T) {
+	cmd1, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd1.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf := leaves[0]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+
+	cmd2, err := parseCommand("show path")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves = cmd2.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf = leaves[0]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge to succeed")
+	}
+
+	leaves = cmd3.Leaves()
+
+	if len(leaves) != 2 {
+		t.Fatal("expected 2 leaves")
+	}
+
+	leaf = leaves[0]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+
+	leaf = leaves[1]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+}
+
+func TestParamTypesAfterMergeWithParams(t *testing.T) {
+	cmd1, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd1.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf := leaves[0]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+
+	cmd2, err := parseCommand("show A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves = cmd2.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf = leaves[0]
+
+	if len(leaf.paramTypes) != 1 {
+		t.Fatal("expected 1 params")
+	}
+
+	cmd3 := cmd1.Merge(cmd2)
+	if cmd3 == nil {
+		t.Fatal("expected merge to succeed")
+	}
+
+	leaves = cmd3.Leaves()
+
+	if len(leaves) != 2 {
+		t.Fatal("expected 2 leaves")
+	}
+
+	leaf = leaves[0]
+
+	if len(leaf.paramTypes) != 0 {
+		t.Fatal("expected 0 params")
+	}
+
+	leaf = leaves[1]
+
+	if len(leaf.paramTypes) != 1 {
+		t.Fatal("expected 1 params")
+	}
+}
+
+func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
+	cmd1, err := parseCommand("show bgp <A.B.C.D>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd1.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf := leaves[0]
+
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf(netip.Addr{})}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf(netip.Addr{})}, leaf.paramTypes)
+	}
+
+	cmd2, err := parseCommand("show interface IFACE")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves = cmd2.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatal("expected 1 leaves")
+	}
+
+	leaf = leaves[0]
+
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf("")}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf("")}, leaf.paramTypes)
+	}
+}
