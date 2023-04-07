@@ -80,6 +80,105 @@ func TestParseCommandWithChoiceAndTrailingLiteral(t *testing.T) {
 	AssertMatchesCommandSpec(t, spec, cmd)
 }
 
+func TestMergeDescription(t *testing.T) {
+	spec1 := `
+		literal:show[literal:version]
+	`
+
+	cmd1, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesCommandSpec(t, spec1, cmd1)
+
+	spec2 := `
+		literal:show[literal:version?"Show version information"]
+	`
+
+	cmd2, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].description = "Show version information"
+
+	AssertMatchesCommandSpec(t, spec2, cmd2)
+
+	spec3 := `
+		literal:show[literal:version?"Show version information"]
+	`
+
+	cmd3 := cmd1.Merge(cmd2)
+	AssertMatchesCommandSpec(t, spec3, cmd3)
+}
+
+func TestMergeHandler(t *testing.T) {
+	spec1 := `
+		literal:show[literal:version]
+	`
+
+	cmd1, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesCommandSpec(t, spec1, cmd1)
+
+	spec2 := `
+		literal:show[literal:version!Hfunc()]
+	`
+
+	cmd2, err := parseCommand("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].handlerFunc = reflect.ValueOf(func() error { return nil })
+
+	AssertMatchesCommandSpec(t, spec2, cmd2)
+
+	spec3 := `
+		literal:show[literal:version!Hfunc()]
+	`
+
+	cmd3 := cmd1.Merge(cmd2)
+	AssertMatchesCommandSpec(t, spec3, cmd3)
+}
+
+func TestMergeAutocomplete(t *testing.T) {
+	spec1 := `
+		literal:show[param:ipv4]
+	`
+
+	cmd1, err := parseCommand("show A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesCommandSpec(t, spec1, cmd1)
+
+	spec2 := `
+		literal:show[param:ipv4!A]
+	`
+
+	cmd2, err := parseCommand("show A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].autocompleteFunc = func(string) []string { return nil }
+
+	AssertMatchesCommandSpec(t, spec2, cmd2)
+
+	spec3 := `
+		literal:show[param:ipv4!A]
+	`
+
+	cmd3 := cmd1.Merge(cmd2)
+	AssertMatchesCommandSpec(t, spec3, cmd3)
+}
+
 func TestMatchLiteral(t *testing.T) {
 	s := "show"
 	cmd, err := parseCommand(s)
