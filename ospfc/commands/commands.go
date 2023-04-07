@@ -227,7 +227,19 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 	}
 
 	if n1.t == ntChoice && n2.t == ntChoice {
-		if n1.explicitChoice {
+		if n1.explicitChoice && n2.explicitChoice {
+			if len(n1.children) != len(n2.children) {
+				return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+			}
+
+			for i, child1 := range n1.children {
+				child2 := n2.children[i]
+
+				if child1.id() != child2.id() {
+					return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+				}
+			}
+		} else if n1.explicitChoice {
 			return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
 		} else if n2.explicitChoice {
 			return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)

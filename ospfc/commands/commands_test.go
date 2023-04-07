@@ -329,6 +329,156 @@ func TestMergeExplicitChoiceAndChoice(t *testing.T) {
 	}
 }
 
+func TestMergeExplicitChoiceIsAllowedIfChildrenAreTheSame(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeExplicitChoiceSameChildrenWithAttributes(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4,
+				param:ipv6
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2.children[0].children[0].description = "Show IP address"
+	cmd2.children[0].children[1].description = "Show IPv6 address"
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4?"Show IP address",
+				param:ipv6?"Show IPv6 address"
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
+func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
+	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X> detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:detail.1
+				],
+				param:ipv6[
+					literal:detail.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X> summary")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					literal:summary.1
+				],
+				param:ipv6[
+					literal:summary.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				param:ipv4[
+					choice.1[
+						literal:detail.1,
+						literal:summary.1
+					],
+				],
+				param:ipv6[
+					choice.1
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
 func TestMergePiecemeal(t *testing.T) {
 	cmd1, err := parseCommand("show A.B.C.D detail")
 	if err != nil {
