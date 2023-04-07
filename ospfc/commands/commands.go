@@ -84,6 +84,38 @@ func (n *Node) id() string {
 	}
 }
 
+func findIndex(n *Node, ns []*Node) int {
+	for i, child := range ns {
+		if child.id() == n.id() {
+			return i
+		}
+	}
+	return -1
+}
+
+func (n1 *Node) mergeAttributes(n2 *Node) {
+	if n1.description != "" && n2.description != "" {
+		fmt.Printf("Warning: overwriting description for %s from %q to %q\n", path+"/"+n1.id(), n1.description, n2.description)
+	}
+	if n2.description != "" {
+		n1.description = n2.description
+	}
+
+	if n1.autocompleteFunc != nil && n2.autocompleteFunc != nil {
+		fmt.Printf("Warning: overwriting autocomplete function for %s\n", path+"/"+n1.id())
+	}
+	if n2.autocompleteFunc != nil {
+		n1.autocompleteFunc = n2.autocompleteFunc
+	}
+
+	if n1.handlerFunc.IsValid() && n2.handlerFunc.IsValid() {
+		fmt.Printf("Warning: overwriting handler function for %s\n", path+"/"+n1.id())
+	}
+	if n2.handlerFunc.IsValid() {
+		n1.handlerFunc = n2.handlerFunc
+	}
+}
+
 func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 	if n1 == nil {
 		return n2
@@ -93,37 +125,32 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 		return n1
 	}
 
-	if n1.t == ntChoice {
-		// TODO
-		panic("not implemented")
+	if n1.t == ntChoice && n2.t == ntChoice {
+		for _, child := range n2.children {
+			i := findIndex(child, n1.children)
+
+			if i == -1 {
+				n1.children = append(n1.children, child)
+				continue
+			}
+
+			if len(n1.children[i].children) == 0 {
+				n1.children[i] = n1.children[i].mergeAttributes(child)
+				n1.children[i].children = append(n1.children[i].children, child.children...)
+			}
+
+
+
+	} else if n1.t == ntChoice {
+		c2 := &Node{t: ntChoice, children: []*Node{n2}}
+		return n1.mergeWithPath(path, c2)
 	} else if n2.t == ntChoice {
-		n2.mergeWithPath(path, n1)
+		c1 := &Node{t: ntChoice, children: []*Node{n1}}
+		return c1.mergeWithPath(path, n2)
 	} else { // n1 and n2 are non-choice nodes
 		if n1.id() == n2.id() {
-			// merge attributes
-			// merge children
-
-			if n1.description != "" && n2.description != "" {
-				fmt.Printf("Warning: overwriting description for %s from %q to %q\n", path+"/"+n1.id(), n1.description, n2.description)
-			}
-			if n2.description != "" {
-				n1.description = n2.description
-			}
-
-			if n1.autocompleteFunc != nil && n2.autocompleteFunc != nil {
-				fmt.Printf("Warning: overwriting autocomplete function for %s\n", path+"/"+n1.id())
-			}
-			if n2.autocompleteFunc != nil {
-				n1.autocompleteFunc = n2.autocompleteFunc
-			}
-
-			if n1.handlerFunc.IsValid() && n2.handlerFunc.IsValid() {
-				fmt.Printf("Warning: overwriting handler function for %s\n", path+"/"+n1.id())
-			}
-			if n2.handlerFunc.IsValid() {
-				n1.handlerFunc = n2.handlerFunc
-			}
-
+			n1.mergeAttributes(n2)
+			
 			if len(n1.children) > 1 || len(n2.children) > 1 {
 				panic("non-choice nodes should have at most one child")
 			}
@@ -141,10 +168,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) *Node {
 
 			return c1.mergeWithPath(path, c2)
 		}
-
 	}
-
-	return nil
 }
 
 func (n1 *Node) Merge(n2 *Node) *Node {
