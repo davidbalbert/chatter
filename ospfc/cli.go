@@ -1,11 +1,68 @@
 package main
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/davidbalbert/ospfd/ospfc/commands"
+	"golang.org/x/term"
 )
 
 type CLI struct {
-	root *commands.Node
+	running bool
+	root    *commands.Node
+}
+
+func NewCLI() *CLI {
+	cli := &CLI{}
+
+	cli.MustRegister("exit", "Exit the CLI", func() error {
+		cli.running = false
+		return nil
+	})
+
+	cli.MustRegister("quit", "Exit the CLI", func() error {
+		cli.running = false
+		return nil
+	})
+
+	return cli
+}
+
+func (cli *CLI) Run(t *term.Terminal) {
+	cli.running = true
+
+	for cli.running {
+		line, err := t.ReadLine()
+		if err != nil {
+			fmt.Printf("%% Error reading line: %v\n", err)
+			break
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		matches := cli.root.Match(line)
+		if len(matches) == 0 {
+			fmt.Printf("%% Unknown command: %s\n", line)
+			continue
+		} else if len(matches) > 1 {
+			fmt.Printf("%% Ambiguous command: %s\n", line)
+			continue
+		}
+
+		invoker, err := matches[0].Invoker()
+		if err != nil {
+			fmt.Printf("%% Command incomplete: %s\n", line)
+		}
+
+		err = invoker.Run()
+		if err != nil {
+			fmt.Printf("%% Error running command: %v\n", err)
+		}
+	}
 }
 
 func (cli *CLI) Register(command string, description string, handlerFunc any) error {

@@ -415,6 +415,32 @@ type Match struct {
 	addr  netip.Addr // address for IPv4/IPv6 parameters
 }
 
+func (m *Match) Invoker() (*Invoker, error) {
+	// we have a problem, which is that right now, match (with input and addr) doesn't have
+	// enough info to know how to call the handler function. For explict choices, we need to
+	// pass arguments for each of the options (but only one of them will be set). For implicit
+	// choices, we need to pass arguments for the matched option only.
+	//
+	// We'll need to change Match as well as matchTokens to fix this.
+	return nil, fmt.Errorf("not implemented")
+}
+
+type Invoker struct {
+	match       *Match
+	args        []reflect.Value
+	handlerFunc reflect.Value
+}
+
+func (i *Invoker) Run() error {
+	results := i.handlerFunc.Call(i.args)
+	err := results[0].Interface().(error)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *Match) length() int {
 	if m == nil {
 		return 0

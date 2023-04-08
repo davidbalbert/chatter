@@ -3,8 +3,11 @@ package main
 import (
 	"fmt"
 	"net/netip"
+	"os"
 	"sort"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func commonPrefixLen(a, b string) int {
@@ -318,4 +321,14 @@ func main() {
 	// we assume that setting autocomplete options on Choice nodes doesn't make sense.
 	cli.MustAutocomplete("show bgp neighbors A.B.C.D", autocompleteBGPNeighborsV4)
 	cli.MustAutocomplete("show bgp <some|all> neighbors X:X:X::X", autocompleteBGPNeighborsV6)
+
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		fmt.Printf("Failed to make terminal raw: %v\n", err)
+		os.Exit(1)
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	t := term.NewTerminal(os.Stdin, "#ospfd# ")
+	cli.Run(t)
 }
