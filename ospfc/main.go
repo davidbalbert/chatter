@@ -274,8 +274,10 @@ func main() {
 	cli := &CLI{}
 
 	cli.MustDocument("show", "Show running system information")
-	cli.MustRegister("show version", "Show ospfd version", func() {
+	cli.MustRegister("show version", "Show ospfd version", func() error {
 		fmt.Println("ospfd v0.0.1")
+
+		return nil
 	})
 
 	cli.MustDocument("show ip", "IP information")
@@ -297,8 +299,8 @@ func main() {
 	cli.MustRegister(
 		"show bgp neighbors <A.B.C.D|X:X:X::X|all>",
 		"Neighbor to display information about",
-		func(neighbor netip.Addr, all string) error {
-			if all != "" {
+		func(neighbor netip.Addr, all bool) error {
+			if all {
 				fmt.Println("All neighbors")
 			} else {
 				fmt.Println("Neighbor:", neighbor)

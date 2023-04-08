@@ -75,7 +75,7 @@ func (t nodeType) paramType(inChoice bool) reflect.Type {
 	}
 }
 
-type AutocompleteFunc (func(string) []string)
+type AutocompleteFunc (func(string) ([]string, error))
 
 type Node struct {
 	t                nodeType
@@ -386,6 +386,28 @@ func (n *Node) SetHandlerFunc(f any) error {
 	return nil
 }
 
+func (n *Node) SetDescription(desc string) error {
+	if n.t == ntChoice {
+		return fmt.Errorf("cannot set description for choice node")
+	}
+
+	n.description = desc
+
+	return nil
+}
+
+func (n *Node) SetAutocompleteFunc(fn AutocompleteFunc) error {
+	if n.t == ntChoice {
+		return fmt.Errorf("cannot set autocomplete function for choice node")
+	} else if n.t == ntLiteral {
+		return fmt.Errorf("cannot set autocomplete function for literal node")
+	}
+
+	n.autocompleteFunc = fn
+
+	return nil
+}
+
 type Match struct {
 	node  *Node
 	next  *Match
@@ -555,7 +577,7 @@ type commandParser struct {
 	pos int
 }
 
-func parseCommand(s string) (*Node, error) {
+func ParseDeclaration(s string) (*Node, error) {
 	p := &commandParser{s: s}
 	n, err := p.parseCommand()
 	if err != nil {

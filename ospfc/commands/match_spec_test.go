@@ -181,7 +181,7 @@ func TestMatchSpecParamString(t *testing.T) {
 }
 
 func TestMatchSpecMatchLiterals(t *testing.T) {
-	cmd, err := parseCommand("show ip route")
+	cmd, err := ParseDeclaration("show ip route")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestMatchSpecMatchLiterals(t *testing.T) {
 }
 
 func TestMatchSpecNoHandler(t *testing.T) {
-	cmd, err := parseCommand("show ip route")
+	cmd, err := ParseDeclaration("show ip route")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestMatchSpecNoHandler(t *testing.T) {
 }
 
 func TestMatchSpecMatchParams(t *testing.T) {
-	cmd, err := parseCommand("show ip route A.B.C.D")
+	cmd, err := ParseDeclaration("show ip route A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestMatchSpecMatchParams(t *testing.T) {
 }
 
 func TestMatchSpecMatchParamsIPv6(t *testing.T) {
-	cmd, err := parseCommand("show ip route X:X:X::X")
+	cmd, err := ParseDeclaration("show ip route X:X:X::X")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +263,7 @@ func TestMatchSpecMatchParamsIPv6(t *testing.T) {
 }
 
 func TestMatchSpecAmbiguousMatch(t *testing.T) {
-	cmd, err := parseCommand("show <ip|interface>")
+	cmd, err := ParseDeclaration("show <ip|interface>")
 	if err != nil {
 		t.Fatal(err)
 	}

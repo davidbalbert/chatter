@@ -5,53 +5,89 @@ import (
 )
 
 type CLI struct {
-	graph commands.Node
+	root *commands.Node
+}
+
+func (cli *CLI) Register(command string, description string, handlerFunc any) error {
+	n, err := commands.ParseDeclaration(command)
+	if err != nil {
+		return err
+	}
+
+	for _, l := range n.Leaves() {
+		err := l.SetHandlerFunc(handlerFunc)
+		if err != nil {
+			return err
+		}
+	}
+
+	newRoot, err := cli.root.Merge(n)
+	if err != nil {
+		return err
+	}
+
+	cli.root = newRoot
+
+	return nil
 }
 
 func (cli *CLI) MustRegister(command string, description string, handlerFunc any) {
-	// g, parsedType, err := commands.ParseDeclaration(command)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	err := cli.Register(command, description, handlerFunc)
+	if err != nil {
+		panic(err)
+	}
+}
 
-	// handler := reflect.ValueOf(handlerFunc)
-	// givenType := handler.Type()
+func (cli *CLI) Document(command string, description string) error {
+	n, err := commands.ParseDeclaration(command)
+	if err != nil {
+		return err
+	}
 
-	// if parsedType != givenType {
-	// 	s := fmt.Sprintf("command %q expects %s, but handler is %s", command, parsedType, givenType)
-	// 	panic(s)
-	// }
+	for _, l := range n.Leaves() {
+		l.SetDescription(description)
+	}
 
-	// for _, l := range g.Leaves() {
-	// 	l.SetHandlerFunc(handler)
-	// }
+	newRoot, err := cli.root.Merge(n)
+	if err != nil {
+		return err
+	}
 
-	// cli.graph = cli.graph.Merge(g)
+	cli.root = newRoot
 
+	return nil
 }
 
 func (cli *CLI) MustDocument(command string, description string) {
-	// g, _, err := commands.ParseDeclaration(command)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	err := cli.Document(command, description)
+	if err != nil {
+		panic(err)
+	}
+}
 
-	// for _, l := range g.Leaves() {
-	// 	l.SetDescription(description)
-	// }
+func (cli *CLI) Autocomplete(command string, autocompleteFunc commands.AutocompleteFunc) error {
+	n, err := commands.ParseDeclaration(command)
+	if err != nil {
+		return err
+	}
 
-	// cli.graph = cli.graph.Merge(g)
+	for _, l := range n.Leaves() {
+		l.SetAutocompleteFunc(autocompleteFunc)
+	}
+
+	newRoot, err := cli.root.Merge(n)
+	if err != nil {
+		return err
+	}
+
+	cli.root = newRoot
+
+	return nil
 }
 
 func (cli *CLI) MustAutocomplete(command string, autocompleteFunc func(string) ([]string, error)) {
-	// g, _, err := commands.ParseDeclaration(command)
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// for _, l := range g.Leaves() {
-	// 	l.SetAutocompleteFunc(autocompleteFunc)
-	// }
-
-	// cli.graph = cli.graph.Merge(g)
+	err := cli.Autocomplete(command, autocompleteFunc)
+	if err != nil {
+		panic(err)
+	}
 }

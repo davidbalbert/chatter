@@ -12,7 +12,7 @@ func TestParseCommand(t *testing.T) {
 	spec := `
 		literal:show[literal:version]
 	`
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,7 +26,7 @@ func TestParseCommandWithParam(t *testing.T) {
 		literal:show[literal:bgp[literal:neighbors[param:ipv4]]]
 	`
 
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestParseCommandWithChoice(t *testing.T) {
 		]
 	`
 
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestParseCommandWithChoiceAndTrailingLiteral(t *testing.T) {
 		]
 	`
 
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestMergeDescription(t *testing.T) {
 		literal:show[literal:version]
 	`
 
-	cmd1, err := parseCommand("show version")
+	cmd1, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestMergeDescription(t *testing.T) {
 		literal:show[literal:version?"Show version information"]
 	`
 
-	cmd2, err := parseCommand("show version")
+	cmd2, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestMergeHandler(t *testing.T) {
 		literal:show[literal:version]
 	`
 
-	cmd1, err := parseCommand("show version")
+	cmd1, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestMergeHandler(t *testing.T) {
 		literal:show[literal:version!Hfunc()]
 	`
 
-	cmd2, err := parseCommand("show version")
+	cmd2, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +159,7 @@ func TestMergeAutocomplete(t *testing.T) {
 		literal:show[param:ipv4]
 	`
 
-	cmd1, err := parseCommand("show A.B.C.D")
+	cmd1, err := ParseDeclaration("show A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestMergeAutocomplete(t *testing.T) {
 		literal:show[param:ipv4!A]
 	`
 
-	cmd2, err := parseCommand("show A.B.C.D")
+	cmd2, err := ParseDeclaration("show A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,12 +191,12 @@ func TestMergeAutocomplete(t *testing.T) {
 }
 
 func TestMergeDifferentLiterals(t *testing.T) {
-	cmd1, err := parseCommand("show")
+	cmd1, err := ParseDeclaration("show")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmd2, err := parseCommand("hide")
+	cmd2, err := ParseDeclaration("hide")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,22 +210,22 @@ func TestMergeDifferentLiterals(t *testing.T) {
 }
 
 func TestMergeDifferentAllAtoms(t *testing.T) {
-	cmd1, err := parseCommand("show A.B.C.D")
+	cmd1, err := ParseDeclaration("show A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmd2, err := parseCommand("show X:X:X::X")
+	cmd2, err := ParseDeclaration("show X:X:X::X")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmd3, err := parseCommand("show IFACE")
+	cmd3, err := ParseDeclaration("show IFACE")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	cmd4, err := parseCommand("show all")
+	cmd4, err := ParseDeclaration("show all")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestMergeDifferentAllAtoms(t *testing.T) {
 }
 
 func TestMergeExplicitChoiceAndLiteral(t *testing.T) {
-	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd1, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestMergeExplicitChoiceAndLiteral(t *testing.T) {
 	`
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show version")
+	cmd2, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestMergeExplicitChoiceAndLiteral(t *testing.T) {
 }
 
 func TestMergeExplicitChoiceAndChoice(t *testing.T) {
-	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd1, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,7 +303,7 @@ func TestMergeExplicitChoiceAndChoice(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show <IFACE|all>")
+	cmd2, err := ParseDeclaration("show <IFACE|all>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestMergeExplicitChoiceAndChoice(t *testing.T) {
 }
 
 func TestMergeExplicitChoiceIsAllowedIfChildrenAreTheSame(t *testing.T) {
-	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd1, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestMergeExplicitChoiceIsAllowedIfChildrenAreTheSame(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd2, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestMergeExplicitChoiceIsAllowedIfChildrenAreTheSame(t *testing.T) {
 }
 
 func TestMergeExplicitChoiceSameChildrenWithAttributes(t *testing.T) {
-	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd1, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestMergeExplicitChoiceSameChildrenWithAttributes(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X>")
+	cmd2, err := ParseDeclaration("show <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -415,7 +415,7 @@ func TestMergeExplicitChoiceSameChildrenWithAttributes(t *testing.T) {
 }
 
 func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
-	cmd1, err := parseCommand("show <A.B.C.D|X:X:X::X> detail")
+	cmd1, err := ParseDeclaration("show <A.B.C.D|X:X:X::X> detail")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +435,7 @@ func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show <A.B.C.D|X:X:X::X> summary")
+	cmd2, err := ParseDeclaration("show <A.B.C.D|X:X:X::X> summary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
 }
 
 func TestMergePiecemeal(t *testing.T) {
-	cmd1, err := parseCommand("show A.B.C.D detail")
+	cmd1, err := ParseDeclaration("show A.B.C.D detail")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +495,7 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show X:X:X::X summary")
+	cmd2, err := ParseDeclaration("show X:X:X::X summary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd3)
 
-	cmd4, err := parseCommand("show A.B.C.D summary")
+	cmd4, err := ParseDeclaration("show A.B.C.D summary")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func TestMergePiecemeal(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd5)
 
-	cmd6, err := parseCommand("show X:X:X::X detail")
+	cmd6, err := ParseDeclaration("show X:X:X::X detail")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -611,7 +611,7 @@ func TestMergePiecemeal(t *testing.T) {
 }
 
 func TestMergePrefix(t *testing.T) {
-	cmd1, err := parseCommand("show ip route")
+	cmd1, err := ParseDeclaration("show ip route")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -626,7 +626,7 @@ func TestMergePrefix(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show ip")
+	cmd2, err := ParseDeclaration("show ip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -659,7 +659,7 @@ func TestMergePrefix(t *testing.T) {
 
 func TestMergeSuffix(t *testing.T) {
 	// merge "show ip route" into "show ip", making sure to set a description on "show ip" in the second command
-	cmd1, err := parseCommand("show ip route")
+	cmd1, err := ParseDeclaration("show ip route")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -674,7 +674,7 @@ func TestMergeSuffix(t *testing.T) {
 
 	AssertMatchesCommandSpec(t, spec, cmd1)
 
-	cmd2, err := parseCommand("show ip")
+	cmd2, err := ParseDeclaration("show ip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -707,7 +707,7 @@ func TestMergeSuffix(t *testing.T) {
 
 func TestMatchLiteral(t *testing.T) {
 	s := "show"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -724,7 +724,7 @@ func TestMatchLiteral(t *testing.T) {
 
 func TestMatchLiteralNoHandler(t *testing.T) {
 	s := "show"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -737,7 +737,7 @@ func TestMatchLiteralNoHandler(t *testing.T) {
 
 func TestMatchLiteralPrefix(t *testing.T) {
 	s := "show"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -753,7 +753,7 @@ func TestMatchLiteralPrefix(t *testing.T) {
 
 func TestMatchLiteralInvalid(t *testing.T) {
 	s := "show"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -768,7 +768,7 @@ func TestMatchLiteralInvalid(t *testing.T) {
 
 func TestMatchString(t *testing.T) {
 	s := "WORD"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -785,7 +785,7 @@ func TestMatchString(t *testing.T) {
 
 func TestMatchStringNoHandler(t *testing.T) {
 	s := "WORD"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,7 +798,7 @@ func TestMatchStringNoHandler(t *testing.T) {
 
 func TestMatchIPv4(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -815,7 +815,7 @@ func TestMatchIPv4(t *testing.T) {
 
 func TestMatchIPv4NoHandler(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -828,7 +828,7 @@ func TestMatchIPv4NoHandler(t *testing.T) {
 
 func TestMatchIPv4IncompleteAddr(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -843,7 +843,7 @@ func TestMatchIPv4IncompleteAddr(t *testing.T) {
 
 func TestMatchIPv4InvalidAddr(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -858,7 +858,7 @@ func TestMatchIPv4InvalidAddr(t *testing.T) {
 
 func TestMatchIPv4Nonsense(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -873,7 +873,7 @@ func TestMatchIPv4Nonsense(t *testing.T) {
 
 func TestMatchIPv4NoMatchIPv6(t *testing.T) {
 	s := "A.B.C.D"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -888,7 +888,7 @@ func TestMatchIPv4NoMatchIPv6(t *testing.T) {
 
 func TestMatchIPv6(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -905,7 +905,7 @@ func TestMatchIPv6(t *testing.T) {
 
 func TestMatchIPv6NoHandler(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -918,7 +918,7 @@ func TestMatchIPv6NoHandler(t *testing.T) {
 
 func TestMatchIPv6IncompleteAddr(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -933,7 +933,7 @@ func TestMatchIPv6IncompleteAddr(t *testing.T) {
 
 func TestMatchIPv6InvalidAddr(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -948,7 +948,7 @@ func TestMatchIPv6InvalidAddr(t *testing.T) {
 
 func TestMatchIPv6Nonsense(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -963,7 +963,7 @@ func TestMatchIPv6Nonsense(t *testing.T) {
 
 func TestMatchIPv6NoMatchIPv4(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -978,7 +978,7 @@ func TestMatchIPv6NoMatchIPv4(t *testing.T) {
 
 func TestMatchIPv6MappedIPv4(t *testing.T) {
 	s := "X:X:X::X"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -995,7 +995,7 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 
 func TestMatchChoiceLiteral(t *testing.T) {
 	s := "<foo|bar>"
-	cmd, err := parseCommand(s)
+	cmd, err := ParseDeclaration(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1016,7 +1016,7 @@ func TestMatchChoiceLiteral(t *testing.T) {
 }
 
 func TestMatchMultiple(t *testing.T) {
-	cmd, err := parseCommand("foo bar baz")
+	cmd, err := ParseDeclaration("foo bar baz")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1028,7 +1028,7 @@ func TestMatchMultiple(t *testing.T) {
 }
 
 func TestMatchMultipleWithChoice(t *testing.T) {
-	cmd, err := parseCommand("foo <bar|baz> qux")
+	cmd, err := ParseDeclaration("foo <bar|baz> qux")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1044,7 +1044,7 @@ func TestMatchMultipleWithChoice(t *testing.T) {
 }
 
 func TestMatchMultipleWithString(t *testing.T) {
-	cmd, err := parseCommand("before WORD after")
+	cmd, err := ParseDeclaration("before WORD after")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1074,7 +1074,7 @@ func TestMatchMultipleWithString(t *testing.T) {
 }
 
 func TestMatchMultipleWithIPv4(t *testing.T) {
-	cmd, err := parseCommand("show ip route A.B.C.D")
+	cmd, err := ParseDeclaration("show ip route A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1086,7 +1086,7 @@ func TestMatchMultipleWithIPv4(t *testing.T) {
 }
 
 func TestMatchChoice(t *testing.T) {
-	cmd, err := parseCommand("<foo|bar>")
+	cmd, err := ParseDeclaration("<foo|bar>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1107,7 +1107,7 @@ func TestMatchChoice(t *testing.T) {
 }
 
 func TestMatchAmbiguousMatch(t *testing.T) {
-	cmd, err := parseCommand("show <ip|interface>")
+	cmd, err := ParseDeclaration("show <ip|interface>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1120,7 +1120,7 @@ func TestMatchAmbiguousMatch(t *testing.T) {
 }
 
 func TestMatchDisambiguateWithLaterToken(t *testing.T) {
-	cmd, err := parseCommand("show ip route <A.B.C.D|X:X:X::X>")
+	cmd, err := ParseDeclaration("show ip route <A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1133,7 +1133,7 @@ func TestMatchDisambiguateWithLaterToken(t *testing.T) {
 }
 
 func TestMatchCommonPrefixesAreAmbiguous(t *testing.T) {
-	cmd, err := parseCommand("show <ip|ipv6>")
+	cmd, err := ParseDeclaration("show <ip|ipv6>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1146,7 +1146,7 @@ func TestMatchCommonPrefixesAreAmbiguous(t *testing.T) {
 }
 
 func TestMatchExactMatchesAreNonAmbiguous(t *testing.T) {
-	cmd, err := parseCommand("show <ip|ipv6>")
+	cmd, err := ParseDeclaration("show <ip|ipv6>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1159,7 +1159,7 @@ func TestMatchExactMatchesAreNonAmbiguous(t *testing.T) {
 }
 
 func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
-	cmd, err := parseCommand("show <ip|ipv6> <route|routes>")
+	cmd, err := ParseDeclaration("show <ip|ipv6> <route|routes>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1239,7 +1239,7 @@ func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
 }
 
 func TestHandlerNoArgs(t *testing.T) {
-	cmd, err := parseCommand("show version")
+	cmd, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1261,7 +1261,7 @@ func TestHandlerNoArgs(t *testing.T) {
 }
 
 func TestHandlerWrongArgs(t *testing.T) {
-	cmd, err := parseCommand("show version")
+	cmd, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1286,7 +1286,7 @@ func TestHandlerWrongArgs(t *testing.T) {
 }
 
 func TestHandlerWrongReturnValue(t *testing.T) {
-	cmd, err := parseCommand("show version")
+	cmd, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1309,7 +1309,7 @@ func TestHandlerWrongReturnValue(t *testing.T) {
 }
 
 func TestHandlerArgs(t *testing.T) {
-	cmd, err := parseCommand("show WORD")
+	cmd, err := ParseDeclaration("show WORD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1331,7 +1331,7 @@ func TestHandlerArgs(t *testing.T) {
 }
 
 func TestHandlerWrongArgType(t *testing.T) {
-	cmd, err := parseCommand("show WORD")
+	cmd, err := ParseDeclaration("show WORD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1357,7 +1357,7 @@ func TestHandlerWrongArgType(t *testing.T) {
 }
 
 func TestHandlerChoice(t *testing.T) {
-	cmd, err := parseCommand("show <ip|ipv6>")
+	cmd, err := ParseDeclaration("show <ip|ipv6>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1387,7 +1387,7 @@ func TestHandlerChoice(t *testing.T) {
 }
 
 func TestHandlerChoiceWithParam(t *testing.T) {
-	cmd, err := parseCommand("show <IFACE|all>")
+	cmd, err := ParseDeclaration("show <IFACE|all>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1417,7 +1417,7 @@ func TestHandlerChoiceWithParam(t *testing.T) {
 }
 
 func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
-	cmd, err := parseCommand("show <A.B.C.D|X:X:X::X|all>")
+	cmd, err := ParseDeclaration("show <A.B.C.D|X:X:X::X|all>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1455,7 +1455,7 @@ func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
 }
 
 func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
-	cmd, err := parseCommand("show <all|A.B.C.D|X:X:X::X>")
+	cmd, err := ParseDeclaration("show <all|A.B.C.D|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1495,7 +1495,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
 }
 
 func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
-	cmd, err := parseCommand("show <A.B.C.D|all|X:X:X::X>")
+	cmd, err := ParseDeclaration("show <A.B.C.D|all|X:X:X::X>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1535,7 +1535,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
 }
 
 func TestHandlerChoiceWithLiteralAfter(t *testing.T) {
-	cmd, err := parseCommand("show <A.B.C.D|all> detail")
+	cmd, err := ParseDeclaration("show <A.B.C.D|all> detail")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1557,7 +1557,7 @@ func TestHandlerChoiceWithLiteralAfter(t *testing.T) {
 }
 
 func TestHandlerChoiceWithParameterAfter(t *testing.T) {
-	cmd, err := parseCommand("show <A.B.C.D|all> IFACE")
+	cmd, err := ParseDeclaration("show <A.B.C.D|all> IFACE")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1579,7 +1579,7 @@ func TestHandlerChoiceWithParameterAfter(t *testing.T) {
 }
 
 func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
-	cmd, err := parseCommand("show <A.B.C.D|all> <detail|IFACE>")
+	cmd, err := ParseDeclaration("show <A.B.C.D|all> <detail|IFACE>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1609,7 +1609,7 @@ func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
 }
 
 func TestParamTypesAfterMergeNoParams(t *testing.T) {
-	cmd1, err := parseCommand("show version")
+	cmd1, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1626,7 +1626,7 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 		t.Fatal("expected 0 params")
 	}
 
-	cmd2, err := parseCommand("show path")
+	cmd2, err := ParseDeclaration("show path")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1668,7 +1668,7 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 }
 
 func TestParamTypesAfterMergeWithParams(t *testing.T) {
-	cmd1, err := parseCommand("show version")
+	cmd1, err := ParseDeclaration("show version")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1685,7 +1685,7 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 		t.Fatal("expected 0 params")
 	}
 
-	cmd2, err := parseCommand("show A.B.C.D")
+	cmd2, err := ParseDeclaration("show A.B.C.D")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1727,7 +1727,7 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 }
 
 func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
-	cmd1, err := parseCommand("show bgp <A.B.C.D>")
+	cmd1, err := ParseDeclaration("show bgp <A.B.C.D>")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1744,7 +1744,7 @@ func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
 		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf(netip.Addr{})}, leaf.paramTypes)
 	}
 
-	cmd2, err := parseCommand("show interface IFACE")
+	cmd2, err := ParseDeclaration("show interface IFACE")
 	if err != nil {
 		t.Fatal(err)
 	}
