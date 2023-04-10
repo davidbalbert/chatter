@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"net/netip"
 	"reflect"
 	"strconv"
@@ -268,12 +269,13 @@ func (p *commandSpecParser) parseSignature(s *commandSpec) error {
 	}
 
 	errorType := reflect.TypeOf((*error)(nil)).Elem()
+	writerType := reflect.TypeOf((*io.Writer)(nil)).Elem()
 
 	p.skipWhitespace()
 
 	if p.peek() == ')' {
 		p.next()
-		handler := reflect.FuncOf(nil, []reflect.Type{errorType}, false)
+		handler := reflect.FuncOf([]reflect.Type{writerType}, []reflect.Type{errorType}, false)
 		s.handler = &handler
 		return nil
 	}
@@ -309,13 +311,15 @@ func (p *commandSpecParser) parseSignature(s *commandSpec) error {
 		return p.errorf("expected ')'")
 	}
 
-	types := make([]reflect.Type, len(args))
+	types := make([]reflect.Type, len(args)+1)
+	types[0] = writerType
+
 	for i, arg := range args {
 		switch arg {
 		case "string":
-			types[i] = reflect.TypeOf("")
+			types[i+1] = reflect.TypeOf("")
 		case "addr":
-			types[i] = reflect.TypeOf(netip.Addr{})
+			types[i+1] = reflect.TypeOf(netip.Addr{})
 		default:
 			return p.errorf("invalid argument type %s", arg)
 		}

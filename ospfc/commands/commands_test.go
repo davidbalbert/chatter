@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"io"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -139,7 +140,7 @@ func TestMergeHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd2.children[0].SetHandlerFunc(func() error { return nil })
+	err = cmd2.children[0].SetHandlerFunc(func(w io.Writer) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1213,10 +1214,9 @@ func TestHandlerNoArgs(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func() error {
+	err = leaf.SetHandlerFunc(func(io.Writer) error {
 		return nil
 	})
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1235,15 +1235,15 @@ func TestHandlerWrongArgs(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr) error {
 		return nil
 	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	if !strings.Contains(err.Error(), "expected func() error, got func(netip.Addr) error") {
-		t.Fatal("error should contain 'expected func() error, got func(netip.Addr) error'")
+	if !strings.Contains(err.Error(), "expected func(io.Writer) error, got func(io.Writer, netip.Addr) error") {
+		t.Fatal("error should contain 'expected func(io.Writer) error, got func(io.Writer, netip.Addr) error'")
 	}
 }
 
@@ -1265,8 +1265,8 @@ func TestHandlerWrongReturnValue(t *testing.T) {
 		t.Fatal("expected error")
 	}
 
-	if !strings.Contains(err.Error(), "expected func() error, got func()") {
-		t.Fatal("error should contain 'expected func() error, got func()'")
+	if !strings.Contains(err.Error(), "expected func(io.Writer) error, got func()") {
+		t.Fatalf("error should contain 'expected func(io.Writer) error, got func()', got %q", err.Error())
 	}
 }
 
@@ -1284,7 +1284,7 @@ func TestHandlerArgs(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(word string) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, word string) error {
 		return nil
 	})
 	if err != nil {
@@ -1306,15 +1306,15 @@ func TestHandlerWrongArgType(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(word int) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, word int) error {
 		return nil
 	})
 	if err == nil {
 		t.Fatal("expected error")
 	}
 
-	if !strings.Contains(err.Error(), "expected func(string) error, got func(int) error") {
-		t.Fatal("error should contain 'expected func(string) error, got func(int) error'")
+	if !strings.Contains(err.Error(), "expected func(io.Writer, string) error, got func(io.Writer, int) error") {
+		t.Fatalf("error should contain 'expected func(io.Writer, string) error, got func(io.Writer, int) error', got %q", err.Error())
 	}
 }
 
@@ -1332,7 +1332,7 @@ func TestHandlerChoice(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(ip, ipv6 bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, ip, ipv6 bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1340,7 +1340,7 @@ func TestHandlerChoice(t *testing.T) {
 	}
 
 	leaf = leaves[1]
-	err = leaf.SetHandlerFunc(func(ip, ipv6 bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, ip, ipv6 bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1362,7 +1362,7 @@ func TestHandlerChoiceWithParam(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(iface string, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, iface string, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1370,7 +1370,7 @@ func TestHandlerChoiceWithParam(t *testing.T) {
 	}
 
 	leaf = leaves[1]
-	err = leaf.SetHandlerFunc(func(iface string, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, iface string, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1392,7 +1392,7 @@ func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1400,7 +1400,7 @@ func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
 	}
 
 	leaf = leaves[1]
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1408,7 +1408,7 @@ func TestHandlerChoiceWithOverlappingParams(t *testing.T) {
 	}
 
 	leaf = leaves[2]
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1430,7 +1430,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, all bool, addr netip.Addr) error {
 		return nil
 	})
 	if err != nil {
@@ -1439,7 +1439,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
 
 	leaf = leaves[1]
 
-	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, all bool, addr netip.Addr) error {
 		return nil
 	})
 	if err != nil {
@@ -1448,7 +1448,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderMatters(t *testing.T) {
 
 	leaf = leaves[2]
 
-	err = leaf.SetHandlerFunc(func(all bool, addr netip.Addr) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, all bool, addr netip.Addr) error {
 		return nil
 	})
 	if err != nil {
@@ -1470,7 +1470,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1479,7 +1479,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
 
 	leaf = leaves[1]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1488,7 +1488,7 @@ func TestHandlerChoiceWithOverlappingCommandsOrderInterspersed(t *testing.T) {
 
 	leaf = leaves[2]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1510,7 +1510,7 @@ func TestHandlerChoiceWithLiteralAfter(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool) error {
 		return nil
 	})
 	if err != nil {
@@ -1532,7 +1532,7 @@ func TestHandlerChoiceWithParameterAfter(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, iface string) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool, iface string) error {
 		return nil
 	})
 	if err != nil {
@@ -1554,7 +1554,7 @@ func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
 
 	leaf := leaves[0]
 
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, detail bool, iface string) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool, detail bool, iface string) error {
 		return nil
 	})
 	if err != nil {
@@ -1562,7 +1562,7 @@ func TestHandlerChoiceWithChoiceAfter(t *testing.T) {
 	}
 
 	leaf = leaves[1]
-	err = leaf.SetHandlerFunc(func(addr netip.Addr, all bool, detail bool, iface string) error {
+	err = leaf.SetHandlerFunc(func(w io.Writer, addr netip.Addr, all bool, detail bool, iface string) error {
 		return nil
 	})
 	if err != nil {
@@ -1584,8 +1584,8 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 
 	leaf := leaves[0]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}, leaf.paramTypes)
 	}
 
 	cmd2, err := ParseDeclaration("show path")
@@ -1601,8 +1601,8 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 
 	leaf = leaves[0]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}, leaf.paramTypes)
 	}
 
 	cmd3, err := cmd1.Merge(cmd2)
@@ -1618,14 +1618,14 @@ func TestParamTypesAfterMergeNoParams(t *testing.T) {
 
 	leaf = leaves[0]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}, leaf.paramTypes)
 	}
 
 	leaf = leaves[1]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}) {
+		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()}, leaf.paramTypes)
 	}
 }
 
@@ -1643,8 +1643,8 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 
 	leaf := leaves[0]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if len(leaf.paramTypes) != 1 {
+		t.Fatal("expected 1 param")
 	}
 
 	cmd2, err := ParseDeclaration("show A.B.C.D")
@@ -1660,8 +1660,8 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 
 	leaf = leaves[0]
 
-	if len(leaf.paramTypes) != 1 {
-		t.Fatal("expected 1 params")
+	if len(leaf.paramTypes) != 2 {
+		t.Fatal("expected 2 params")
 	}
 
 	cmd3, err := cmd1.Merge(cmd2)
@@ -1677,14 +1677,14 @@ func TestParamTypesAfterMergeWithParams(t *testing.T) {
 
 	leaf = leaves[0]
 
-	if len(leaf.paramTypes) != 0 {
-		t.Fatal("expected 0 params")
+	if len(leaf.paramTypes) != 1 {
+		t.Fatal("expected 1 params")
 	}
 
 	leaf = leaves[1]
 
-	if len(leaf.paramTypes) != 1 {
-		t.Fatal("expected 1 params")
+	if len(leaf.paramTypes) != 2 {
+		t.Fatal("expected 2 params")
 	}
 }
 
@@ -1702,8 +1702,9 @@ func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
 
 	leaf := leaves[0]
 
-	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf(netip.Addr{})}) {
-		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf(netip.Addr{})}, leaf.paramTypes)
+	expected := []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem(), reflect.TypeOf(netip.Addr{})}
+	if !reflect.DeepEqual(leaf.paramTypes, expected) {
+		t.Fatalf("expected %v, got %v", expected, leaf.paramTypes)
 	}
 
 	cmd2, err := ParseDeclaration("show interface IFACE")
@@ -1719,7 +1720,8 @@ func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
 
 	leaf = leaves[0]
 
-	if !reflect.DeepEqual(leaf.paramTypes, []reflect.Type{reflect.TypeOf("")}) {
-		t.Fatalf("expected %v, got %v", []reflect.Type{reflect.TypeOf("")}, leaf.paramTypes)
+	expected = []reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem(), reflect.TypeOf("")}
+	if !reflect.DeepEqual(leaf.paramTypes, expected) {
+		t.Fatalf("expected %v, got %v", expected, leaf.paramTypes)
 	}
 }

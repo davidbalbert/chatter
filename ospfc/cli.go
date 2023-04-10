@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/davidbalbert/ospfd/ospfc/commands"
@@ -16,12 +17,12 @@ type CLI struct {
 func NewCLI() *CLI {
 	cli := &CLI{}
 
-	cli.MustRegister("exit", "Exit the CLI", func() error {
+	cli.MustRegister("exit", "Exit the CLI", func(w io.Writer) error {
 		cli.running = false
 		return nil
 	})
 
-	cli.MustRegister("quit", "Exit the CLI", func() error {
+	cli.MustRegister("quit", "Exit the CLI", func(w io.Writer) error {
 		cli.running = false
 		return nil
 	})
@@ -70,7 +71,7 @@ func (cli *CLI) Run(t *term.Terminal) {
 			continue
 		}
 
-		err = invoker.Run()
+		err = invoker.Run(t)
 		if err != nil {
 			fmt.Printf("%% Error running command: %v\n", err)
 			continue

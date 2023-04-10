@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"io"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -183,7 +184,7 @@ func (n *Node) updateParamTypesWithTypes(types []reflect.Type) {
 }
 
 func (n *Node) updateParamTypes() {
-	n.updateParamTypesWithTypes(nil)
+	n.updateParamTypesWithTypes([]reflect.Type{reflect.TypeOf((*io.Writer)(nil)).Elem()})
 }
 
 func findIndex(n *Node, ns []*Node) int {
@@ -454,8 +455,12 @@ type Invoker struct {
 	handlerFunc reflect.Value
 }
 
-func (i *Invoker) Run() error {
-	results := i.handlerFunc.Call(i.args)
+func (i *Invoker) Run(w io.Writer) error {
+	args := make([]reflect.Value, len(i.args)+1)
+	args[0] = reflect.ValueOf(w)
+	copy(args[1:], i.args)
+
+	results := i.handlerFunc.Call(args)
 	err := results[0].Interface()
 	if err != nil {
 		return err.(error)

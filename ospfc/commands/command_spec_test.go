@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"io"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -559,7 +560,7 @@ func TestHandler(t *testing.T) {
 		t.Fatal("expected handler to not be empty")
 	}
 
-	signature := reflect.TypeOf(func(netip.Addr, netip.Addr) error { return nil })
+	signature := reflect.TypeOf(func(io.Writer, netip.Addr, netip.Addr) error { return nil })
 
 	if *c2.handler != signature {
 		t.Fatalf("expected handler to be %v, got %v", signature, *c2.handler)
@@ -602,8 +603,8 @@ func TestEmptyHandler(t *testing.T) {
 		t.Fatal("expected handler to not be empty")
 	}
 
-	if *spec.handler != reflect.TypeOf(func() error { return nil }) {
-		t.Fatalf("expected handler to be %v, got %v", reflect.TypeOf(func() error { return nil }), *spec.handler)
+	if *spec.handler != reflect.TypeOf(func(io.Writer) error { return nil }) {
+		t.Fatalf("expected handler to be %v, got %v", reflect.TypeOf(func(io.Writer) error { return nil }), *spec.handler)
 	}
 }
 

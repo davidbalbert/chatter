@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/netip"
 	"os"
 	"sort"
@@ -277,8 +278,8 @@ func main() {
 	cli := NewCLI()
 
 	cli.MustDocument("show", "Show running system information")
-	cli.MustRegister("show version", "Show ospfd version", func() error {
-		fmt.Println("ospfd v0.0.1")
+	cli.MustRegister("show version", "Show ospfd version", func(w io.Writer) error {
+		fmt.Fprintln(w, "v0.0.1")
 
 		return nil
 	})
@@ -288,8 +289,8 @@ func main() {
 	cli.MustRegister(
 		"show ip route A.B.C.D",
 		"Network in the IP routing table to display",
-		func(addr netip.Addr) error {
-			fmt.Println("addr:", addr)
+		func(w io.Writer, addr netip.Addr) error {
+			fmt.Fprintln(w, "addr:", addr)
 
 			return nil
 		})
@@ -302,11 +303,11 @@ func main() {
 	cli.MustRegister(
 		"show bgp neighbors <A.B.C.D|X:X:X::X|all>",
 		"Neighbor to display information about",
-		func(neighbor netip.Addr, all bool) error {
+		func(w io.Writer, neighbor netip.Addr, all bool) error {
 			if all {
-				fmt.Println("All neighbors")
+				fmt.Fprintln(w, "All neighbors")
 			} else {
-				fmt.Println("Neighbor:", neighbor)
+				fmt.Fprintln(w, "Neighbor:", neighbor)
 			}
 
 			return nil
