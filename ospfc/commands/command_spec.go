@@ -531,7 +531,7 @@ func (m *commandSpecMatcher) match(path string, n *Node, s *commandSpec) error {
 		if s.handler == nil && n.handlerFunc.IsValid() {
 			return fmt.Errorf("%s: expected no handler, got %v", path, n.handlerFunc.Type())
 		} else if s.handler != nil && (!n.handlerFunc.IsValid() || *s.handler != n.handlerFunc.Type()) {
-			return fmt.Errorf("%s: expected handler %v, got %v", path, *s.handler, n.handlerFunc.Type())
+			return fmt.Errorf("%s: expected handler %v, got no handler", path, *s.handler)
 		}
 	case ntParamString, ntParamIPv4, ntParamIPv6:
 		if s.description != n.description {

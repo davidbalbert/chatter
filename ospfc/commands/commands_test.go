@@ -715,11 +715,6 @@ func TestMatchLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func() error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("show")
 	if matches == nil {
 		t.Fatal("expected match")
@@ -755,11 +750,6 @@ func TestMatchLiteralPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func() error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("sh")
 	if len(matches) != 1 {
 		t.Fatal("expected 1 match")
@@ -775,11 +765,6 @@ func TestMatchLiteralInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func() error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("sha")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -789,11 +774,6 @@ func TestMatchLiteralInvalid(t *testing.T) {
 func TestMatchString(t *testing.T) {
 	s := "WORD"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.SetHandlerFunc(func(string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -829,11 +809,6 @@ func TestMatchIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("192.168.0.1")
 	if len(matches) != 1 {
 		t.Fatal("expected match")
@@ -865,11 +840,6 @@ func TestMatchIPv4IncompleteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("192.168.0")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -879,11 +849,6 @@ func TestMatchIPv4IncompleteAddr(t *testing.T) {
 func TestMatchIPv4InvalidAddr(t *testing.T) {
 	s := "A.B.C.D"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -901,11 +866,6 @@ func TestMatchIPv4Nonsense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("foobar")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -919,11 +879,6 @@ func TestMatchIPv4NoMatchIPv6(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("2001:db8::68")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -933,11 +888,6 @@ func TestMatchIPv4NoMatchIPv6(t *testing.T) {
 func TestMatchIPv6(t *testing.T) {
 	s := "X:X:X::X"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -973,11 +923,6 @@ func TestMatchIPv6IncompleteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("2001:db8")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -987,11 +932,6 @@ func TestMatchIPv6IncompleteAddr(t *testing.T) {
 func TestMatchIPv6InvalidAddr(t *testing.T) {
 	s := "X:X:X::X"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1009,11 +949,6 @@ func TestMatchIPv6Nonsense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("foobar")
 	if len(matches) != 0 {
 		t.Fatal("expected no match")
@@ -1023,11 +958,6 @@ func TestMatchIPv6Nonsense(t *testing.T) {
 func TestMatchIPv6NoMatchIPv4(t *testing.T) {
 	s := "X:X:X::X"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1045,11 +975,6 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("::ffff:192.168.0.1")
 	if len(matches) != 1 {
 		t.Fatal("expected match")
@@ -1061,18 +986,6 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 func TestMatchChoiceLiteral(t *testing.T) {
 	s := "<foo|bar>"
 	cmd, err := ParseDeclaration(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	handler := func(x, y bool) error { return nil }
-
-	err = cmd.children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[1].SetHandlerFunc(handler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1095,27 +1008,12 @@ func TestMatchMultiple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.children[0].children[0].SetHandlerFunc(func() error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("foo bar baz")
 	AssertMatchesMatchSpec(t, "foo bar baz", matches)
 }
 
 func TestMatchMultipleWithChoice(t *testing.T) {
 	cmd, err := ParseDeclaration("foo <bar|baz> qux")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[0].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[1].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1129,11 +1027,6 @@ func TestMatchMultipleWithChoice(t *testing.T) {
 
 func TestMatchMultipleWithString(t *testing.T) {
 	cmd, err := ParseDeclaration("before WORD after")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[0].SetHandlerFunc(func(string) error { return nil })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1168,29 +1061,12 @@ func TestMatchMultipleWithIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.children[0].children[0].children[0].SetHandlerFunc(func(netip.Addr) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("show ip route 1.2.3.4")
 	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
 }
 
 func TestMatchChoice(t *testing.T) {
 	cmd, err := ParseDeclaration("<foo|bar>")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	handler := func(bool, bool) error { return nil }
-
-	err = cmd.children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[1].SetHandlerFunc(handler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1213,33 +1089,12 @@ func TestMatchAmbiguousMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cmd.children[0].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[1].SetHandlerFunc(func(bool, bool) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("sh i")
 	AssertMatchesMatchSpec(t, "show ip\nshow interface", matches)
 }
 
 func TestMatchDisambiguateWithLaterToken(t *testing.T) {
 	cmd, err := ParseDeclaration("show ip route <A.B.C.D|X:X:X::X>")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	handler := func(netip.Addr) error { return nil }
-	err = cmd.children[0].children[0].children[0].children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[0].children[0].children[1].SetHandlerFunc(handler)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1254,17 +1109,6 @@ func TestMatchCommonPrefixesAreAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := func(bool, bool) error { return nil }
-	err = cmd.children[0].children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[1].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("sh i")
 	AssertMatchesMatchSpec(t, "show ip\nshow ipv6", matches)
 }
@@ -1275,34 +1119,12 @@ func TestMatchExactMatchesAreNonAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := func(bool, bool) error { return nil }
-	err = cmd.children[0].children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[1].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	matches := cmd.Match("sh ip")
 	AssertMatchesMatchSpec(t, "show ip", matches)
 }
 
 func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
 	cmd, err := ParseDeclaration("show <ip|ipv6> <route|routes>")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	handler := func(bool, bool, bool, bool) error { return nil }
-	err = cmd.children[0].children[0].children[0].children[0].SetHandlerFunc(handler)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = cmd.children[0].children[0].children[0].children[1].SetHandlerFunc(handler)
 	if err != nil {
 		t.Fatal(err)
 	}
