@@ -139,7 +139,10 @@ func TestMergeHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd2.children[0].handlerFunc = reflect.ValueOf(func() error { return nil })
+	err = cmd2.children[0].SetHandlerFunc(func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	AssertMatchesCommandSpec(t, spec2, cmd2)
 
@@ -712,7 +715,10 @@ func TestMatchLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("show")
 	if matches == nil {
@@ -745,7 +751,11 @@ func TestMatchLiteralPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	matches := cmd.Match("sh")
 	if len(matches) != 1 {
 		t.Fatal("expected 1 match")
@@ -761,7 +771,10 @@ func TestMatchLiteralInvalid(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sha")
 	if len(matches) != 0 {
@@ -776,7 +789,10 @@ func TestMatchString(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foobar")
 	if len(matches) != 1 {
@@ -809,7 +825,10 @@ func TestMatchIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("192.168.0.1")
 	if len(matches) != 1 {
@@ -842,7 +861,10 @@ func TestMatchIPv4IncompleteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("192.168.0")
 	if len(matches) != 0 {
@@ -857,7 +879,10 @@ func TestMatchIPv4InvalidAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("300.0.0.1")
 	if len(matches) != 0 {
@@ -872,7 +897,10 @@ func TestMatchIPv4Nonsense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foobar")
 	if len(matches) != 0 {
@@ -887,7 +915,10 @@ func TestMatchIPv4NoMatchIPv6(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("2001:db8::68")
 	if len(matches) != 0 {
@@ -902,7 +933,10 @@ func TestMatchIPv6(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("2001:db8::68")
 	if len(matches) != 1 {
@@ -935,7 +969,10 @@ func TestMatchIPv6IncompleteAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("2001:db8")
 	if len(matches) != 0 {
@@ -950,7 +987,10 @@ func TestMatchIPv6InvalidAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("2001:db8::g")
 	if len(matches) != 0 {
@@ -965,7 +1005,10 @@ func TestMatchIPv6Nonsense(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foobar")
 	if len(matches) != 0 {
@@ -980,7 +1023,10 @@ func TestMatchIPv6NoMatchIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("192.168.0.1")
 	if len(matches) != 0 {
@@ -995,7 +1041,10 @@ func TestMatchIPv6MappedIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("::ffff:192.168.0.1")
 	if len(matches) != 1 {
@@ -1012,8 +1061,17 @@ func TestMatchChoiceLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(x, y bool) error { return nil }
+
+	err = cmd.children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foo")
 	AssertMatchesMatchSpec(t, "foo", matches)
@@ -1033,7 +1091,10 @@ func TestMatchMultiple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.children[0].children[0].SetHandlerFunc(func() error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foo bar baz")
 	AssertMatchesMatchSpec(t, "foo bar baz", matches)
@@ -1045,8 +1106,15 @@ func TestMatchMultipleWithChoice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[1].children[0].handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.children[0].children[0].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[1].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foo bar qux")
 	AssertMatchesMatchSpec(t, "foo bar qux", matches)
@@ -1061,7 +1129,10 @@ func TestMatchMultipleWithString(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.children[0].children[0].SetHandlerFunc(func(string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("before foo after")
 	AssertMatchesMatchSpec(t, "before string:foo after", matches)
@@ -1093,7 +1164,10 @@ func TestMatchMultipleWithIPv4(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.children[0].children[0].children[0].SetHandlerFunc(func(netip.Addr) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("show ip route 1.2.3.4")
 	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
@@ -1105,8 +1179,17 @@ func TestMatchChoice(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(bool, bool) error { return nil }
+
+	err = cmd.children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("foo")
 	AssertMatchesMatchSpec(t, "foo", matches)
@@ -1126,8 +1209,15 @@ func TestMatchAmbiguousMatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+	err = cmd.children[0].children[0].SetHandlerFunc(func(bool, bool) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[1].SetHandlerFunc(func(bool, bool) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sh i")
 	AssertMatchesMatchSpec(t, "show ip\nshow interface", matches)
@@ -1139,8 +1229,16 @@ func TestMatchDisambiguateWithLaterToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[0].children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(netip.Addr) error { return nil }
+	err = cmd.children[0].children[0].children[0].children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[0].children[0].children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sh i ro 1.2.3.4")
 	AssertMatchesMatchSpec(t, "show ip route ipv4:1.2.3.4", matches)
@@ -1152,8 +1250,16 @@ func TestMatchCommonPrefixesAreAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(bool, bool) error { return nil }
+	err = cmd.children[0].children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sh i")
 	AssertMatchesMatchSpec(t, "show ip\nshow ipv6", matches)
@@ -1165,8 +1271,16 @@ func TestMatchExactMatchesAreNonAmbiguous(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(bool, bool) error { return nil }
+	err = cmd.children[0].children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sh ip")
 	AssertMatchesMatchSpec(t, "show ip", matches)
@@ -1178,8 +1292,16 @@ func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd.children[0].children[0].children[0].children[0].handlerFunc = reflect.ValueOf(func() {})
-	cmd.children[0].children[0].children[0].children[1].handlerFunc = reflect.ValueOf(func() {})
+	handler := func(bool, bool, bool, bool) error { return nil }
+	err = cmd.children[0].children[0].children[0].children[0].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cmd.children[0].children[0].children[0].children[1].SetHandlerFunc(handler)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	matches := cmd.Match("sh i r")
 	spec := `
