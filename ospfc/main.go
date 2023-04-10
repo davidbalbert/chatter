@@ -274,7 +274,7 @@ func autocompleteBGPNeighborsV6(prefix string) ([]string, error) {
 }
 
 func main() {
-	cli := &CLI{}
+	cli := NewCLI()
 
 	cli.MustDocument("show", "Show running system information")
 	cli.MustRegister("show version", "Show ospfd version", func() error {
