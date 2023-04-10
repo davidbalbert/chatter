@@ -409,10 +409,15 @@ func (n *Node) SetAutocompleteFunc(fn AutocompleteFunc) error {
 }
 
 type Match struct {
-	node  *Node
-	next  *Match
-	input string     // the input that matched this node
-	addr  netip.Addr // address for IPv4/IPv6 parameters
+	node       *Node
+	next       *Match
+	isComplete bool       // leaf node has a valid handler function
+	input      string     // the input that matched this node
+	addr       netip.Addr // address for IPv4/IPv6 parameters
+}
+
+func (m *Match) IsComplete() bool {
+	return m.isComplete
 }
 
 func (m *Match) Invoker() (*Invoker, error) {
@@ -422,6 +427,7 @@ func (m *Match) Invoker() (*Invoker, error) {
 	// choices, we need to pass arguments for the matched option only.
 	//
 	// We'll need to change Match as well as matchTokens to fix this.
+
 	return nil, fmt.Errorf("not implemented")
 }
 
@@ -501,9 +507,11 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 		}
 
 		if len(tokens) == 1 && n.handlerFunc.IsValid() {
+			match.isComplete = true
+		}
+
+		if len(tokens) == 1 {
 			return []*Match{match}
-		} else if len(tokens) == 1 {
-			return nil
 		}
 
 		if len(n.children) == 0 {
@@ -517,6 +525,11 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 		for _, childMatch := range child.matchTokens(tokens[1:]) {
 			dupedMatch := *match
 			dupedMatch.next = childMatch
+
+			if childMatch.isComplete {
+				dupedMatch.isComplete = true
+			}
+
 			matches = append(matches, &dupedMatch)
 		}
 

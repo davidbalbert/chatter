@@ -175,7 +175,7 @@ func TestMergeAutocomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd2.children[0].autocompleteFunc = func(string) []string { return nil }
+	cmd2.children[0].autocompleteFunc = func(string) ([]string, error) { return nil, nil }
 
 	AssertMatchesCommandSpec(t, spec2, cmd2)
 
@@ -730,8 +730,11 @@ func TestMatchLiteralNoHandler(t *testing.T) {
 	}
 
 	matches := cmd.Match("show")
-	if len(matches) != 0 {
-		t.Fatal("expected no match")
+
+	AssertMatchesMatchSpec(t, "show", matches)
+
+	if matches[0].isComplete {
+		t.Fatal("expected incomplete match")
 	}
 }
 
@@ -791,8 +794,11 @@ func TestMatchStringNoHandler(t *testing.T) {
 	}
 
 	matches := cmd.Match("foobar")
-	if len(matches) != 0 {
-		t.Fatal("expected no match")
+
+	AssertMatchesMatchSpec(t, "string:foobar", matches)
+
+	if matches[0].isComplete {
+		t.Fatal("expected incomplete match")
 	}
 }
 
@@ -821,8 +827,11 @@ func TestMatchIPv4NoHandler(t *testing.T) {
 	}
 
 	matches := cmd.Match("192.168.0.1")
-	if len(matches) != 0 {
-		t.Fatal("expected no match")
+
+	AssertMatchesMatchSpec(t, "ipv4:192.168.0.1", matches)
+
+	if matches[0].isComplete {
+		t.Fatal("expected incomplete match")
 	}
 }
 
@@ -911,8 +920,11 @@ func TestMatchIPv6NoHandler(t *testing.T) {
 	}
 
 	matches := cmd.Match("2001:db8::68")
-	if len(matches) != 0 {
-		t.Fatal("expected no match")
+
+	AssertMatchesMatchSpec(t, "ipv6:2001:db8::68", matches)
+
+	if matches[0].isComplete {
+		t.Fatal("expected incomplete match")
 	}
 }
 
@@ -1058,8 +1070,10 @@ func TestMatchMultipleWithString(t *testing.T) {
 	AssertMatchesMatchSpec(t, "before string:bar after", matches)
 
 	matches = cmd.Match("before foo")
-	if len(matches) != 0 {
-		t.Fatal("expected no match")
+	AssertMatchesMatchSpec(t, "before string:foo", matches)
+
+	if matches[0].isComplete {
+		t.Fatal("expected incomplete match")
 	}
 
 	matches = cmd.Match("before bar baz after")

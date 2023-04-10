@@ -215,8 +215,8 @@ func TestMatchSpecNoHandler(t *testing.T) {
 	}
 
 	err = specs.match(matches)
-	if err == nil {
-		t.Fatal("expected error")
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

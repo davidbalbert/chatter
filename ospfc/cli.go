@@ -45,22 +45,35 @@ func (cli *CLI) Run(t *term.Terminal) {
 		}
 
 		matches := cli.root.Match(line)
-		if len(matches) == 0 {
+		completeMatches := make([]*commands.Match, 0, len(matches))
+
+		for _, m := range matches {
+			if m.IsComplete() {
+				completeMatches = append(completeMatches, m)
+			}
+		}
+
+		if len(completeMatches) == 0 && len(matches) == 0 {
 			fmt.Printf("%% Unknown command: %s\n", line)
 			continue
-		} else if len(matches) > 1 {
+		} else if len(completeMatches) == 0 {
+			fmt.Printf("%% Command incomplete: %s\n", line)
+			continue
+		} else if len(completeMatches) > 1 {
 			fmt.Printf("%% Ambiguous command: %s\n", line)
 			continue
 		}
 
 		invoker, err := matches[0].Invoker()
 		if err != nil {
-			fmt.Printf("%% Command incomplete: %s\n", line)
+			fmt.Printf("%% Error running command: %v\n", err)
+			continue
 		}
 
 		err = invoker.Run()
 		if err != nil {
 			fmt.Printf("%% Error running command: %v\n", err)
+			continue
 		}
 	}
 }
