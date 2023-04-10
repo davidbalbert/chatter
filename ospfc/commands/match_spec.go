@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -98,12 +99,38 @@ func (s *matchSpec) match(m *Match) error {
 				return fmt.Errorf("%s: expected string param %s, got %s", s.String(), part.s, m.input)
 			}
 		case ntParamIPv4:
-			if m.node.t != ntParamIPv4 || m.addr.Compare(part.addr) != 0 {
-				return fmt.Errorf("%s: expected ipv4 param %s, got %s", s.String(), part.addr.String(), m.addr.String())
+			if m.node.t != ntParamIPv4 {
+				return fmt.Errorf("%s: expected ipv4 param, got %s", s.String(), m.node.t)
+			}
+
+			var actual netip.Addr
+			argType := reflect.TypeOf(actual)
+			for _, arg := range m.args {
+				if arg.Type() == argType {
+					actual = arg.Interface().(netip.Addr)
+					break
+				}
+			}
+
+			if m.node.t != ntParamIPv4 || actual.Compare(part.addr) != 0 {
+				return fmt.Errorf("%s: expected ipv4 param %s, got %s", s.String(), part.addr.String(), actual.String())
 			}
 		case ntParamIPv6:
-			if m.node.t != ntParamIPv6 || m.addr.Compare(part.addr) != 0 {
-				return fmt.Errorf("%s: expected ipv6 param %s, got %s", s.String(), part.addr.String(), m.addr.String())
+			if m.node.t != ntParamIPv6 {
+				return fmt.Errorf("%s: expected ipv4 param, got %s", s.String(), m.node.t)
+			}
+
+			var actual netip.Addr
+			argType := reflect.TypeOf(actual)
+			for _, arg := range m.args {
+				if arg.Type() == argType {
+					actual = arg.Interface().(netip.Addr)
+					break
+				}
+			}
+
+			if m.node.t != ntParamIPv6 || actual.Compare(part.addr) != 0 {
+				return fmt.Errorf("%s: expected ipv6 param %s, got %s", s.String(), part.addr.String(), actual.String())
 			}
 		default:
 			panic("unreachable")

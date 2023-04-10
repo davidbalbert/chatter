@@ -84,7 +84,7 @@ type Node struct {
 	handlerFunc      reflect.Value
 	autocompleteFunc AutocompleteFunc
 	children         []*Node
-	paramTypes       []reflect.Type
+	paramTypes       []reflect.Type // the types of all parameters in this node and its parents
 
 	// true if this node was explicitly declared as a choice (e.g. "<A.B.C.D|X:X:X::X>") as
 	// compared to a choice that was implictly created by merging two literals
@@ -154,7 +154,8 @@ func (n *Node) updateParamTypesWithTypes(types []reflect.Type) {
 			// Examples:
 			// 1. "show <A.B.C.D|X:X:X::X|all>" -> func(addr netip.Addr, all bool)
 			// 2. "show <A.B.C.D|X:X:X::X>" -> func(addr netip.Addr)
-			// 3. "show <ip|ipv6>" -> func(ip, ipv6 bool)
+			// 3. "show <A.B.C.D|all|X:X:X::X>" -> func(addr netip.Addr, all bool)
+			// 4. "show <ip|ipv6>" -> func(ip, ipv6 bool)
 			if t != nil && (!containsType(clonedTypes, t) || t == reflect.TypeOf(false)) {
 				clonedTypes = append(clonedTypes, t)
 			}
@@ -411,9 +412,9 @@ func (n *Node) SetAutocompleteFunc(fn AutocompleteFunc) error {
 type Match struct {
 	node       *Node
 	next       *Match
-	isComplete bool       // leaf node has a valid handler function
-	input      string     // the input that matched this node
-	addr       netip.Addr // address for IPv4/IPv6 parameters
+	isComplete bool            // leaf node has a valid handler function
+	input      string          // the input that matched this node
+	args       []reflect.Value // arguments for the handler function
 }
 
 func (m *Match) IsComplete() bool {
@@ -421,27 +422,43 @@ func (m *Match) IsComplete() bool {
 }
 
 func (m *Match) Invoker() (*Invoker, error) {
-	// we have a problem, which is that right now, match (with input and addr) doesn't have
-	// enough info to know how to call the handler function. For explict choices, we need to
-	// pass arguments for each of the options (but only one of them will be set). For implicit
-	// choices, we need to pass arguments for the matched option only.
-	//
-	// We'll need to change Match as well as matchTokens to fix this.
+	if !m.isComplete {
+		return nil, fmt.Errorf("match is not complete")
+	}
 
-	return nil, fmt.Errorf("not implemented")
+	var args []reflect.Value
+	var handlerFunc reflect.Value
+	for {
+		args = append(args, m.args...)
+
+		if m.next == nil {
+			handlerFunc = m.node.handlerFunc
+			break
+		}
+
+		m = m.next
+	}
+
+	if !handlerFunc.IsValid() {
+		return nil, fmt.Errorf("invariant violation: handler function is not valid but isComplete is true")
+	}
+
+	return &Invoker{
+		args:        args,
+		handlerFunc: handlerFunc,
+	}, nil
 }
 
 type Invoker struct {
-	match       *Match
 	args        []reflect.Value
 	handlerFunc reflect.Value
 }
 
 func (i *Invoker) Run() error {
 	results := i.handlerFunc.Call(i.args)
-	err := results[0].Interface().(error)
+	err := results[0].Interface()
 	if err != nil {
-		return err
+		return err.(error)
 	}
 
 	return nil
@@ -458,10 +475,63 @@ func (m *Match) length() int {
 func (n *Node) matchTokens(tokens []string) []*Match {
 	if n.t == ntChoice {
 		var matches []*Match
-		for _, child := range n.children {
+		for i, child := range n.children {
 			ms := child.matchTokens(tokens)
-			if len(ms) > 0 {
-				matches = append(matches, ms...)
+
+			for _, m := range ms {
+				if n.explicitChoice {
+					var args []reflect.Value
+					argCount := 0
+					firstIndexOfMatchType := -1
+
+					for j, child := range n.children {
+						argType := child.t.paramType(true)
+
+						if argType == m.node.t.paramType(true) && firstIndexOfMatchType == -1 {
+							firstIndexOfMatchType = argCount
+						}
+
+						// <A.B.C.D|all> -> [1.2.3.4, false] or [netip.Addr{}, true]
+						// <A.B.C.D|X:X:X::X> -> [netip.Addr{...}]
+						// <A.B.C.D|X:X:X::X|all> -> [netip.Addr{...}, false] or [netip.Addr{}, true]
+						// <A.B.C.D|all|X:X:X::X> -> [netip.Addr{...}, false] or [netip.Addr{}, true]
+
+						shouldAppend := false
+						if firstIndexOfMatchType != -1 {
+							if j == firstIndexOfMatchType {
+								shouldAppend = true
+							} else if j > firstIndexOfMatchType {
+								if child.t == ntLiteral {
+									shouldAppend = true
+								}
+							}
+						}
+
+						if i == j {
+							var arg reflect.Value
+							if m.node.t == ntLiteral {
+								arg = reflect.ValueOf(true)
+							} else {
+								arg = m.args[0]
+							}
+
+							if j == firstIndexOfMatchType {
+								args = append(args, arg)
+							} else {
+								args[firstIndexOfMatchType] = arg
+							}
+
+							argCount++
+						} else if shouldAppend {
+							args = append(args, reflect.Zero(argType))
+							argCount++
+						}
+					}
+
+					m.args = args
+				}
+
+				matches = append(matches, m)
 			}
 		}
 
@@ -479,6 +549,7 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 			match = &Match{
 				node:  n,
 				input: tokens[0],
+				args:  []reflect.Value{reflect.ValueOf(tokens[0])},
 			}
 		} else if n.t == ntParamIPv4 {
 			addr, err := netip.ParseAddr(tokens[0])
@@ -486,7 +557,7 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 				match = &Match{
 					node:  n,
 					input: tokens[0],
-					addr:  addr,
+					args:  []reflect.Value{reflect.ValueOf(addr)},
 				}
 			}
 		} else if n.t == ntParamIPv6 {
@@ -495,7 +566,7 @@ func (n *Node) matchTokens(tokens []string) []*Match {
 				match = &Match{
 					node:  n,
 					input: tokens[0],
-					addr:  addr,
+					args:  []reflect.Value{reflect.ValueOf(addr)},
 				}
 			}
 		} else {

@@ -726,6 +726,10 @@ func TestMatchLiteral(t *testing.T) {
 	}
 
 	AssertMatchesMatchSpec(t, "show", matches)
+
+	if len(matches[0].args) != 0 {
+		t.Fatalf("expected no args, got %v", matches[0].args)
+	}
 }
 
 func TestMatchLiteralNoHandler(t *testing.T) {
