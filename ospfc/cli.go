@@ -88,8 +88,6 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	}
 
 	if len(options) == 0 {
-		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
-		fmt.Fprintf(w, "no options\n")
 		return "", 0, false
 	} else if len(options) == 1 {
 		new := line + options[0][offset:] + " "

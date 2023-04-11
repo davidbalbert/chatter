@@ -764,42 +764,35 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 			return options, nil
 		}
 
-		// len(fields) > 1, we need to continue on the next field
+		// len(fields) > 1, we need to match this field and then continue on to children
+
+		var err error
+		var opts []string
+
+		if n.t == ntLiteral {
+			if !strings.HasPrefix(n.value, fields[0]) {
+				return nil, nil
+			}
+		} else if n.t == ntParamString {
+			// always matches
+		} else if n.t == ntParamIPv4 {
+			var addr netip.Addr
+			addr, err = netip.ParseAddr(fields[0])
+			if err != nil || !addr.Is4() {
+				return nil, nil
+			}
+		} else if n.t == ntParamIPv6 {
+			var addr netip.Addr
+			addr, err = netip.ParseAddr(fields[0])
+			if err != nil || !addr.Is6() {
+				return nil, nil
+			}
+		} else {
+			panic("unreachable")
+		}
 
 		for _, child := range n.children {
-			var err error
-			var opts []string
-
-			if child.t == ntChoice {
-				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
-			} else if child.t == ntLiteral {
-				if strings.HasPrefix(child.value, fields[0]) {
-					opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
-				}
-			} else if child.t == ntParamString {
-				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
-			} else if child.t == ntParamIPv4 {
-				var addr netip.Addr
-				addr, err = netip.ParseAddr(fields[0])
-				if err != nil || !addr.Is4() {
-					// invalid address, skip this child
-					continue
-				}
-
-				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
-			} else if child.t == ntParamIPv6 {
-				var addr netip.Addr
-				addr, err = netip.ParseAddr(fields[0])
-				if err != nil || !addr.Is6() {
-					// invalid address, skip this child
-					continue
-				}
-
-				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
-			} else {
-				panic("unreachable")
-			}
-
+			opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
 			if err != nil {
 				return nil, err
 			}

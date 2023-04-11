@@ -2050,3 +2050,26 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected no options, got %v", options)
 	}
 }
+
+func TestAutocompleteMultiLevel(t *testing.T) {
+	cmd1, err := ParseDeclaration("show ip route")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	options, offset, err := cmd1.GetAutocompleteOptions(w, "show ip ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 0 {
+		t.Fatalf("expected offset 0, got %d", offset)
+	}
+
+	expected := []string{"route"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+}
