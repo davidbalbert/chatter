@@ -142,6 +142,24 @@ func containsType(types []reflect.Type, t reflect.Type) bool {
 	return false
 }
 
+func containsValueOfType(values []reflect.Value, t reflect.Type) bool {
+	for _, v := range values {
+		if v.Type() == t {
+			return true
+		}
+	}
+	return false
+}
+
+func indexOfType(values []reflect.Value, t reflect.Type) int {
+	for i, v := range values {
+		if v.Type() == t {
+			return i
+		}
+	}
+	return -1
+}
+
 func (n *Node) updateParamTypesWithTypes(types []reflect.Type) {
 	clonedTypes := make([]reflect.Type, len(types))
 	copy(clonedTypes, types)
@@ -480,56 +498,46 @@ func (m *Match) length() int {
 func (n *Node) matchTokens(tokens []string) []*Match {
 	if n.t == ntChoice {
 		var matches []*Match
-		for i, child := range n.children {
-			ms := child.matchTokens(tokens)
+		for _, child1 := range n.children {
+			ms := child1.matchTokens(tokens)
 
 			for _, m := range ms {
 				if n.explicitChoice {
 					var args []reflect.Value
-					argCount := 0
-					firstIndexOfMatchType := -1
 
-					for j, child := range n.children {
-						argType := child.t.paramType(true)
-
-						if argType == m.node.t.paramType(true) && firstIndexOfMatchType == -1 {
-							firstIndexOfMatchType = argCount
-						}
-
+					for _, child2 := range n.children {
 						// <A.B.C.D|all> -> [1.2.3.4, false] or [netip.Addr{}, true]
 						// <A.B.C.D|X:X:X::X> -> [netip.Addr{...}]
 						// <A.B.C.D|X:X:X::X|all> -> [netip.Addr{...}, false] or [netip.Addr{}, true]
 						// <A.B.C.D|all|X:X:X::X> -> [netip.Addr{...}, false] or [netip.Addr{}, true]
 
-						shouldAppend := false
-						if firstIndexOfMatchType != -1 {
-							if j == firstIndexOfMatchType {
-								shouldAppend = true
-							} else if j > firstIndexOfMatchType {
-								if child.t == ntLiteral {
-									shouldAppend = true
+						// make any empty list of args
+						// if child not the node we matched
+						//   if it's a literal, add false to args
+						//   if it's not a literal and there's not already an element of that type in args, add the zero value for that child to args
+						// if child is the node we matched
+						//   if it's a literal, add true to args
+						// 	 else, find the first index in args is of the same type as m.args[0]
+						//      if that index is found, add m.args[0] to args at that index
+						//      if that index is not found, add m.args[0] to args at the end
+
+						if child2 != m.node {
+							if child2.t == ntLiteral {
+								args = append(args, reflect.ValueOf(false))
+							} else if !containsValueOfType(args, child2.t.paramType(true)) {
+								args = append(args, reflect.Zero(child2.t.paramType(true)))
+							}
+						} else {
+							if child2.t == ntLiteral {
+								args = append(args, reflect.ValueOf(true))
+							} else {
+								i := indexOfType(args, m.args[0].Type())
+								if i >= 0 {
+									args[i] = m.args[0]
+								} else {
+									args = append(args, m.args[0])
 								}
 							}
-						}
-
-						if i == j {
-							var arg reflect.Value
-							if m.node.t == ntLiteral {
-								arg = reflect.ValueOf(true)
-							} else {
-								arg = m.args[0]
-							}
-
-							if j == firstIndexOfMatchType {
-								args = append(args, arg)
-							} else {
-								args[firstIndexOfMatchType] = arg
-							}
-
-							argCount++
-						} else if shouldAppend {
-							args = append(args, reflect.Zero(argType))
-							argCount++
 						}
 					}
 
