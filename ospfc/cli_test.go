@@ -256,6 +256,47 @@ func TestCommandWithArgChoiceDifferentTypes(t *testing.T) {
 func TestDisambiguationBasedOnLaterTokens(t *testing.T) {
 	cli := NewCLI()
 
+	err := cli.Register("show ip bgp", "Show BGP information", func(w io.Writer) error {
+		fmt.Fprintf(w, "BGP information\n")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cli.Register("show interface brief", "Show interface brief", func(w io.Writer) error {
+		fmt.Fprintf(w, "Interface brief\n")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	cli.runLine("s i b", w)
+
+	if w.String() != "% Ambiguous command: s i b\n" {
+		t.Fatalf("Unexpected output: %s", w.String())
+	}
+
+	w = &strings.Builder{}
+	cli.runLine("s i br", w)
+
+	if w.String() != "Interface brief\n" {
+		t.Fatalf("Unexpected output: %s", w.String())
+	}
+
+	w = &strings.Builder{}
+	cli.runLine("s i bg", w)
+
+	if w.String() != "BGP information\n" {
+		t.Fatalf("Unexpected output: %s", w.String())
+	}
+}
+
+func TestDisambiguationBasedOnLaterTokensWithParams(t *testing.T) {
+	cli := NewCLI()
+
 	err := cli.Register("show ip route A.B.C.D", "Show route to A.B.C.D", func(w io.Writer, addr netip.Addr) error {
 		fmt.Fprintf(w, "IPv4 route to %s\n", addr)
 		return nil
