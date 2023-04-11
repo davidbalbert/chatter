@@ -12,10 +12,11 @@ import (
 type CLI struct {
 	running bool
 	root    *commands.Node
+	prompt  string
 }
 
 func NewCLI() *CLI {
-	cli := &CLI{}
+	cli := &CLI{prompt: "ospfc# "}
 
 	cli.MustRegister("exit", "Exit the CLI", func(w io.Writer) error {
 		cli.running = false
@@ -79,13 +80,15 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 		return "", 0, false
 	}
 
-	options, offset, err := cli.root.GetAutocompleteOptions(line)
+	options, offset, err := cli.root.GetAutocompleteOptions(w, line)
 	if err != nil {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "%% Error getting autocomplete options: %v\n", err)
 		return "", 0, false
 	}
 
 	if len(options) == 0 {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "no options\n")
 		return "", 0, false
 	} else if len(options) == 1 {
@@ -93,6 +96,8 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 
 		return new, len(new), true
 	} else {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+
 		for _, o := range options {
 			fmt.Fprintf(w, "%s\n", o)
 		}
@@ -101,7 +106,9 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	}
 }
 
-func (cli *CLI) Run(t *term.Terminal) {
+func (cli *CLI) Run(rw io.ReadWriter) {
+	t := term.NewTerminal(rw, cli.prompt)
+
 	t.AutoCompleteCallback = func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
 		return cli.autocomplete(t, line, pos, key)
 	}

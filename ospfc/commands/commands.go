@@ -708,70 +708,100 @@ func contains(strings []string, s string) bool {
 	return false
 }
 
-func (root *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, offset int, err error) {
-	fields := strings.Fields(line)
+func autocompleteFields(s string) []string {
+	fields := strings.Fields(s)
 
-	fieldnum := len(fields)
-
-	r, n := utf8.DecodeLastRuneInString(line)
-	if r == utf8.RuneError && n == 1 { // invalid utf8
-		return nil, 0, nil
+	r, n := utf8.DecodeLastRuneInString(s)
+	if r == utf8.RuneError && n == 1 {
+		// invalid encoding, just return the result of strings.Fields
+		return fields
 	}
 
-	if !unicode.IsSpace(r) && r != utf8.RuneError {
-		fieldnum--
+	if unicode.IsSpace(r) || r == utf8.RuneError {
+		fields = append(fields, "")
 	}
 
-	var field string
-	if fieldnum < len(fields) {
-		field = fields[fieldnum]
-	} else {
-		field = ""
-	}
+	return fields
+}
 
-	fmt.Fprintf(w, "fields: %v, fieldnum: %d, field: %q\n", fields, fieldnum, field)
-
-	var roots []*Node
-
-	if fieldnum == 0 {
-		roots = []*Node{root}
-	} else {
-		matches := root.matchTokens(fields[:fieldnum])
-
-		for _, m := range matches {
-			for m.next != nil {
-				m = m.next
-			}
-
-			roots = append(roots, m.node)
-		}
-	}
-
-	var nodes []*Node
-
-	if field == "" {
-		for _, r := range roots {
-			nodes = append(nodes, r.children...)
-		}
-	} else {
-		nodes = roots
-	}
-
-	fmt.Fprintf(w, "roots: %v nodes: %v\n", roots, nodes)
-
+func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([]string, error) {
 	var options []string
 
-	for _, n := range nodes {
-		if n.t == ntLiteral {
-			if strings.HasPrefix(n.value, field) {
-				if !contains(options, n.value) {
-					options = append(options, n.value)
+	if n.t == ntChoice {
+		for _, child := range n.children {
+			opts, err := child.getAutocompleteOptionsFromTokens(w, fields)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, opt := range opts {
+				if !contains(options, opt) {
+					options = append(options, opt)
 				}
 			}
-		} else if n.autocompleteFunc != nil {
-			opts, err := n.autocompleteFunc(field)
+		}
+	} else {
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("no fields")
+		} else if len(fields) == 1 {
+			if n.t == ntLiteral {
+				if strings.HasPrefix(n.value, fields[0]) && !contains(options, n.value) {
+					options = append(options, n.value)
+				}
+			} else if n.autocompleteFunc != nil {
+				opts, err := n.autocompleteFunc(fields[0])
+				if err != nil {
+					return nil, err
+				}
+
+				for _, opt := range opts {
+					if !contains(options, opt) {
+						options = append(options, opt)
+					}
+				}
+			}
+
+			return options, nil
+		}
+
+		// len(fields) > 1, we need to continue on the next field
+
+		for _, child := range n.children {
+			var err error
+			var opts []string
+
+			if child.t == ntChoice {
+				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+			} else if child.t == ntLiteral {
+				if strings.HasPrefix(child.value, fields[0]) {
+					opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+				}
+			} else if child.t == ntParamString {
+				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+			} else if child.t == ntParamIPv4 {
+				var addr netip.Addr
+				addr, err = netip.ParseAddr(fields[0])
+				if err != nil || !addr.Is4() {
+					// invalid address, skip this child
+					continue
+				}
+
+				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+			} else if child.t == ntParamIPv6 {
+				var addr netip.Addr
+				addr, err = netip.ParseAddr(fields[0])
+				if err != nil || !addr.Is6() {
+					// invalid address, skip this child
+					continue
+				}
+
+				opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+			} else {
+				panic("unreachable")
+			}
+
 			if err != nil {
-				return nil, 0, err
+				return nil, err
 			}
 
 			for _, opt := range opts {
@@ -782,7 +812,20 @@ func (root *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []strin
 		}
 	}
 
-	return options, len(field), nil
+	return options, nil
+}
+
+func (n *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, offset int, err error) {
+	fields := autocompleteFields(line)
+
+	options, err := n.getAutocompleteOptionsFromTokens(w, fields)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	last := fields[len(fields)-1]
+
+	return options, len(last), nil
 }
 
 type commandParser struct {

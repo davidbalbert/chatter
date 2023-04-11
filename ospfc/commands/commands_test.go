@@ -1863,3 +1863,190 @@ func TestParamTypesAfterMergeWithParamsAndChoices(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, leaf.paramTypes)
 	}
 }
+
+func TestAutocompleteSimple(t *testing.T) {
+	cmd1, err := ParseDeclaration("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("reset counters")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	options, offset, err := cmd3.GetAutocompleteOptions(w, "sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 2 {
+		t.Fatalf("expected offset 2, got %d", offset)
+	}
+
+	expected := []string{"show"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+}
+
+func TestAutocompleteEmpty(t *testing.T) {
+	cmd1, err := ParseDeclaration("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("reset counters")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	options, offset, err := cmd3.GetAutocompleteOptions(w, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 0 {
+		t.Fatalf("expected offset 0, got %d", offset)
+	}
+
+	expected := []string{"show", "reset"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+}
+
+func TestAutocompleteMultiple(t *testing.T) {
+	cmd1, err := ParseDeclaration("show interface")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("show ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := ParseDeclaration("show ipv6")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd4, err := ParseDeclaration("show version")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd5, err := cmd1.Merge(cmd2, cmd3, cmd4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	options, offset, err := cmd5.GetAutocompleteOptions(w, "show ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 0 {
+		t.Fatalf("expected offset 0, got %d", offset)
+	}
+
+	expected := []string{"interface", "ip", "ipv6", "version"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd5.GetAutocompleteOptions(w, "show i")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 1 {
+		t.Fatalf("expected offset 1, got %d", offset)
+	}
+
+	expected = []string{"interface", "ip", "ipv6"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ip")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 2 {
+		t.Fatalf("expected offset 2, got %d", offset)
+	}
+
+	expected = []string{"ip", "ipv6"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ipv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 3 {
+		t.Fatalf("expected offset 3, got %d", offset)
+	}
+
+	expected = []string{"ipv6"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ipv6")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 4 {
+		t.Fatalf("expected offset 4, got %d", offset)
+	}
+
+	expected = []string{"ipv6"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd5.GetAutocompleteOptions(w, "show q")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 1 {
+		t.Fatalf("expected offset 1, got %d", offset)
+	}
+
+	if len(options) != 0 {
+		t.Fatalf("expected no options, got %v", options)
+	}
+}

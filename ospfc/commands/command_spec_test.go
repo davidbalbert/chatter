@@ -449,7 +449,7 @@ func TestMoreComplicatedDescription(t *testing.T) {
 	}
 }
 
-func TestAutocomplete(t *testing.T) {
+func TestHasAutocomplete(t *testing.T) {
 	s, err := parseSpec("param:ipv4!A?\"Autocompletes IPv4 addresses\"")
 	if err != nil {
 		t.Fatal(err)

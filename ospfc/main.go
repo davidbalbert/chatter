@@ -341,6 +341,5 @@ func main() {
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	t := term.NewTerminal(os.Stdin, "ospfd# ")
-	cli.Run(t)
+	cli.Run(os.Stdin)
 }
