@@ -36,7 +36,7 @@ func (cli *CLI) Run(t *term.Terminal) {
 	for cli.running {
 		line, err := t.ReadLine()
 		if err != nil {
-			fmt.Printf("%% Error reading line: %v\n", err)
+			fmt.Fprintf(t, "%% Error reading line: %v\n", err)
 			break
 		}
 
@@ -55,25 +55,25 @@ func (cli *CLI) Run(t *term.Terminal) {
 		}
 
 		if len(completeMatches) == 0 && len(matches) == 0 {
-			fmt.Printf("%% Unknown command: %s\n", line)
+			fmt.Fprintf(t, "%% Unknown command: %s\n", line)
 			continue
 		} else if len(completeMatches) == 0 {
-			fmt.Printf("%% Command incomplete: %s\n", line)
+			fmt.Fprintf(t, "%% Command incomplete: %s\n", line)
 			continue
 		} else if len(completeMatches) > 1 {
-			fmt.Printf("%% Ambiguous command: %s\n", line)
+			fmt.Fprintf(t, "%% Ambiguous command: %s\n", line)
 			continue
 		}
 
 		invoker, err := matches[0].Invoker()
 		if err != nil {
-			fmt.Printf("%% Error running command: %v\n", err)
+			fmt.Fprintf(t, "%% Error running command: %v\n", err)
 			continue
 		}
 
 		err = invoker.Run(t)
 		if err != nil {
-			fmt.Printf("%% Error running command: %v\n", err)
+			fmt.Fprintf(t, "%% Error running command: %v\n", err)
 			continue
 		}
 	}
