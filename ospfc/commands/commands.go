@@ -439,28 +439,6 @@ type Match struct {
 	args       []reflect.Value // arguments for the handler function
 }
 
-func (m *Match) getAutocompleteOptions(fieldnum int, prefix string) ([]string, error) {
-	for i := fieldnum; i > 0 && m != nil; i-- {
-		m = m.next
-	}
-
-	if m == nil {
-		return nil, nil
-	}
-
-	if m.node.t == ntLiteral {
-		if strings.HasPrefix(m.node.value, prefix) {
-			return []string{m.node.value}, nil
-		} else {
-			return nil, nil
-		}
-	} else if m.node.autocompleteFunc != nil {
-		return m.node.autocompleteFunc(prefix)
-	} else {
-		return nil, nil
-	}
-}
-
 func (m *Match) IsComplete() bool {
 	return m.isComplete
 }
@@ -720,12 +698,18 @@ func (n *Node) Match(input string) []*Match {
 	return disambiguated
 }
 
-func (node *Node) GetAutocompleteOptions(line string) (opts []string, offset int, err error) {
-	fields := strings.Fields(line)
-
-	if len(fields) == 0 {
-		return nil, 0, nil
+func contains(strings []string, s string) bool {
+	for _, str := range strings {
+		if str == s {
+			return true
+		}
 	}
+
+	return false
+}
+
+func (root *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, offset int, err error) {
+	fields := strings.Fields(line)
 
 	fieldnum := len(fields)
 
@@ -745,16 +729,57 @@ func (node *Node) GetAutocompleteOptions(line string) (opts []string, offset int
 		field = ""
 	}
 
-	matches := node.matchTokens(fields)
+	fmt.Fprintf(w, "fields: %v, fieldnum: %d, field: %q\n", fields, fieldnum, field)
+
+	var roots []*Node
+
+	if fieldnum == 0 {
+		roots = []*Node{root}
+	} else {
+		matches := root.matchTokens(fields[:fieldnum])
+
+		for _, m := range matches {
+			for m.next != nil {
+				m = m.next
+			}
+
+			roots = append(roots, m.node)
+		}
+	}
+
+	var nodes []*Node
+
+	if field == "" {
+		for _, r := range roots {
+			nodes = append(nodes, r.children...)
+		}
+	} else {
+		nodes = roots
+	}
+
+	fmt.Fprintf(w, "roots: %v nodes: %v\n", roots, nodes)
 
 	var options []string
-	for _, m := range matches {
-		opts, err := m.getAutocompleteOptions(fieldnum, field)
-		if err != nil {
-			return nil, 0, err
-		}
 
-		options = append(options, opts...)
+	for _, n := range nodes {
+		if n.t == ntLiteral {
+			if strings.HasPrefix(n.value, field) {
+				if !contains(options, n.value) {
+					options = append(options, n.value)
+				}
+			}
+		} else if n.autocompleteFunc != nil {
+			opts, err := n.autocompleteFunc(field)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			for _, opt := range opts {
+				if !contains(options, opt) {
+					options = append(options, opt)
+				}
+			}
+		}
 	}
 
 	return options, len(field), nil
