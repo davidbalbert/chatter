@@ -30,6 +30,45 @@ func NewCLI() *CLI {
 	return cli
 }
 
+func (cli *CLI) runLine(line string, w io.Writer) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	matches := cli.root.Match(line)
+	completeMatches := make([]*commands.Match, 0, len(matches))
+
+	for _, m := range matches {
+		if m.IsComplete() {
+			completeMatches = append(completeMatches, m)
+		}
+	}
+
+	if len(completeMatches) == 0 && len(matches) == 0 {
+		fmt.Fprintf(w, "%% Unknown command: %s\n", line)
+		return
+	} else if len(completeMatches) == 0 {
+		fmt.Fprintf(w, "%% Command incomplete: %s\n", line)
+		return
+	} else if len(completeMatches) > 1 {
+		fmt.Fprintf(w, "%% Ambiguous command: %s\n", line)
+		return
+	}
+
+	invoker, err := matches[0].Invoker()
+	if err != nil {
+		fmt.Fprintf(w, "%% Error running command: %v\n", err)
+		return
+	}
+
+	err = invoker.Run(w)
+	if err != nil {
+		fmt.Fprintf(w, "%% Error running command: %v\n", err)
+		return
+	}
+}
+
 func (cli *CLI) Run(t *term.Terminal) {
 	cli.running = true
 
@@ -40,42 +79,7 @@ func (cli *CLI) Run(t *term.Terminal) {
 			break
 		}
 
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		matches := cli.root.Match(line)
-		completeMatches := make([]*commands.Match, 0, len(matches))
-
-		for _, m := range matches {
-			if m.IsComplete() {
-				completeMatches = append(completeMatches, m)
-			}
-		}
-
-		if len(completeMatches) == 0 && len(matches) == 0 {
-			fmt.Fprintf(t, "%% Unknown command: %s\n", line)
-			continue
-		} else if len(completeMatches) == 0 {
-			fmt.Fprintf(t, "%% Command incomplete: %s\n", line)
-			continue
-		} else if len(completeMatches) > 1 {
-			fmt.Fprintf(t, "%% Ambiguous command: %s\n", line)
-			continue
-		}
-
-		invoker, err := matches[0].Invoker()
-		if err != nil {
-			fmt.Fprintf(t, "%% Error running command: %v\n", err)
-			continue
-		}
-
-		err = invoker.Run(t)
-		if err != nil {
-			fmt.Fprintf(t, "%% Error running command: %v\n", err)
-			continue
-		}
+		cli.runLine(line, t)
 	}
 }
 
