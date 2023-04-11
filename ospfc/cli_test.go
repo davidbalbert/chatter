@@ -253,6 +253,35 @@ func TestCommandWithArgChoiceDifferentTypes(t *testing.T) {
 	}
 }
 
+func TestDisambiguationBasedOnLaterTokens(t *testing.T) {
+	cli := NewCLI()
+
+	err := cli.Register("show ip route A.B.C.D", "Show route to A.B.C.D", func(w io.Writer, addr netip.Addr) error {
+		fmt.Fprintf(w, "IPv4 route to %s\n", addr)
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = cli.Register("show ipv6 route X:X:X::X", "Show route to X:X:X::X", func(w io.Writer, addr netip.Addr) error {
+		fmt.Fprintf(w, "IPv6 route to %s\n", addr)
+		return nil
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	cli.runLine("s i r 1.1.1.1", w)
+
+	if w.String() != "IPv4 route to 1.1.1.1\n" {
+		t.Fatalf("Unexpected output: %s", w.String())
+	}
+}
+
 func TestRegistrationWrongArgs(t *testing.T) {
 	cli := NewCLI()
 

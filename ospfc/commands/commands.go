@@ -274,27 +274,29 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 				n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2)
 			}
 
-			var grandchild *Node
-			if len(child2.children) == 1 && i != -1 {
-				grandchild = n1.children[i].children[0]
-			} else if len(child2.children) == 1 {
-				for _, child1 := range n1.children {
-					if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
-						gc, err := child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
-						if err != nil {
-							return nil, err
-						}
+			if n1.explicitChoice && n2.explicitChoice {
+				var grandchild *Node
+				if len(child2.children) == 1 && i != -1 {
+					grandchild = n1.children[i].children[0]
+				} else if len(child2.children) == 1 {
+					for _, child1 := range n1.children {
+						if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
+							gc, err := child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+							if err != nil {
+								return nil, err
+							}
 
-						grandchild = gc
-						break
+							grandchild = gc
+							break
+						}
 					}
 				}
-			}
 
-			if grandchild != nil {
-				for _, child1 := range n1.children {
-					if len(child1.children) > 0 && child1.children[0].id() == grandchild.id() {
-						child1.children[0] = grandchild
+				if grandchild != nil {
+					for _, child1 := range n1.children {
+						if len(child1.children) > 0 && child1.children[0].id() == grandchild.id() {
+							child1.children[0] = grandchild
+						}
 					}
 				}
 			}

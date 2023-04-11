@@ -483,6 +483,66 @@ func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
 	AssertMatchesCommandSpec(t, spec, cmd3)
 }
 
+func TestMergeSeparatePaths(t *testing.T) {
+	cmd1, err := ParseDeclaration("show ip route A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec := `
+		literal:show[
+			literal:ip[
+				literal:route[
+					param:ipv4
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd1)
+
+	cmd2, err := ParseDeclaration("show ipv6 route X:X:X::X")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			literal:ipv6[
+				literal:route[
+					param:ipv6
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd2)
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	spec = `
+		literal:show[
+			choice[
+				literal:ip[
+					literal:route[
+						param:ipv4
+					]
+				],
+				literal:ipv6[
+					literal:route[
+						param:ipv6
+					]
+				]
+			]
+		]
+	`
+
+	AssertMatchesCommandSpec(t, spec, cmd3)
+}
+
 func TestMergePiecemeal(t *testing.T) {
 	cmd1, err := ParseDeclaration("show A.B.C.D detail")
 	if err != nil {
@@ -599,13 +659,16 @@ func TestMergePiecemeal(t *testing.T) {
 		literal:show[
 			choice[
 				param:ipv4[
-					choice.1[
-						literal:summary
+					choice[
 						literal:detail,
+						literal:summary
 					]
 				],
 				param:ipv6[
-					choice.1
+					choice[
+						literal:summary,
+						literal:detail
+					]
 				]
 			]
 		]
@@ -1198,6 +1261,81 @@ func TestMatchCommonPrefixesAreAmbiguousMoreComplicated(t *testing.T) {
 	spec = `
 		show ipv6 routes
 	`
+	AssertMatchesMatchSpec(t, spec, matches)
+}
+
+func TestFutureTokensResolveAmbiguity(t *testing.T) {
+	cmd1, err := ParseDeclaration("show ip route")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("show ipv6 runner")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	matches := cmd3.Match("sh i r")
+
+	spec := `
+		show ip route
+		show ipv6 runner
+	`
+
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd3.Match("sh i ro")
+
+	spec = `
+		show ip route
+	`
+
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd3.Match("sh i ru")
+
+	spec = `
+		show ipv6 runner
+	`
+
+	AssertMatchesMatchSpec(t, spec, matches)
+}
+
+func TestFutureTokensResolveAmbiguityWithParams(t *testing.T) {
+	cmd1, err := ParseDeclaration("show ip route A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("show ipv6 route X:X:X::X")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd3, err := cmd1.Merge(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	matches := cmd3.Match("sh i r 1.1.1.1")
+
+	spec := `
+		show ip route ipv4:1.1.1.1
+	`
+
+	AssertMatchesMatchSpec(t, spec, matches)
+
+	matches = cmd3.Match("sh i r 2001:0db8::1")
+
+	spec = `
+		show ipv6 route ipv6:2001:0db8::1
+	`
+
 	AssertMatchesMatchSpec(t, spec, matches)
 }
 
