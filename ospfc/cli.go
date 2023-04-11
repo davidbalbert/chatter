@@ -69,7 +69,43 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 	}
 }
 
+func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+	// For now, only autocomplete at the end of the line
+	if pos != len(line) {
+		return "", 0, false
+	}
+
+	if key != '\t' {
+		return "", 0, false
+	}
+
+	options, offset, err := cli.root.GetAutocompleteOptions(line)
+	if err != nil {
+		fmt.Fprintf(w, "%% Error getting autocomplete options: %v\n", err)
+		return "", 0, false
+	}
+
+	if len(options) == 0 {
+		fmt.Fprintf(w, "no options\n")
+		return "", 0, false
+	} else if len(options) == 1 {
+		new := line + options[0][offset:] + " "
+
+		return new, len(new), true
+	} else {
+		for _, o := range options {
+			fmt.Fprintf(w, "%s\n", o)
+		}
+
+		return "", 0, false
+	}
+}
+
 func (cli *CLI) Run(t *term.Terminal) {
+	t.AutoCompleteCallback = func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+		return cli.autocomplete(t, line, pos, key)
+	}
+
 	cli.running = true
 
 	for cli.running {
@@ -81,6 +117,8 @@ func (cli *CLI) Run(t *term.Terminal) {
 
 		cli.runLine(line, t)
 	}
+
+	t.AutoCompleteCallback = nil
 }
 
 func (cli *CLI) Register(command string, description string, handlerFunc any) error {

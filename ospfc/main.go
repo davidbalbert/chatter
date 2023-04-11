@@ -295,6 +295,17 @@ func main() {
 			return nil
 		})
 
+	cli.MustDocument("show ipv6", "IPv6 information")
+	cli.MustDocument("show ipv6 route", "IPv6 routing table")
+	cli.MustRegister(
+		"show ipv6 route X:X:X::X",
+		"Network in the IPv6 routing table to display",
+		func(w io.Writer, addr netip.Addr) error {
+			fmt.Fprintln(w, "addr:", addr)
+
+			return nil
+		})
+
 	cli.MustDocument("show bgp", "BGP information")
 	cli.MustDocument("show bgp neighbors", "Detailed information on TCP and BGP neighbor connections")
 

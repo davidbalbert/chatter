@@ -6,6 +6,7 @@ import (
 	"net/netip"
 	"reflect"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -438,6 +439,28 @@ type Match struct {
 	args       []reflect.Value // arguments for the handler function
 }
 
+func (m *Match) getAutocompleteOptions(fieldnum int, prefix string) ([]string, error) {
+	for i := fieldnum; i > 0 && m != nil; i-- {
+		m = m.next
+	}
+
+	if m == nil {
+		return nil, nil
+	}
+
+	if m.node.t == ntLiteral {
+		if strings.HasPrefix(m.node.value, prefix) {
+			return []string{m.node.value}, nil
+		} else {
+			return nil, nil
+		}
+	} else if m.node.autocompleteFunc != nil {
+		return m.node.autocompleteFunc(prefix)
+	} else {
+		return nil, nil
+	}
+}
+
 func (m *Match) IsComplete() bool {
 	return m.isComplete
 }
@@ -695,6 +718,46 @@ func (n *Node) Match(input string) []*Match {
 	}
 
 	return disambiguated
+}
+
+func (node *Node) GetAutocompleteOptions(line string) (opts []string, offset int, err error) {
+	fields := strings.Fields(line)
+
+	if len(fields) == 0 {
+		return nil, 0, nil
+	}
+
+	fieldnum := len(fields)
+
+	r, n := utf8.DecodeLastRuneInString(line)
+	if r == utf8.RuneError && n == 1 { // invalid utf8
+		return nil, 0, nil
+	}
+
+	if !unicode.IsSpace(r) && r != utf8.RuneError {
+		fieldnum--
+	}
+
+	var field string
+	if fieldnum < len(fields) {
+		field = fields[fieldnum]
+	} else {
+		field = ""
+	}
+
+	matches := node.matchTokens(fields)
+
+	var options []string
+	for _, m := range matches {
+		opts, err := m.getAutocompleteOptions(fieldnum, field)
+		if err != nil {
+			return nil, 0, err
+		}
+
+		options = append(options, opts...)
+	}
+
+	return options, len(field), nil
 }
 
 type commandParser struct {
