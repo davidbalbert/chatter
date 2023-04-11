@@ -96,6 +96,7 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	} else {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
+		// TODO: tabulate output based on width of terminal
 		for _, o := range options {
 			fmt.Fprintf(w, "%s\n", o)
 		}
