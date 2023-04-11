@@ -272,7 +272,12 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 			if i == -1 {
 				n1.children = append(n1.children, child2)
 			} else {
-				n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2)
+				merged, err := n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2)
+				if err != nil {
+					return nil, err
+				}
+
+				n1.children[i] = merged
 			}
 
 			if n1.explicitChoice && n2.explicitChoice {
