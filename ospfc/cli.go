@@ -71,16 +71,14 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 }
 
 func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
-	// For now, only autocomplete at the end of the line
-	if pos != len(line) {
-		return "", 0, false
-	}
+	prefix := line[:pos]
+	rest := line[pos:]
 
 	if key != '\t' {
 		return "", 0, false
 	}
 
-	options, offset, err := cli.root.GetAutocompleteOptions(w, line)
+	options, offset, err := cli.root.GetAutocompleteOptions(w, prefix)
 	if err != nil {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "%% Error getting autocomplete options: %v\n", err)
@@ -90,7 +88,13 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	if len(options) == 0 {
 		return "", 0, false
 	} else if len(options) == 1 {
-		new := line + options[0][offset:] + " "
+		new := prefix + options[0][offset:]
+
+		if !strings.HasPrefix(rest, " ") {
+			new += " "
+		}
+
+		new += rest
 
 		return new, len(new), true
 	} else {
