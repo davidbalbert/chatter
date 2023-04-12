@@ -111,7 +111,7 @@ func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine 
 	prefix := line[:pos]
 	rest := line[pos:]
 
-	options, offset, err := cli.root.GetAutocompleteOptions(w, prefix)
+	options, offset, err := cli.root.GetAutocompleteOptions(prefix)
 	if err != nil {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "%% Error getting autocomplete options: %v\n", err)

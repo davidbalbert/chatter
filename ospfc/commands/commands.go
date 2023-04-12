@@ -768,12 +768,12 @@ func (n *Node) OptionsFromAutocompleteFunc(prefix string) ([]string, error) {
 	return filtered, nil
 }
 
-func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([]string, error) {
+func (n *Node) getAutocompleteOptionsFromTokens(fields []string) ([]string, error) {
 	var options []string
 
 	if n.t == ntChoice {
 		for _, child := range n.children {
-			opts, err := child.getAutocompleteOptionsFromTokens(w, fields)
+			opts, err := child.getAutocompleteOptionsFromTokens(fields)
 			if err != nil {
 				return nil, err
 			}
@@ -836,7 +836,7 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 		}
 
 		for _, child := range n.children {
-			opts, err = child.getAutocompleteOptionsFromTokens(w, fields[1:])
+			opts, err = child.getAutocompleteOptionsFromTokens(fields[1:])
 			if err != nil {
 				return nil, err
 			}
@@ -852,10 +852,10 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 	return options, nil
 }
 
-func (n *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, offset int, err error) {
+func (n *Node) GetAutocompleteOptions(line string) (opts []string, offset int, err error) {
 	fields := autocompleteFields(line)
 
-	options, err := n.getAutocompleteOptionsFromTokens(w, fields)
+	options, err := n.getAutocompleteOptionsFromTokens(fields)
 	if err != nil {
 		return nil, 0, err
 	}

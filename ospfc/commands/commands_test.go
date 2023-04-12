@@ -2140,8 +2140,7 @@ func TestAutocompleteSimple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &strings.Builder{}
-	options, offset, err := cmd3.GetAutocompleteOptions(w, "sh")
+	options, offset, err := cmd3.GetAutocompleteOptions("sh")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2173,8 +2172,7 @@ func TestAutocompleteEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &strings.Builder{}
-	options, offset, err := cmd3.GetAutocompleteOptions(w, "")
+	options, offset, err := cmd3.GetAutocompleteOptions("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2183,7 +2181,7 @@ func TestAutocompleteEmpty(t *testing.T) {
 		t.Fatalf("expected offset 0, got %d", offset)
 	}
 
-	expected := []string{"show", "reset"}
+	expected := []string{"reset", "show"}
 
 	if !reflect.DeepEqual(options, expected) {
 		t.Fatalf("expected %v, got %v", expected, options)
@@ -2216,8 +2214,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &strings.Builder{}
-	options, offset, err := cmd5.GetAutocompleteOptions(w, "show ")
+	options, offset, err := cmd5.GetAutocompleteOptions("show ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2232,8 +2229,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd5.GetAutocompleteOptions(w, "show i")
+	options, offset, err = cmd5.GetAutocompleteOptions("show i")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2248,8 +2244,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ip")
+	options, offset, err = cmd5.GetAutocompleteOptions("show ip")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2264,8 +2259,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ipv")
+	options, offset, err = cmd5.GetAutocompleteOptions("show ipv")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2280,8 +2274,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd5.GetAutocompleteOptions(w, "show ipv6")
+	options, offset, err = cmd5.GetAutocompleteOptions("show ipv6")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2296,8 +2289,7 @@ func TestAutocompleteMultiple(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd5.GetAutocompleteOptions(w, "show q")
+	options, offset, err = cmd5.GetAutocompleteOptions("show q")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2317,8 +2309,7 @@ func TestAutocompleteMultiLevel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &strings.Builder{}
-	options, offset, err := cmd1.GetAutocompleteOptions(w, "show ip ")
+	options, offset, err := cmd1.GetAutocompleteOptions("show ip ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2352,8 +2343,7 @@ func TestAutocompleteWithParam(t *testing.T) {
 		return []string{"1.1.1.1", "8.8.8.8"}, nil
 	})
 
-	w := &strings.Builder{}
-	options, offset, err := cmd1.GetAutocompleteOptions(w, "show bgp neighbors ")
+	options, offset, err := cmd1.GetAutocompleteOptions("show bgp neighbors ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2368,8 +2358,7 @@ func TestAutocompleteWithParam(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 1")
+	options, offset, err = cmd1.GetAutocompleteOptions("show bgp neighbors 1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2384,8 +2373,7 @@ func TestAutocompleteWithParam(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 8.8.")
+	options, offset, err = cmd1.GetAutocompleteOptions("show bgp neighbors 8.8.")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2400,8 +2388,7 @@ func TestAutocompleteWithParam(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 
-	w = &strings.Builder{}
-	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 2")
+	options, offset, err = cmd1.GetAutocompleteOptions("show bgp neighbors 2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2443,8 +2430,7 @@ func TestAutocompleteWithParamAndLiteral(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w := &strings.Builder{}
-	options, offset, err := cmd3.GetAutocompleteOptions(w, "show bgp neighbors ")
+	options, offset, err := cmd3.GetAutocompleteOptions("show bgp neighbors ")
 	if err != nil {
 		t.Fatal(err)
 	}
