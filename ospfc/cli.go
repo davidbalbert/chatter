@@ -151,12 +151,12 @@ func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) 
 	if err != nil {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "%% Error getting autocomplete nodes: %v\n", err)
-		return "", 0, false
+		return line, pos, true
 	}
 
 	if len(nodes) == 0 {
 		fmt.Fprintf(w, "%% There is no matched command.\n")
-		return "", 0, false
+		return line, pos, true
 	}
 
 	longestTokenLen := 0
@@ -174,7 +174,7 @@ func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) 
 		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), n.Description())
 	}
 
-	return "", 0, false
+	return line, pos, true
 }
 
 func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
