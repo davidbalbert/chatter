@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/netip"
 	"reflect"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -836,6 +837,8 @@ func (n *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, 
 	}
 
 	last := fields[len(fields)-1]
+
+	sort.Strings(options)
 
 	return options, len(last), nil
 }
