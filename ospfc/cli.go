@@ -90,17 +90,9 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 	}
 }
 
-func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
-	defer func() {
-		cli.lastKey = key
-	}()
-
+func (cli *CLI) autocompleteWithTab(w io.Writer, line string, pos int) (newLine string, newPos int, ok bool) {
 	prefix := line[:pos]
 	rest := line[pos:]
-
-	if key != '\t' {
-		return "", 0, false
-	}
 
 	options, offset, err := cli.root.GetAutocompleteOptions(w, prefix)
 	if err != nil {
@@ -141,6 +133,19 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 
 		return "", 0, false
 	}
+
+}
+
+func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+	defer func() {
+		cli.lastKey = key
+	}()
+
+	if key == '\t' {
+		return cli.autocompleteWithTab(w, line, pos)
+	}
+
+	return "", 0, false
 }
 
 func (cli *CLI) Run(rw io.ReadWriter) {
