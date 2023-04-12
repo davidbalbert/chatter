@@ -305,8 +305,6 @@ func (cli *CLI) Run(rw readWriteFder) {
 
 		cli.runLine(line, t)
 	}
-
-	t.AutoCompleteCallback = nil
 }
 
 func (cli *CLI) Register(command string, description string, handlerFunc any) error {
