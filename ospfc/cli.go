@@ -9,6 +9,25 @@ import (
 	"golang.org/x/term"
 )
 
+func commonPrefixLen(ss ...string) int {
+	if len(ss) == 0 {
+		return 0
+	}
+
+	prefixLen := len(ss[0])
+	for _, s := range ss[1:] {
+		i := 0
+		for ; i < len(s) && i < prefixLen; i++ {
+			if s[i] != ss[0][i] {
+				break
+			}
+		}
+		prefixLen = i
+	}
+
+	return prefixLen
+}
+
 type CLI struct {
 	running bool
 	root    *commands.Node
@@ -94,18 +113,28 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 			new += " "
 		}
 
-		new += rest
-
-		return new, len(new), true
+		return new + rest, len(new), true
 	} else {
-		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+		// find the longest prefix length of all options
+		// if the prefix is longer than zero, autocomplete with it (don't add a space at the end)
+		// if it is zero, print the options and return
 
-		// TODO: tabulate output based on width of terminal
-		for _, o := range options {
-			fmt.Fprintf(w, "%s\n", o)
+		prefixLen := commonPrefixLen(options...)
+
+		if prefixLen > 0 && prefixLen > offset {
+			new := prefix + options[0][offset:prefixLen]
+
+			return new + rest, len(new), true
+		} else {
+			fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+
+			// TODO: tabulate output based on width of terminal
+			for _, o := range options {
+				fmt.Fprintf(w, "%s\n", o)
+			}
+
+			return "", 0, false
 		}
-
-		return "", 0, false
 	}
 }
 

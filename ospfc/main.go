@@ -11,7 +11,7 @@ import (
 	"golang.org/x/term"
 )
 
-func commonPrefixLen(a, b string) int {
+func radixTreeCommonPrefixLen(a, b string) int {
 	i := 0
 	for ; i < len(a) && i < len(b); i++ {
 		if a[i] != b[i] {
@@ -48,7 +48,7 @@ func (n *node) store(key string, value any) {
 		if i < len(n.edgeIndex) && n.edgeIndex[i] == key[0] {
 			// edge found
 			e := n.edges[i]
-			prefixLen := commonPrefixLen(e.label, key)
+			prefixLen := radixTreeCommonPrefixLen(e.label, key)
 
 			if prefixLen == len(e.label) && prefixLen == len(key) {
 				// exact match, overwrite
@@ -107,7 +107,7 @@ func (n *node) load(key string) (any, bool) {
 		if i < len(n.edgeIndex) && n.edgeIndex[i] == key[0] {
 			// edge found
 			e := n.edges[i]
-			prefixLen := commonPrefixLen(e.label, key)
+			prefixLen := radixTreeCommonPrefixLen(e.label, key)
 
 			if prefixLen == len(e.label) && prefixLen == len(key) {
 				// exact match
@@ -174,7 +174,7 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 
 	walkEdge = func(prefix string, e *edge, offset int, partialToken string, partialTokens []string) error {
 		rest := e.label[offset:]
-		prefixLen := commonPrefixLen(rest, partialToken)
+		prefixLen := radixTreeCommonPrefixLen(rest, partialToken)
 
 		if prefixLen < len(partialToken) && prefixLen < len(rest) {
 			// neither the edge	nor partialToken is a prefix of the other. no match.

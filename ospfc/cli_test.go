@@ -8,6 +8,40 @@ import (
 	"testing"
 )
 
+func TestCommonPrefixLen(t *testing.T) {
+	if commonPrefixLen("foo", "bar") != 0 {
+		t.Fatal("commonPrefixLen should be 0")
+	}
+
+	if commonPrefixLen("foo", "foo") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+
+	if commonPrefixLen("foo", "foobar") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+
+	if commonPrefixLen("foobar", "foo") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+
+	if commonPrefixLen("foo", "bar", "baz") != 0 {
+		t.Fatal("commonPrefixLen should be 0")
+	}
+
+	if commonPrefixLen("foo", "foo", "foo") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+
+	if commonPrefixLen("foo", "foobar", "foobaz") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+
+	if commonPrefixLen("foobar", "foo", "foobaz") != 3 {
+		t.Fatal("commonPrefixLen should be 3")
+	}
+}
+
 func TestBuiltInExitCommand(t *testing.T) {
 	cli := NewCLI()
 
