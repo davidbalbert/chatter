@@ -128,6 +128,10 @@ func TestIsPrefixOfIPv4Address(t *testing.T) {
 	if isPrefixOfIPv4Address("1.2.3.256") {
 		t.Fatal("1.2.3.256 should not be a prefix of any IPv4 address")
 	}
+
+	if isPrefixOfIPv4Address("a") {
+		t.Fatal("a should not be a prefix of any IPv4 address")
+	}
 }
 
 func TestIsPrefixOfIPv6Address(t *testing.T) {

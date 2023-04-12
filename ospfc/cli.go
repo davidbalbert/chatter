@@ -155,6 +155,7 @@ func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) 
 	}
 
 	if len(nodes) == 0 {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 		fmt.Fprintf(w, "%% There is no matched command.\n")
 		return line, pos, true
 	}

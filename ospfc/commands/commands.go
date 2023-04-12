@@ -869,6 +869,12 @@ func isPrefixOfIPv4Address(s string) bool {
 			return false
 		}
 
+		for _, c := range octet {
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+
 		if len(octet) > 1 && octet[0] == '0' {
 			return false
 		}
@@ -925,8 +931,6 @@ func isPrefixOfIPv6Address(s string) bool {
 			nEmptyHextets++
 		}
 	}
-
-	fmt.Printf("nEmptyHextets=%d nDoubleColons=%d len(hextets)=%d hextets=%#v\n", nEmptyHextets, nDoubleColons, len(hextets), hextets)
 
 	if len(hextets) > 8 && nDoubleColons == 0 {
 		return false
