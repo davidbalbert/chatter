@@ -289,7 +289,11 @@ func main() {
 		})
 
 	cli.MustDocument("show bgp", "BGP information")
-	cli.MustDocument("show bgp neighbors", "Detailed information on TCP and BGP neighbor connections")
+	cli.Register("show bgp neighbors", "Detailed information on TCP and BGP neighbor connections", func(w io.Writer) error {
+		fmt.Fprintln(w, "BGP neighbors")
+
+		return nil
+	})
 
 	// If the last node is a choice, the description will be set on all options in the choice.
 	// To override the description of a particular option, you can call MustDocument after MustRegister (see below).

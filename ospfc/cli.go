@@ -5,6 +5,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/davidbalbert/ospfd/ospfc/commands"
 	"golang.org/x/term"
@@ -169,7 +171,26 @@ func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) 
 
 	sort.Sort(NodeSlice(nodes))
 
+	// Check to see if we should add <cr> as the first option. We do this if
+	// we're at the beginning of a token (i.e. the last character is a space)
+	// and the line matches a complete command.
+	var cr bool
+	lastRune, _ := utf8.DecodeLastRuneInString(line)
+	if unicode.IsSpace(lastRune) {
+		matches := cli.root.Match(line)
+		for _, m := range matches {
+			if m.IsComplete() {
+				cr = true
+				break
+			}
+		}
+	}
+
 	fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+
+	if cr {
+		fmt.Fprintf(w, "  <cr>\n")
+	}
 
 	for _, n := range nodes {
 		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), n.Description())
