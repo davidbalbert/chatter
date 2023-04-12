@@ -2073,3 +2073,149 @@ func TestAutocompleteMultiLevel(t *testing.T) {
 		t.Fatalf("expected %v, got %v", expected, options)
 	}
 }
+
+func TestAutocompleteWithParam(t *testing.T) {
+	cmd1, err := ParseDeclaration("show bgp neighbors A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd1.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatalf("expected 1 leaf, got %d", len(leaves))
+	}
+
+	leaf := leaves[0]
+
+	leaf.SetAutocompleteFunc(func(prefix string) ([]string, error) {
+		options := []string{"1.1.1.1", "8.8.8.8"}
+
+		var matches []string
+
+		for _, option := range options {
+			if strings.HasPrefix(option, prefix) {
+				matches = append(matches, option)
+			}
+		}
+
+		return matches, nil
+	})
+
+	w := &strings.Builder{}
+	options, offset, err := cmd1.GetAutocompleteOptions(w, "show bgp neighbors ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 0 {
+		t.Fatalf("expected offset 0, got %d", offset)
+	}
+
+	expected := []string{"1.1.1.1", "8.8.8.8"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 1 {
+		t.Fatalf("expected offset 1, got %d", offset)
+	}
+
+	expected = []string{"1.1.1.1"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 8.8.")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 4 {
+		t.Fatalf("expected offset 4, got %d", offset)
+	}
+
+	expected = []string{"8.8.8.8"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+
+	w = &strings.Builder{}
+	options, offset, err = cmd1.GetAutocompleteOptions(w, "show bgp neighbors 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 1 {
+		t.Fatalf("expected offset 1, got %d", offset)
+	}
+
+	if len(options) != 0 {
+		t.Fatalf("expected no options, got %v", options)
+	}
+}
+
+func TestAutocompleteWithParamAndLiteral(t *testing.T) {
+	cmd1, err := ParseDeclaration("show bgp neighbors <A.B.C.D|all>")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd2, err := ParseDeclaration("show bgp neighbors A.B.C.D")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	leaves := cmd2.Leaves()
+
+	if len(leaves) != 1 {
+		t.Fatalf("expected 1 leaf, got %d", len(leaves))
+	}
+
+	leaf := leaves[0]
+
+	leaf.SetAutocompleteFunc(func(prefix string) ([]string, error) {
+		options := []string{"1.1.1.1", "8.8.8.8"}
+
+		var matches []string
+
+		for _, option := range options {
+			if strings.HasPrefix(option, prefix) {
+				matches = append(matches, option)
+			}
+		}
+
+		return matches, nil
+	})
+
+	cmd3, err := cmd1.MergeWithoutExplicitChoiceRestrictions(cmd2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	w := &strings.Builder{}
+	options, offset, err := cmd3.GetAutocompleteOptions(w, "show bgp neighbors ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if offset != 0 {
+		t.Fatalf("expected offset 0, got %d", offset)
+	}
+
+	expected := []string{"1.1.1.1", "8.8.8.8", "all"}
+
+	if !reflect.DeepEqual(options, expected) {
+		t.Fatalf("expected %v, got %v", expected, options)
+	}
+}

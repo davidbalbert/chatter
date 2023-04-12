@@ -167,7 +167,7 @@ func (cli *CLI) Document(command string, description string) error {
 		l.SetDescription(description)
 	}
 
-	newRoot, err := cli.root.Merge(n)
+	newRoot, err := cli.root.MergeWithoutExplicitChoiceRestrictions(n)
 	if err != nil {
 		return err
 	}
@@ -184,7 +184,7 @@ func (cli *CLI) MustDocument(command string, description string) {
 	}
 }
 
-func (cli *CLI) Autocomplete(command string, autocompleteFunc commands.AutocompleteFunc) error {
+func (cli *CLI) RegisterAutocomplete(command string, autocompleteFunc commands.AutocompleteFunc) error {
 	n, err := commands.ParseDeclaration(command)
 	if err != nil {
 		return err
@@ -194,7 +194,7 @@ func (cli *CLI) Autocomplete(command string, autocompleteFunc commands.Autocompl
 		l.SetAutocompleteFunc(autocompleteFunc)
 	}
 
-	newRoot, err := cli.root.Merge(n)
+	newRoot, err := cli.root.MergeWithoutExplicitChoiceRestrictions(n)
 	if err != nil {
 		return err
 	}
@@ -204,8 +204,8 @@ func (cli *CLI) Autocomplete(command string, autocompleteFunc commands.Autocompl
 	return nil
 }
 
-func (cli *CLI) MustAutocomplete(command string, autocompleteFunc func(string) ([]string, error)) {
-	err := cli.Autocomplete(command, autocompleteFunc)
+func (cli *CLI) MustRegisterAutocomplete(command string, autocompleteFunc commands.AutocompleteFunc) {
+	err := cli.RegisterAutocomplete(command, autocompleteFunc)
 	if err != nil {
 		panic(err)
 	}

@@ -331,8 +331,8 @@ func main() {
 	// If you want to set autocomplete different options of a Choice node, you
 	// register each option separately, like below – unlike in MustRegister,
 	// we assume that setting autocomplete options on Choice nodes doesn't make sense.
-	cli.MustAutocomplete("show bgp neighbors A.B.C.D", autocompleteBGPNeighborsV4)
-	cli.MustAutocomplete("show bgp <some|all> neighbors X:X:X::X", autocompleteBGPNeighborsV6)
+	cli.MustRegisterAutocomplete("show bgp neighbors A.B.C.D", autocompleteBGPNeighborsV4)
+	cli.MustRegisterAutocomplete("show bgp <some|all> neighbors X:X:X::X", autocompleteBGPNeighborsV6)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {

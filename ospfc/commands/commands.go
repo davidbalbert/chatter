@@ -238,7 +238,7 @@ func (n1 *Node) mergeAttributes(path string, n2 *Node) {
 	}
 }
 
-func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
+func (n1 *Node) mergeWithPath(path string, n2 *Node, canMergeExplicitChoiceWithAtoms bool) (*Node, error) {
 	if n1 == nil {
 		return n2, nil
 	}
@@ -248,22 +248,24 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 	}
 
 	if n1.t == ntChoice && n2.t == ntChoice {
-		if n1.explicitChoice && n2.explicitChoice {
-			if len(n1.children) != len(n2.children) {
-				return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
-			}
-
-			for i, child1 := range n1.children {
-				child2 := n2.children[i]
-
-				if child1.id() != child2.id() {
+		if !canMergeExplicitChoiceWithAtoms {
+			if n1.explicitChoice && n2.explicitChoice {
+				if len(n1.children) != len(n2.children) {
 					return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
 				}
+
+				for i, child1 := range n1.children {
+					child2 := n2.children[i]
+
+					if child1.id() != child2.id() {
+						return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+					}
+				}
+			} else if n1.explicitChoice {
+				return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
+			} else if n2.explicitChoice {
+				return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)
 			}
-		} else if n1.explicitChoice {
-			return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
-		} else if n2.explicitChoice {
-			return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)
 		}
 
 		for _, child2 := range n2.children {
@@ -272,7 +274,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 			if i == -1 {
 				n1.children = append(n1.children, child2)
 			} else {
-				merged, err := n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2)
+				merged, err := n1.children[i].mergeWithPath(path+"/"+n1.children[i].id(), child2, canMergeExplicitChoiceWithAtoms)
 				if err != nil {
 					return nil, err
 				}
@@ -287,7 +289,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 				} else if len(child2.children) == 1 {
 					for _, child1 := range n1.children {
 						if len(child1.children) > 0 && child1.children[0].id() == child2.children[0].id() {
-							gc, err := child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0])
+							gc, err := child1.children[0].mergeWithPath(path+"/"+child1.id(), child2.children[0], canMergeExplicitChoiceWithAtoms)
 							if err != nil {
 								return nil, err
 							}
@@ -310,19 +312,19 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 
 		return n1, nil
 	} else if n1.t == ntChoice {
-		if n1.explicitChoice {
+		if n1.explicitChoice && !canMergeExplicitChoiceWithAtoms {
 			return nil, fmt.Errorf("%s: cannot merge explicit choice %q with %q", path, n1, n2)
 		}
 
 		c2 := &Node{t: ntChoice, children: []*Node{n2}}
-		return n1.mergeWithPath(path, c2)
+		return n1.mergeWithPath(path, c2, canMergeExplicitChoiceWithAtoms)
 	} else if n2.t == ntChoice {
-		if n2.explicitChoice {
+		if n2.explicitChoice && !canMergeExplicitChoiceWithAtoms {
 			return nil, fmt.Errorf("%s: cannot merge explicit choice %q into %q", path, n2, n1)
 		}
 
 		c1 := &Node{t: ntChoice, children: []*Node{n1}}
-		return c1.mergeWithPath(path, n2)
+		return c1.mergeWithPath(path, n2, canMergeExplicitChoiceWithAtoms)
 	} else { // n1 and n2 are non-choice nodes
 		if n1.id() == n2.id() {
 			n1.mergeAttributes(path+"/"+n1.id(), n2)
@@ -332,7 +334,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 			}
 
 			if len(n1.children) == 1 && len(n2.children) == 1 {
-				c, err := n1.children[0].mergeWithPath(path+"/"+n1.id(), n2.children[0])
+				c, err := n1.children[0].mergeWithPath(path+"/"+n1.id(), n2.children[0], canMergeExplicitChoiceWithAtoms)
 				if err != nil {
 					return nil, err
 				}
@@ -346,7 +348,7 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 			c1 := &Node{t: ntChoice, children: []*Node{n1}}
 			c2 := &Node{t: ntChoice, children: []*Node{n2}}
 
-			return c1.mergeWithPath(path, c2)
+			return c1.mergeWithPath(path, c2, canMergeExplicitChoiceWithAtoms)
 		}
 	}
 }
@@ -354,7 +356,19 @@ func (n1 *Node) mergeWithPath(path string, n2 *Node) (*Node, error) {
 func (n1 *Node) Merge(nodes ...*Node) (*Node, error) {
 	for _, n2 := range nodes {
 		var err error
-		n1, err = n1.mergeWithPath("", n2)
+		n1, err = n1.mergeWithPath("", n2, false)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return n1, nil
+}
+
+func (n1 *Node) MergeWithoutExplicitChoiceRestrictions(nodes ...*Node) (*Node, error) {
+	for _, n2 := range nodes {
+		var err error
+		n1, err = n1.mergeWithPath("", n2, true)
 		if err != nil {
 			return nil, err
 		}
