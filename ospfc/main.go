@@ -248,30 +248,12 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 	return walkNode("", root, queryParts[0], queryParts[1:])
 }
 
-func autocompleteBGPNeighborsV4(prefix string) ([]string, error) {
-	options := []string{"1.2.3.4", "5.6.7.8"}
-
-	var matches []string
-	for _, option := range options {
-		if strings.HasPrefix(option, prefix) {
-			matches = append(matches, option)
-		}
-	}
-
-	return matches, nil
+func autocompleteBGPNeighborsV4() ([]string, error) {
+	return []string{"1.2.3.4", "5.6.7.8"}, nil
 }
 
-func autocompleteBGPNeighborsV6(prefix string) ([]string, error) {
-	options := []string{"2001:db8::1", "2001:db8::2"}
-
-	var matches []string
-	for _, option := range options {
-		if strings.HasPrefix(option, prefix) {
-			matches = append(matches, option)
-		}
-	}
-
-	return matches, nil
+func autocompleteBGPNeighborsV6() ([]string, error) {
+	return []string{"2001:db8::1", "2001:db8::2"}, nil
 }
 
 func main() {

@@ -179,7 +179,7 @@ func TestMergeAutocomplete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cmd2.children[0].autocompleteFunc = func(string) ([]string, error) { return nil, nil }
+	cmd2.children[0].autocompleteFunc = func() ([]string, error) { return nil, nil }
 
 	AssertMatchesCommandSpec(t, spec2, cmd2)
 
@@ -2088,18 +2088,8 @@ func TestAutocompleteWithParam(t *testing.T) {
 
 	leaf := leaves[0]
 
-	leaf.SetAutocompleteFunc(func(prefix string) ([]string, error) {
-		options := []string{"1.1.1.1", "8.8.8.8"}
-
-		var matches []string
-
-		for _, option := range options {
-			if strings.HasPrefix(option, prefix) {
-				matches = append(matches, option)
-			}
-		}
-
-		return matches, nil
+	leaf.SetAutocompleteFunc(func() ([]string, error) {
+		return []string{"1.1.1.1", "8.8.8.8"}, nil
 	})
 
 	w := &strings.Builder{}
@@ -2184,18 +2174,8 @@ func TestAutocompleteWithParamAndLiteral(t *testing.T) {
 
 	leaf := leaves[0]
 
-	leaf.SetAutocompleteFunc(func(prefix string) ([]string, error) {
-		options := []string{"1.1.1.1", "8.8.8.8"}
-
-		var matches []string
-
-		for _, option := range options {
-			if strings.HasPrefix(option, prefix) {
-				matches = append(matches, option)
-			}
-		}
-
-		return matches, nil
+	leaf.SetAutocompleteFunc(func() ([]string, error) {
+		return []string{"1.1.1.1", "8.8.8.8"}, nil
 	})
 
 	cmd3, err := cmd1.MergeWithoutExplicitChoiceRestrictions(cmd2)

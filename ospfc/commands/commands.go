@@ -77,7 +77,7 @@ func (t nodeType) paramType(inChoice bool) reflect.Type {
 	}
 }
 
-type AutocompleteFunc (func(string) ([]string, error))
+type AutocompleteFunc (func() ([]string, error))
 
 type Node struct {
 	t                nodeType
@@ -768,13 +768,13 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 					options = append(options, n.value)
 				}
 			} else if n.autocompleteFunc != nil {
-				opts, err := n.autocompleteFunc(fields[0])
+				opts, err := n.autocompleteFunc()
 				if err != nil {
 					return nil, err
 				}
 
 				for _, opt := range opts {
-					if !contains(options, opt) {
+					if strings.HasPrefix(opt, fields[0]) && !contains(options, opt) {
 						options = append(options, opt)
 					}
 				}
