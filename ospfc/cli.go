@@ -32,6 +32,7 @@ type CLI struct {
 	running bool
 	root    *commands.Node
 	prompt  string
+	lastKey rune
 }
 
 func NewCLI() *CLI {
@@ -90,6 +91,10 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 }
 
 func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+	defer func() {
+		cli.lastKey = key
+	}()
+
 	prefix := line[:pos]
 	rest := line[pos:]
 
@@ -105,6 +110,7 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	}
 
 	if len(options) == 0 {
+		fmt.Fprintf(w, "\a")
 		return "", 0, false
 	} else if len(options) == 1 {
 		new := prefix + options[0][offset:]
@@ -114,27 +120,26 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 		}
 
 		return new + rest, len(new), true
-	} else {
+	} else if cli.lastKey != '\t' {
 		// find the longest prefix length of all options
 		// if the prefix is longer than zero, autocomplete with it (don't add a space at the end)
 		// if it is zero, print the options and return
 
 		prefixLen := commonPrefixLen(options...)
+		new := prefix + options[0][offset:prefixLen]
 
-		if prefixLen > 0 && prefixLen > offset {
-			new := prefix + options[0][offset:prefixLen]
+		fmt.Fprintf(w, "\a")
 
-			return new + rest, len(new), true
-		} else {
-			fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+		return new + rest, len(new), true
+	} else {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
-			// TODO: tabulate output based on width of terminal
-			for _, o := range options {
-				fmt.Fprintf(w, "%s\n", o)
-			}
-
-			return "", 0, false
+		// TODO: tabulate output based on width of terminal
+		for _, o := range options {
+			fmt.Fprintf(w, "%s\n", o)
 		}
+
+		return "", 0, false
 	}
 }
 
