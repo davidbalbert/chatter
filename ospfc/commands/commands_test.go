@@ -8,6 +8,262 @@ import (
 	"testing"
 )
 
+func TestIsPrefixOfIPv4Address(t *testing.T) {
+	if !isPrefixOfIPv4Address("") {
+		t.Fatal("empty string should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("1") {
+		t.Fatal("1 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("9") {
+		t.Fatal("9 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("10") {
+		t.Fatal("10 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("99") {
+		t.Fatal("99 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("100") {
+		t.Fatal("100 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("255") {
+		t.Fatal("255 should be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256") {
+		t.Fatal("256 should not be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("1.") {
+		t.Fatal("1. should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("1.2") {
+		t.Fatal("1.2 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("1.2.3") {
+		t.Fatal("1.2.3 should be a prefix of any IPv4 address")
+	}
+
+	if !isPrefixOfIPv4Address("1.2.3.4") {
+		t.Fatal("1.2.3.4 should be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1..3.4") {
+		t.Fatal("1..3.4 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address(".2.3.4") {
+		t.Fatal(".2.3.4 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.2.3.4.") {
+		t.Fatal("1.2.3.4. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.") {
+		t.Fatal("256. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.2") {
+		t.Fatal("256.2 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.2.") {
+		t.Fatal("256.2. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.2.3") {
+		t.Fatal("256.2.3 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.2.3.") {
+		t.Fatal("256.2.3. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("256.2.3.4") {
+		t.Fatal("256.2.3.4 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.256") {
+		t.Fatal("1.256 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.256.") {
+		t.Fatal("1.256. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.256.3") {
+		t.Fatal("1.256.3 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.256.3.") {
+		t.Fatal("1.256.3. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.256.3.4") {
+		t.Fatal("1.256.3.4 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.2.256") {
+		t.Fatal("1.2.256 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.2.256.") {
+		t.Fatal("1.2.256. should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.2.256.4") {
+		t.Fatal("1.2.256.4 should not be a prefix of any IPv4 address")
+	}
+
+	if isPrefixOfIPv4Address("1.2.3.256") {
+		t.Fatal("1.2.3.256 should not be a prefix of any IPv4 address")
+	}
+}
+
+func TestIsPrefixOfIPv6Address(t *testing.T) {
+	if !isPrefixOfIPv6Address("") {
+		t.Fatal("empty string should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("1") {
+		t.Fatal("1 should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("9") {
+		t.Fatal("9 should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("a") {
+		t.Fatal("a should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("A") {
+		t.Fatal("A should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("f") {
+		t.Fatal("f should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("F") {
+		t.Fatal("F should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("g") {
+		t.Fatal("g should not be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("G") {
+		t.Fatal("G should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address(":") {
+		t.Fatal(": should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::") {
+		t.Fatal(":: should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address(":::") {
+		t.Fatal("::: should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::1") {
+		t.Fatal("::1 should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff") {
+		t.Fatal("::ffff should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff:") {
+		t.Fatal("::ffff: should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("::ffff::") {
+		t.Fatal("::ffff:: should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::1:") {
+		t.Fatal("::1: should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("ffff") {
+		t.Fatal("ffff should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("10000") {
+		t.Fatal("10000 should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("1:") {
+		t.Fatal("1: should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("1::") {
+		t.Fatal("1:: should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("ffff:") {
+		t.Fatal("ffff: should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("ffff::") {
+		t.Fatal("ffff:: should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("10000:") {
+		t.Fatal("10000: should not be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("10000::") {
+		t.Fatal("10000:: should not be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("1:2:3:4:5:6:7:8:9") {
+		t.Fatal("1:2:3:4:5:6:7:8:9 should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("1:2:3:4:5:6:7::") {
+		t.Fatal("1:2:3:4:5:6:7:: should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("1:2:3:4:5:6:7::8") {
+		t.Fatal("1:2:3:4:5:6:7::8 should not be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff:1.") {
+		t.Fatal("::ffff:1. should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff:1.2.") {
+		t.Fatal("::ffff:1.2. should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff:1.2.3.") {
+		t.Fatal("::ffff:1.2.3. should be a prefix of an IPv6 address")
+	}
+
+	if !isPrefixOfIPv6Address("::ffff:1.2.3.4") {
+		t.Fatal("::ffff:1.2.3.4 should be a prefix of an IPv6 address")
+	}
+
+	if isPrefixOfIPv6Address("::ffff:256.") {
+		t.Fatal("::ffff:256. should not be a prefix of an IPv6 address")
+	}
+}
+
 func TestParseCommand(t *testing.T) {
 	s := "show version"
 	spec := `

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/davidbalbert/ospfd/ospfc/commands"
@@ -129,7 +130,51 @@ func (cli *CLI) autocompleteWithTab(w io.Writer, line string, pos int) (newLine 
 
 		return "", 0, false
 	}
+}
 
+type NodeSlice []*commands.Node
+
+func (ns NodeSlice) Len() int {
+	return len(ns)
+}
+
+func (ns NodeSlice) Less(i, j int) bool {
+	return ns[i].String() < ns[j].String()
+}
+
+func (ns NodeSlice) Swap(i, j int) {
+	ns[i], ns[j] = ns[j], ns[i]
+}
+
+func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) (newLine string, newPos int, ok bool) {
+	nodes, err := cli.root.GetAutocompleteNodes(line)
+	if err != nil {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+		fmt.Fprintf(w, "%% Error getting autocomplete nodes: %v\n", err)
+		return "", 0, false
+	}
+
+	if len(nodes) == 0 {
+		fmt.Fprintf(w, "%% There is no matched command.\n")
+		return "", 0, false
+	}
+
+	longestTokenLen := 0
+	for _, n := range nodes {
+		if len(n.String()) > longestTokenLen {
+			longestTokenLen = len(n.String())
+		}
+	}
+
+	sort.Sort(NodeSlice(nodes))
+
+	fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+
+	for _, n := range nodes {
+		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), n.Description())
+	}
+
+	return "", 0, false
 }
 
 func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
@@ -139,6 +184,8 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 
 	if key == '\t' {
 		return cli.autocompleteWithTab(w, line, pos)
+	} else if key == '?' {
+		return cli.autocompleteWithQuestionMark(w, line, pos)
 	}
 
 	return "", 0, false

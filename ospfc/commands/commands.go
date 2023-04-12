@@ -135,6 +135,10 @@ func (n *Node) String() string {
 	}
 }
 
+func (n *Node) Description() string {
+	return n.description
+}
+
 func containsType(types []reflect.Type, t reflect.Type) bool {
 	for _, t2 := range types {
 		if t2 == t {
@@ -841,6 +845,214 @@ func (n *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, 
 	sort.Strings(options)
 
 	return options, len(last), nil
+}
+
+func isPrefixOfIPv4Address(s string) bool {
+	// s is a prefix of an IPv4 address if you can add more characters to the end of s to get a valid IPv4 address
+
+	if len(s) == 0 {
+		return true
+	}
+
+	octets := strings.Split(s, ".")
+
+	if len(octets) > 4 {
+		return false
+	}
+
+	for i, octet := range octets {
+		if len(octet) == 0 && i != len(octets)-1 {
+			return false
+		}
+
+		if len(octet) > 3 {
+			return false
+		}
+
+		if len(octet) > 1 && octet[0] == '0' {
+			return false
+		}
+
+		if len(octet) == 3 && octet[0] > '2' {
+			return false
+		}
+
+		if len(octet) == 3 && octet[0] == '2' && octet[1] > '5' {
+			return false
+		}
+
+		if len(octet) == 3 && octet[0] == '2' && octet[1] == '5' && octet[2] > '5' {
+			return false
+		}
+	}
+
+	return true
+}
+
+func countOverlapping(s, substr string) int {
+	count := 0
+	for i := 0; i < len(s); i++ {
+		if strings.HasPrefix(s[i:], substr) {
+			count++
+		}
+	}
+	return count
+}
+
+func isPrefixOfIPv6Address(s string) bool {
+	s = strings.ToLower(s)
+
+	if len(s) == 0 {
+		return true
+	}
+
+	nDoubleColons := countOverlapping(s, "::")
+
+	if nDoubleColons > 1 {
+		return false
+	}
+
+	if strings.HasPrefix(s, "::ffff:") {
+		// IPv4-mapped IPv6 address
+		return isPrefixOfIPv4Address(s[7:])
+	}
+
+	hextets := strings.Split(s, ":")
+
+	nEmptyHextets := 0
+	for _, hextet := range hextets {
+		if len(hextet) == 0 {
+			nEmptyHextets++
+		}
+	}
+
+	fmt.Printf("nEmptyHextets=%d nDoubleColons=%d len(hextets)=%d hextets=%#v\n", nEmptyHextets, nDoubleColons, len(hextets), hextets)
+
+	if len(hextets) > 8 && nDoubleColons == 0 {
+		return false
+	}
+
+	if len(hextets) > 8 && nDoubleColons == 1 && nEmptyHextets != 2 {
+		return false
+	}
+
+	if len(hextets) > 9 && nDoubleColons == 1 && nEmptyHextets != 1 {
+		return false
+	}
+
+	for _, hextet := range hextets {
+		if len(hextet) == 0 {
+			continue
+		}
+
+		if len(hextet) > 4 {
+			return false
+		}
+
+		for _, c := range hextet {
+			if !strings.Contains("0123456789abcdef", string(c)) {
+				return false
+			}
+		}
+	}
+
+	return true
+}
+
+func (n *Node) getAutocompleteNodesFromTokens(fields []string) ([]*Node, error) {
+	var nodes []*Node
+
+	if n.t == ntChoice {
+		for _, child := range n.children {
+			opts, err := child.getAutocompleteNodesFromTokens(fields)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, opt := range opts {
+				if !containsNode(nodes, opt) {
+					nodes = append(nodes, opt)
+				}
+			}
+		}
+	} else {
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("no fields")
+		} else if len(fields) == 1 {
+			if n.t == ntLiteral {
+				if strings.HasPrefix(n.value, fields[0]) && !containsNode(nodes, n) {
+					nodes = append(nodes, n)
+				}
+			} else if n.t == ntParamString {
+				if !containsNode(nodes, n) {
+					nodes = append(nodes, n)
+				}
+			} else if n.t == ntParamIPv4 {
+				// if fields[0] is a prefix of a valid IPv4 address
+				// then we can autocomplete this node
+
+				if isPrefixOfIPv4Address(fields[0]) && !containsNode(nodes, n) {
+					nodes = append(nodes, n)
+				}
+			} else if n.t == ntParamIPv6 {
+				if isPrefixOfIPv6Address(fields[0]) && !containsNode(nodes, n) {
+					nodes = append(nodes, n)
+				}
+			} else {
+				panic("unreachable")
+			}
+
+			return nodes, nil
+		}
+
+		// len(fields) > 1, we need to match this field and then continue on to children
+
+		var err error
+		var opts []*Node
+
+		if n.t == ntLiteral {
+			if !strings.HasPrefix(n.value, fields[0]) {
+				return nil, nil
+			}
+		} else if n.t == ntParamString {
+			// always matches
+		} else if n.t == ntParamIPv4 {
+			var addr netip.Addr
+			addr, err = netip.ParseAddr(fields[0])
+			if err != nil || !addr.Is4() {
+				return nil, nil
+			}
+		} else if n.t == ntParamIPv6 {
+			var addr netip.Addr
+			addr, err = netip.ParseAddr(fields[0])
+			if err != nil || !addr.Is6() {
+				return nil, nil
+			}
+		} else {
+			panic("unreachable")
+		}
+
+		for _, child := range n.children {
+			opts, err = child.getAutocompleteNodesFromTokens(fields[1:])
+			if err != nil {
+				return nil, err
+			}
+
+			for _, opt := range opts {
+				if !containsNode(nodes, opt) {
+					nodes = append(nodes, opt)
+				}
+			}
+		}
+	}
+
+	return nodes, nil
+}
+
+func (n *Node) GetAutocompleteNodes(line string) ([]*Node, error) {
+	fields := autocompleteFields(line)
+
+	return n.getAutocompleteNodesFromTokens(fields)
 }
 
 type commandParser struct {
