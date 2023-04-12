@@ -748,6 +748,26 @@ func autocompleteFields(s string) []string {
 	return fields
 }
 
+func (n *Node) callAutocompleteFuncFiltered(prefix string) ([]string, error) {
+	if n.autocompleteFunc == nil {
+		return nil, nil
+	}
+
+	options, err := n.autocompleteFunc()
+	if err != nil {
+		return nil, err
+	}
+
+	var filtered []string
+	for _, option := range options {
+		if strings.HasPrefix(option, prefix) {
+			filtered = append(filtered, option)
+		}
+	}
+
+	return filtered, nil
+}
+
 func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([]string, error) {
 	var options []string
 
@@ -773,13 +793,13 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 					options = append(options, n.value)
 				}
 			} else if n.autocompleteFunc != nil {
-				opts, err := n.autocompleteFunc()
+				opts, err := n.callAutocompleteFuncFiltered(fields[0])
 				if err != nil {
 					return nil, err
 				}
 
 				for _, opt := range opts {
-					if strings.HasPrefix(opt, fields[0]) && !contains(options, opt) {
+					if !contains(options, opt) {
 						options = append(options, opt)
 					}
 				}
@@ -848,8 +868,6 @@ func (n *Node) GetAutocompleteOptions(w io.Writer, line string) (opts []string, 
 }
 
 func isPrefixOfIPv4Address(s string) bool {
-	// s is a prefix of an IPv4 address if you can add more characters to the end of s to get a valid IPv4 address
-
 	if len(s) == 0 {
 		return true
 	}
@@ -992,9 +1010,6 @@ func (n *Node) getAutocompleteNodesFromTokens(fields []string) ([]*Node, error) 
 					nodes = append(nodes, n)
 				}
 			} else if n.t == ntParamIPv4 {
-				// if fields[0] is a prefix of a valid IPv4 address
-				// then we can autocomplete this node
-
 				if isPrefixOfIPv4Address(fields[0]) && !containsNode(nodes, n) {
 					nodes = append(nodes, n)
 				}
