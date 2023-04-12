@@ -113,10 +113,6 @@ func (cli *CLI) autocompleteWithTab(w io.Writer, line string, pos int) (newLine 
 
 		return new + rest, len(new), true
 	} else if cli.lastKey != '\t' {
-		// find the longest prefix length of all options
-		// if the prefix is longer than zero, autocomplete with it (don't add a space at the end)
-		// if it is zero, print the options and return
-
 		prefixLen := commonPrefixLen(options...)
 		new := prefix + options[0][offset:prefixLen]
 
