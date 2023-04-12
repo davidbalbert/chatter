@@ -139,7 +139,7 @@ func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine 
 	} else {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
-		for _, l := range tabulate(w, options) {
+		for _, l := range tabulate(w, 0, options) {
 			fmt.Fprintf(w, "%s\n", l)
 		}
 
@@ -161,11 +161,13 @@ func (ns NodeSlice) Swap(i, j int) {
 	ns[i], ns[j] = ns[j], ns[i]
 }
 
-func tabulate(f fder, words []string) []string {
+func tabulate(f fder, indent int, words []string) []string {
 	width, _, err := term.GetSize(int(f.Fd()))
 	if err != nil {
 		return words
 	}
+
+	width -= indent
 
 	longestLen := 0
 	for _, w := range words {
@@ -187,6 +189,8 @@ func tabulate(f fder, words []string) []string {
 
 	lines := make([]string, rows)
 	for i := 0; i < rows; i++ {
+		lines[i] = strings.Repeat(" ", indent)
+
 		for j := 0; j < perRow; j++ {
 			index := i + j*rows
 			if index >= len(words) {
@@ -249,6 +253,16 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 
 	for _, n := range nodes {
 		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), n.Description())
+
+		opts, err := n.OptionsFromAutocompleteFunc("")
+		if err != nil {
+			fmt.Fprintf(w, "%% Error getting options: %v\n", err)
+			continue
+		}
+
+		for _, l := range tabulate(w, 5, opts) {
+			fmt.Fprintf(w, "%s\n", l)
+		}
 	}
 
 	return line, pos, true

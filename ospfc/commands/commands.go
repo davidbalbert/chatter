@@ -748,7 +748,7 @@ func autocompleteFields(s string) []string {
 	return fields
 }
 
-func (n *Node) callAutocompleteFuncFiltered(prefix string) ([]string, error) {
+func (n *Node) OptionsFromAutocompleteFunc(prefix string) ([]string, error) {
 	if n.autocompleteFunc == nil {
 		return nil, nil
 	}
@@ -793,7 +793,7 @@ func (n *Node) getAutocompleteOptionsFromTokens(w io.Writer, fields []string) ([
 					options = append(options, n.value)
 				}
 			} else if n.autocompleteFunc != nil {
-				opts, err := n.callAutocompleteFuncFiltered(fields[0])
+				opts, err := n.OptionsFromAutocompleteFunc(fields[0])
 				if err != nil {
 					return nil, err
 				}
