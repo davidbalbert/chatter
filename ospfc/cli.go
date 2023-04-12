@@ -31,6 +31,20 @@ func commonPrefixLen(ss ...string) int {
 	return prefixLen
 }
 
+type fder interface {
+	Fd() uintptr
+}
+
+type writeFder interface {
+	io.Writer
+	Fd() uintptr
+}
+
+type readWriteFder interface {
+	io.ReadWriter
+	Fd() uintptr
+}
+
 type CLI struct {
 	running bool
 	root    *commands.Node
@@ -93,7 +107,7 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 	}
 }
 
-func (cli *CLI) autocompleteWithTab(w io.Writer, line string, pos int) (newLine string, newPos int, ok bool) {
+func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine string, newPos int, ok bool) {
 	prefix := line[:pos]
 	rest := line[pos:]
 
@@ -125,9 +139,8 @@ func (cli *CLI) autocompleteWithTab(w io.Writer, line string, pos int) (newLine 
 	} else {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
-		// TODO: tabulate output based on width of terminal
-		for _, o := range options {
-			fmt.Fprintf(w, "%s\n", o)
+		for _, l := range tabulate(w, options) {
+			fmt.Fprintf(w, "%s\n", l)
 		}
 
 		return "", 0, false
@@ -148,7 +161,49 @@ func (ns NodeSlice) Swap(i, j int) {
 	ns[i], ns[j] = ns[j], ns[i]
 }
 
-func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) (newLine string, newPos int, ok bool) {
+func tabulate(f fder, words []string) []string {
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return words
+	}
+
+	longestLen := 0
+	for _, w := range words {
+		if len(w) > longestLen {
+			longestLen = len(w)
+		}
+	}
+
+	perRow := width / (longestLen + 2)
+
+	if perRow == 0 {
+		return words
+	}
+
+	rows := len(words) / perRow
+	if len(words)%perRow != 0 {
+		rows++
+	}
+
+	lines := make([]string, rows)
+	for i := 0; i < rows; i++ {
+		for j := 0; j < perRow; j++ {
+			index := i + j*rows
+			if index >= len(words) {
+				break
+			}
+
+			lines[i] += words[index]
+			if j != perRow-1 {
+				lines[i] += strings.Repeat(" ", longestLen-len(words[index])+2)
+			}
+		}
+	}
+
+	return lines
+}
+
+func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) (newLine string, newPos int, ok bool) {
 	nodes, err := cli.root.GetAutocompleteNodes(line)
 	if err != nil {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
@@ -199,7 +254,7 @@ func (cli *CLI) autocompleteWithQuestionMark(w io.Writer, line string, pos int) 
 	return line, pos, true
 }
 
-func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+func (cli *CLI) autocomplete(w writeFder, line string, pos int, key rune) (newLine string, newPos int, ok bool) {
 	defer func() {
 		cli.lastKey = key
 	}()
@@ -213,8 +268,13 @@ func (cli *CLI) autocomplete(w io.Writer, line string, pos int, key rune) (newLi
 	return "", 0, false
 }
 
-func (cli *CLI) Run(rw io.ReadWriter) {
-	t := term.NewTerminal(rw, cli.prompt)
+type terminal struct {
+	*term.Terminal
+	fder
+}
+
+func (cli *CLI) Run(rw readWriteFder) {
+	t := &terminal{term.NewTerminal(rw, cli.prompt), rw}
 
 	t.AutoCompleteCallback = func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
 		return cli.autocomplete(t, line, pos, key)
