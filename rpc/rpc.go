@@ -4,10 +4,13 @@ package rpc
 
 import (
 	context "context"
+
+	"github.com/davidbalbert/chatter/ifacemgr"
 )
 
 type APIService interface {
 	GetVersion(ctx context.Context) (string, error)
+	GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error)
 }
 
 type Server struct {
@@ -29,5 +32,27 @@ func (s *Server) GetVersion(ctx context.Context, req *GetVersionRequest) (*GetVe
 
 	return &GetVersionResponse{
 		Version: version,
+	}, nil
+}
+
+func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (*GetInterfacesResponse, error) {
+	interfaces, err := s.apiService.GetInterfaces(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	ifaces := make([]*Interface, len(interfaces))
+	for i, iface := range interfaces {
+		ifaces[i] = &Interface{
+			Index:        int32(iface.Index),
+			Mtu:          int32(iface.MTU),
+			Name:         iface.Name,
+			HardwareAddr: iface.HardwareAddr,
+			Flags:        uint32(iface.Flags),
+		}
+	}
+
+	return &GetInterfacesResponse{
+		Interfaces: ifaces,
 	}, nil
 }

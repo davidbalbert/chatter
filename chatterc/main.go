@@ -23,6 +23,7 @@ func main() {
 	cli := NewCLI()
 
 	cli.MustDocument("show", "Show running system information")
+
 	cli.MustRegister("show version", "Show version", func(w io.Writer) error {
 		version, err := client.GetVersion(ctx)
 		if err != nil {
@@ -33,6 +34,8 @@ func main() {
 
 		return nil
 	})
+
+	registerInterfaceCommands(ctx, cli, client)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {

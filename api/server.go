@@ -4,12 +4,14 @@ import (
 	"context"
 	"net"
 
+	"github.com/davidbalbert/chatter/ifacemgr"
 	"github.com/davidbalbert/chatter/rpc"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
 type Server struct {
+	InterfaceManager *ifacemgr.InterfaceManager
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -40,4 +42,8 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 func (s *Server) GetVersion(ctx context.Context) (string, error) {
 	return "0.0.1", nil
+}
+
+func (s *Server) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {
+	return s.InterfaceManager.GetInterfaces()
 }

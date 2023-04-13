@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"net"
 
+	"github.com/davidbalbert/chatter/ifacemgr"
 	"github.com/davidbalbert/chatter/rpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -36,4 +38,26 @@ func (c *Client) GetVersion(ctx context.Context) (string, error) {
 	}
 
 	return resp.Version, nil
+}
+
+func (c *Client) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {
+	resp, err := c.rpcClient.GetInterfaces(ctx, &rpc.GetInterfacesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	interfaces := make([]ifacemgr.Interface, len(resp.Interfaces))
+	for i, iface := range resp.Interfaces {
+		interfaces[i] = ifacemgr.Interface{
+			Interface: net.Interface{
+				Index:        int(iface.Index),
+				MTU:          int(iface.Mtu),
+				Name:         iface.Name,
+				HardwareAddr: net.HardwareAddr(iface.HardwareAddr),
+				Flags:        net.Flags(iface.Flags),
+			},
+		}
+	}
+
+	return interfaces, nil
 }

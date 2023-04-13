@@ -20,5 +20,9 @@ message GetInterfacesResponse {
 }
 
 message Interface {
-    string name = 1;
+    int32 index = 1;
+    int32 mtu = 2;
+    string name = 3;
+    bytes hardware_addr = 4;
+    uint32 flags = 5;
 }
