@@ -295,15 +295,26 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 func (cli *CLI) Run(rw readWriteFder) {
 	t := &terminal{term.NewTerminal(rw, cli.prompt), rw}
 
-	t.AutoCompleteCallback = func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
+	autoCompleteCallback := func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
 		return cli.autocomplete(t, line, pos, key)
 	}
+
+	t.AutoCompleteCallback = autoCompleteCallback
 
 	cli.running = true
 
 	for cli.running {
 		line, err := t.ReadLine()
-		if err != nil {
+		if err == io.EOF {
+			// Hack to get around the fact that when Terminal.Readline() gets a ^C (technically an
+			// ETX character), it doesn't advance its buffer before returning io.EOF. This means that
+			// every subsequent call to Readline() will return an empty string. To get around this, we
+			// just create a new terminal, which has the effect of resetting the buffer.
+			t = &terminal{term.NewTerminal(rw, cli.prompt), rw}
+			t.AutoCompleteCallback = autoCompleteCallback
+
+			fmt.Fprintln(t)
+		} else if err != nil {
 			fmt.Fprintf(t, "%% Error reading line: %v\n", err)
 			break
 		}
