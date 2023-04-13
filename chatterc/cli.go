@@ -8,7 +8,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/davidbalbert/ospfd/ospfc/commands"
+	"github.com/davidbalbert/ospfd/chatterc/commands"
 	"golang.org/x/term"
 )
 

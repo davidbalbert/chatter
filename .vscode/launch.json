@@ -5,29 +5,29 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "ospfd",
+            "name": "chatterd",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/ospfd",
+            "program": "${workspaceFolder}/chatterd",
             "console": "integratedTerminal",
             "postDebugTask": "sockrm",
             // "asRoot": true,
         },
         {
-            "name": "ospfc",
+            "name": "chatterc",
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/ospfc",
+            "program": "${workspaceFolder}/chatterc",
             "console": "integratedTerminal",
             // "preLaunchTask": "sockwait",
         },
     ],
     "compounds": [
         {
-            "name": "ospfd + cli",
-            "configurations": ["ospfd", "ospfc"],
+            "name": "chatterd + chatterd",
+            "configurations": ["chatterd", "chatterd"],
             "stopAll": true,
             "presentation": {
                 "order": 1
