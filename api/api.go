@@ -14,7 +14,6 @@ import (
 const socketPath = "/tmp/ospfd.sock"
 
 type Server struct {
-	rpc.UnimplementedAPIServer
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -24,7 +23,9 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	}
 
 	grpcServer := grpc.NewServer()
-	rpc.RegisterAPIServer(grpcServer, s)
+	rpcServer := rpc.NewAPIServer(s)
+
+	rpc.RegisterAPIServer(grpcServer, rpcServer)
 
 	g, ctx := errgroup.WithContext(ctx)
 
@@ -41,25 +42,23 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *Server) GetVersion(ctx context.Context, req *rpc.GetVersionRequest) (*rpc.GetVersionResponse, error) {
-	return &rpc.GetVersionResponse{
-		Version: "0.0.1",
-	}, nil
+func (s *Server) GetVersion(ctx context.Context) (string, error) {
+	return "0.0.1", nil
 }
 
-func (s *Server) GetInterfaces(ctx context.Context, req *rpc.GetInterfacesRequest) (*rpc.GetInterfacesResponse, error) {
-	return &rpc.GetInterfacesResponse{
-		Interfaces: []*rpc.Interface{
-			{
-				Name: "bridge100",
-			},
-		},
-	}, nil
-}
+// func (s *Server) GetInterfaces(ctx context.Context, req *rpc.GetInterfacesRequest) (*rpc.GetInterfacesResponse, error) {
+// 	return &rpc.GetInterfacesResponse{
+// 		Interfaces: []*rpc.Interface{
+// 			{
+// 				Name: "bridge100",
+// 			},
+// 		},
+// 	}, nil
+// }
 
 type Client struct {
 	*grpc.ClientConn
-	rpc.APIClient
+	rpcClient rpc.APIClient
 }
 
 func NewClient() (*Client, error) {
@@ -69,8 +68,19 @@ func NewClient() (*Client, error) {
 		return nil, err
 	}
 
+	rpcClient := rpc.NewAPIClient(conn)
+
 	return &Client{
 		ClientConn: conn,
-		APIClient:  rpc.NewAPIClient(conn),
+		rpcClient:  rpcClient,
 	}, nil
+}
+
+func (c *Client) GetVersion(ctx context.Context) (string, error) {
+	resp, err := c.rpcClient.GetVersion(ctx, &rpc.GetVersionRequest{})
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Version, nil
 }

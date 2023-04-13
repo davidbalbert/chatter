@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/davidbalbert/chatter/api"
-	"github.com/davidbalbert/chatter/rpc"
 	"golang.org/x/term"
 )
 
@@ -19,17 +18,18 @@ func main() {
 		fmt.Printf("Failed to create client: %v\n", err)
 		os.Exit(1)
 	}
+	defer client.Close()
 
 	cli := NewCLI()
 
 	cli.MustDocument("show", "Show running system information")
 	cli.MustRegister("show version", "Show version", func(w io.Writer) error {
-		v, err := client.GetVersion(ctx, &rpc.GetVersionRequest{})
+		version, err := client.GetVersion(ctx)
 		if err != nil {
 			return err
 		}
 
-		fmt.Fprintf(w, "v%s\n", v.Version)
+		fmt.Fprintf(w, "v%s\n", version)
 
 		return nil
 	})
