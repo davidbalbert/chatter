@@ -176,21 +176,6 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 		return line, pos, true
 	}
 
-	if len(nodes) == 0 {
-		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
-		fmt.Fprintf(w, "%% There is no matched command.\n")
-		return line, pos, true
-	}
-
-	longestTokenLen := 0
-	for _, n := range nodes {
-		if len(n.String()) > longestTokenLen {
-			longestTokenLen = len(n.String())
-		}
-	}
-
-	sort.Sort(NodeSlice(nodes))
-
 	// Check to see if we should add <cr> as the first option. We do this if
 	// we're at the beginning of a token (i.e. the last character is a space)
 	// and the line matches a complete command.
@@ -206,6 +191,21 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 		}
 	}
 
+	if len(nodes) == 0 && !cr {
+		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
+		fmt.Fprintf(w, "%% There is no matched command.\n")
+		return line, pos, true
+	}
+
+	longestTokenLen := 0
+	for _, n := range nodes {
+		if len(n.String()) > longestTokenLen {
+			longestTokenLen = len(n.String())
+		}
+	}
+
+	sort.Sort(NodeSlice(nodes))
+
 	fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
 	if cr {
@@ -213,7 +213,12 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 	}
 
 	for _, n := range nodes {
-		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), n.Description())
+		description := n.Description()
+		if description == "" {
+			description = "Missing description"
+		}
+
+		fmt.Fprintf(w, "  %-*s  %s\n", longestTokenLen, n.String(), description)
 
 		opts, err := n.OptionsFromAutocompleteFunc("")
 		if err != nil {
