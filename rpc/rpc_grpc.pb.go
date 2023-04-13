@@ -22,8 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
-	GetRandInt(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandInt, error)
-	GetRandString(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandString, error)
+	GetVersion(ctx context.Context, in *GetVersionRequest, opts ...grpc.CallOption) (*GetVersionResponse, error)
+	GetInterfaces(ctx context.Context, in *GetInterfacesRequest, opts ...grpc.CallOption) (*GetInterfacesResponse, error)
 }
 
 type aPIClient struct {
@@ -34,18 +34,18 @@ func NewAPIClient(cc grpc.ClientConnInterface) APIClient {
 	return &aPIClient{cc}
 }
 
-func (c *aPIClient) GetRandInt(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandInt, error) {
-	out := new(RandInt)
-	err := c.cc.Invoke(ctx, "/rpc.API/GetRandInt", in, out, opts...)
+func (c *aPIClient) GetVersion(ctx context.Context, in *GetVersionRequest, opts ...grpc.CallOption) (*GetVersionResponse, error) {
+	out := new(GetVersionResponse)
+	err := c.cc.Invoke(ctx, "/rpc.API/GetVersion", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *aPIClient) GetRandString(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*RandString, error) {
-	out := new(RandString)
-	err := c.cc.Invoke(ctx, "/rpc.API/GetRandString", in, out, opts...)
+func (c *aPIClient) GetInterfaces(ctx context.Context, in *GetInterfacesRequest, opts ...grpc.CallOption) (*GetInterfacesResponse, error) {
+	out := new(GetInterfacesResponse)
+	err := c.cc.Invoke(ctx, "/rpc.API/GetInterfaces", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +56,8 @@ func (c *aPIClient) GetRandString(ctx context.Context, in *Empty, opts ...grpc.C
 // All implementations must embed UnimplementedAPIServer
 // for forward compatibility
 type APIServer interface {
-	GetRandInt(context.Context, *Empty) (*RandInt, error)
-	GetRandString(context.Context, *Empty) (*RandString, error)
+	GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error)
+	GetInterfaces(context.Context, *GetInterfacesRequest) (*GetInterfacesResponse, error)
 	mustEmbedUnimplementedAPIServer()
 }
 
@@ -65,11 +65,11 @@ type APIServer interface {
 type UnimplementedAPIServer struct {
 }
 
-func (UnimplementedAPIServer) GetRandInt(context.Context, *Empty) (*RandInt, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRandInt not implemented")
+func (UnimplementedAPIServer) GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
 }
-func (UnimplementedAPIServer) GetRandString(context.Context, *Empty) (*RandString, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetRandString not implemented")
+func (UnimplementedAPIServer) GetInterfaces(context.Context, *GetInterfacesRequest) (*GetInterfacesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetInterfaces not implemented")
 }
 func (UnimplementedAPIServer) mustEmbedUnimplementedAPIServer() {}
 
@@ -84,38 +84,38 @@ func RegisterAPIServer(s grpc.ServiceRegistrar, srv APIServer) {
 	s.RegisterService(&API_ServiceDesc, srv)
 }
 
-func _API_GetRandInt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+func _API_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVersionRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(APIServer).GetRandInt(ctx, in)
+		return srv.(APIServer).GetVersion(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rpc.API/GetRandInt",
+		FullMethod: "/rpc.API/GetVersion",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).GetRandInt(ctx, req.(*Empty))
+		return srv.(APIServer).GetVersion(ctx, req.(*GetVersionRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _API_GetRandString_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Empty)
+func _API_GetInterfaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetInterfacesRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(APIServer).GetRandString(ctx, in)
+		return srv.(APIServer).GetInterfaces(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/rpc.API/GetRandString",
+		FullMethod: "/rpc.API/GetInterfaces",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(APIServer).GetRandString(ctx, req.(*Empty))
+		return srv.(APIServer).GetInterfaces(ctx, req.(*GetInterfacesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -128,12 +128,12 @@ var API_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*APIServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetRandInt",
-			Handler:    _API_GetRandInt_Handler,
+			MethodName: "GetVersion",
+			Handler:    _API_GetVersion_Handler,
 		},
 		{
-			MethodName: "GetRandString",
-			Handler:    _API_GetRandString_Handler,
+			MethodName: "GetInterfaces",
+			Handler:    _API_GetInterfaces_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

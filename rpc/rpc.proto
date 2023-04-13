@@ -4,17 +4,21 @@ package rpc;
 option go_package = "github.com/davidbalbert/chatter/rpc";
 
 service API {
-    rpc GetRandInt(Empty) returns (RandInt) {}
-    rpc GetRandString(Empty) returns (RandString) {}
+    rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {}
+    
+    rpc GetInterfaces (GetInterfacesRequest) returns (GetInterfacesResponse) {}
 }
 
-message Empty {
+message GetVersionRequest {}
+message GetVersionResponse {
+    string version = 1;
 }
 
-message RandInt {
-    uint32 value = 1;
+message GetInterfacesRequest {}
+message GetInterfacesResponse {
+    repeated Interface interfaces = 1;
 }
 
-message RandString {
-    string value = 1;
+message Interface {
+    string name = 1;
 }
