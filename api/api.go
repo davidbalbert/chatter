@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/davidbalbert/ospfd/rpc"
+	"github.com/davidbalbert/chatter/rpc"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

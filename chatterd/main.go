@@ -7,8 +7,8 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/davidbalbert/ospfd/api"
-	"github.com/davidbalbert/ospfd/config"
+	"github.com/davidbalbert/chatter/api"
+	"github.com/davidbalbert/chatter/config"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -95,7 +95,7 @@ func (p *RandProtocol) GetRandString() string {
 // }
 
 func main() {
-	fmt.Printf("Starting ospfd with uid %d\n", os.Getuid())
+	fmt.Printf("Starting chatterd with uid %d\n", os.Getuid())
 
 	_, err := config.ParseConfig(s)
 	if err != nil {

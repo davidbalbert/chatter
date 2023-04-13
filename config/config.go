@@ -5,7 +5,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/davidbalbert/ospfd/ospf"
+	"github.com/davidbalbert/chatter/ospf"
 )
 
 type Config struct {

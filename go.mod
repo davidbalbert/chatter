@@ -1,4 +1,4 @@
-module github.com/davidbalbert/ospfd
+module github.com/davidbalbert/chatter
 
 go 1.20
 
