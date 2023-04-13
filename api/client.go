@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/davidbalbert/chatter/ifacemgr"
 	"github.com/davidbalbert/chatter/rpc"
+	"github.com/davidbalbert/chatter/system"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -45,15 +45,15 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {
+func (c *Client) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
 	resp, err := c.rpcClient.GetInterfaces(ctx, &rpc.GetInterfacesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	interfaces := make([]ifacemgr.Interface, len(resp.Interfaces))
+	interfaces := make([]system.Interface, len(resp.Interfaces))
 	for i, iface := range resp.Interfaces {
-		interfaces[i] = ifacemgr.Interface{
+		interfaces[i] = system.Interface{
 			Interface: net.Interface{
 				Index:        int(iface.Index),
 				MTU:          int(iface.Mtu),

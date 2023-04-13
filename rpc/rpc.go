@@ -5,14 +5,14 @@ package rpc
 import (
 	context "context"
 
-	"github.com/davidbalbert/chatter/ifacemgr"
+	"github.com/davidbalbert/chatter/system"
 )
 
 type APIService interface {
 	GetVersion(ctx context.Context) (string, error)
 	Shutdown(ctx context.Context) error
 
-	GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error)
+	GetInterfaces(ctx context.Context) ([]system.Interface, error)
 }
 
 type Server struct {

@@ -9,7 +9,7 @@ import (
 	"reflect"
 
 	"github.com/davidbalbert/chatter/api"
-	"github.com/davidbalbert/chatter/ifacemgr"
+	"github.com/davidbalbert/chatter/system"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -106,7 +106,7 @@ func main() {
 	// - A way to specify command hierarchy - e.g. we have to be able to specify "show" (and a help text for show)
 	//   and then a way to specify that "rand" is an object that you can show
 
-	interfaceManager := &ifacemgr.InterfaceManager{}
+	interfaceManager := &system.InterfaceManager{}
 
 	g.Go(func() error {
 		return interfaceManager.Run(ctx)

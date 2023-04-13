@@ -4,14 +4,14 @@ import (
 	"context"
 	"net"
 
-	"github.com/davidbalbert/chatter/ifacemgr"
 	"github.com/davidbalbert/chatter/rpc"
+	"github.com/davidbalbert/chatter/system"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 )
 
 type Server struct {
-	InterfaceManager *ifacemgr.InterfaceManager
+	InterfaceManager *system.InterfaceManager
 	ShutdownFunc     context.CancelFunc
 }
 
@@ -50,6 +50,6 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {
+func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
 	return s.InterfaceManager.GetInterfaces()
 }
