@@ -12,6 +12,7 @@ import (
 
 type Server struct {
 	InterfaceManager *ifacemgr.InterfaceManager
+	ShutdownFunc     context.CancelFunc
 }
 
 func (s *Server) ListenAndServe(ctx context.Context) error {
@@ -42,6 +43,11 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 
 func (s *Server) GetVersion(ctx context.Context) (string, error) {
 	return "0.0.1", nil
+}
+
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.ShutdownFunc()
+	return nil
 }
 
 func (s *Server) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {

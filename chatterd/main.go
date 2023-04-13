@@ -98,7 +98,7 @@ func (p *RandProtocol) GetRandString() string {
 func main() {
 	fmt.Printf("Starting chatterd v0.0.1 with uid %d\n", os.Getuid())
 
-	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)
 
 	// What we need in an API server?
@@ -113,7 +113,7 @@ func main() {
 	})
 
 	g.Go(func() error {
-		apiServer := &api.Server{InterfaceManager: interfaceManager}
+		apiServer := &api.Server{InterfaceManager: interfaceManager, ShutdownFunc: cancel}
 		return apiServer.ListenAndServe(ctx)
 	})
 

@@ -23,6 +23,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type APIClient interface {
 	GetVersion(ctx context.Context, in *GetVersionRequest, opts ...grpc.CallOption) (*GetVersionResponse, error)
+	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	GetInterfaces(ctx context.Context, in *GetInterfacesRequest, opts ...grpc.CallOption) (*GetInterfacesResponse, error)
 }
 
@@ -43,6 +44,15 @@ func (c *aPIClient) GetVersion(ctx context.Context, in *GetVersionRequest, opts 
 	return out, nil
 }
 
+func (c *aPIClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
+	out := new(ShutdownResponse)
+	err := c.cc.Invoke(ctx, "/rpc.API/Shutdown", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *aPIClient) GetInterfaces(ctx context.Context, in *GetInterfacesRequest, opts ...grpc.CallOption) (*GetInterfacesResponse, error) {
 	out := new(GetInterfacesResponse)
 	err := c.cc.Invoke(ctx, "/rpc.API/GetInterfaces", in, out, opts...)
@@ -57,6 +67,7 @@ func (c *aPIClient) GetInterfaces(ctx context.Context, in *GetInterfacesRequest,
 // for forward compatibility
 type APIServer interface {
 	GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error)
+	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	GetInterfaces(context.Context, *GetInterfacesRequest) (*GetInterfacesResponse, error)
 	mustEmbedUnimplementedAPIServer()
 }
@@ -67,6 +78,9 @@ type UnimplementedAPIServer struct {
 
 func (UnimplementedAPIServer) GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
+}
+func (UnimplementedAPIServer) Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Shutdown not implemented")
 }
 func (UnimplementedAPIServer) GetInterfaces(context.Context, *GetInterfacesRequest) (*GetInterfacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInterfaces not implemented")
@@ -102,6 +116,24 @@ func _API_GetVersion_Handler(srv interface{}, ctx context.Context, dec func(inte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _API_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ShutdownRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(APIServer).Shutdown(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/rpc.API/Shutdown",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(APIServer).Shutdown(ctx, req.(*ShutdownRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _API_GetInterfaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetInterfacesRequest)
 	if err := dec(in); err != nil {
@@ -130,6 +162,10 @@ var API_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVersion",
 			Handler:    _API_GetVersion_Handler,
+		},
+		{
+			MethodName: "Shutdown",
+			Handler:    _API_Shutdown_Handler,
 		},
 		{
 			MethodName: "GetInterfaces",

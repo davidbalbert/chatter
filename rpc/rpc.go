@@ -10,6 +10,8 @@ import (
 
 type APIService interface {
 	GetVersion(ctx context.Context) (string, error)
+	Shutdown(ctx context.Context) error
+
 	GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error)
 }
 
@@ -33,6 +35,15 @@ func (s *Server) GetVersion(ctx context.Context, req *GetVersionRequest) (*GetVe
 	return &GetVersionResponse{
 		Version: version,
 	}, nil
+}
+
+func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownResponse, error) {
+	err := s.apiService.Shutdown(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ShutdownResponse{}, nil
 }
 
 func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (*GetInterfacesResponse, error) {

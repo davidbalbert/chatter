@@ -35,6 +35,17 @@ func main() {
 		return nil
 	})
 
+	cli.MustRegister("shutdown", "Shutdown chatterd", func(w io.Writer) error {
+		err := client.Shutdown(ctx)
+		if err != nil {
+			return err
+		}
+
+		cli.running = false
+
+		return nil
+	})
+
 	registerInterfaceCommands(ctx, cli, client)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))

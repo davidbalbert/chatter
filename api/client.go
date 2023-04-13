@@ -40,6 +40,11 @@ func (c *Client) GetVersion(ctx context.Context) (string, error) {
 	return resp.Version, nil
 }
 
+func (c *Client) Shutdown(ctx context.Context) error {
+	_, err := c.rpcClient.Shutdown(ctx, &rpc.ShutdownRequest{})
+	return err
+}
+
 func (c *Client) GetInterfaces(ctx context.Context) ([]ifacemgr.Interface, error) {
 	resp, err := c.rpcClient.GetInterfaces(ctx, &rpc.GetInterfacesRequest{})
 	if err != nil {

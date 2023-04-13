@@ -5,6 +5,7 @@ option go_package = "github.com/davidbalbert/chatter/rpc";
 
 service API {
     rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {}
+    rpc Shutdown (ShutdownRequest) returns (ShutdownResponse) {}
     
     rpc GetInterfaces (GetInterfacesRequest) returns (GetInterfacesResponse) {}
 }
@@ -13,6 +14,9 @@ message GetVersionRequest {}
 message GetVersionResponse {
     string version = 1;
 }
+
+message ShutdownRequest {}
+message ShutdownResponse {}
 
 message GetInterfacesRequest {}
 message GetInterfacesResponse {
