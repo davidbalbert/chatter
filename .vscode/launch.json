@@ -26,8 +26,8 @@
     ],
     "compounds": [
         {
-            "name": "chatterd + chatterd",
-            "configurations": ["chatterd", "chatterd"],
+            "name": "chatterd + chatterc",
+            "configurations": ["chatterd", "chatterc"],
             "stopAll": true,
             "presentation": {
                 "order": 1

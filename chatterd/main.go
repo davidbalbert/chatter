@@ -5,20 +5,20 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"os/signal"
 	"reflect"
 
 	"github.com/davidbalbert/chatter/api"
-	"github.com/davidbalbert/chatter/config"
 	"golang.org/x/sync/errgroup"
 )
 
-const s = `
-ospf:
-  router-id: 192.168.200.1
+// const s = `
+// ospf:
+//   router-id: 192.168.200.1
 
-  area 0:
-    interface bridge100: {}
-`
+//   area 0:
+//     interface bridge100: {}
+// `
 
 type Invocation struct {
 	Func reflect.Value
@@ -95,15 +95,9 @@ func (p *RandProtocol) GetRandString() string {
 // }
 
 func main() {
-	fmt.Printf("Starting chatterd with uid %d\n", os.Getuid())
+	fmt.Printf("Starting chatterd v0.0.1 with uid %d\n", os.Getuid())
 
-	_, err := config.ParseConfig(s)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-	}
-
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)
 
 	// What we need in an API server?
@@ -122,7 +116,7 @@ func main() {
 		return apiServer.ListenAndServe(ctx)
 	})
 
-	err = g.Wait()
+	err := g.Wait()
 	if err != nil {
 		fmt.Printf("x: %v\n", err)
 		os.Exit(1)

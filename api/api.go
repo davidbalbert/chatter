@@ -41,31 +41,35 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *Server) GetRandInt(ctx context.Context, in *rpc.Empty) (*rpc.RandInt, error) {
-	return &rpc.RandInt{Value: 0}, nil
+func (s *Server) GetVersion(ctx context.Context, req *rpc.GetVersionRequest) (*rpc.GetVersionResponse, error) {
+	return &rpc.GetVersionResponse{
+		Version: "0.0.1",
+	}, nil
 }
 
-func (s *Server) GetRandString(ctx context.Context, in *rpc.Empty) (*rpc.RandString, error) {
-	return &rpc.RandString{Value: "Hello, world"}, nil
+func (s *Server) GetInterfaces(ctx context.Context, req *rpc.GetInterfacesRequest) (*rpc.GetInterfacesResponse, error) {
+	return &rpc.GetInterfacesResponse{
+		Interfaces: []*rpc.Interface{
+			{
+				Name: "bridge100",
+			},
+		},
+	}, nil
 }
 
-type Client interface {
-	rpc.APIClient
-}
-
-type client struct {
+type Client struct {
 	*grpc.ClientConn
 	rpc.APIClient
 }
 
-func NewClient() (Client, error) {
+func NewClient() (*Client, error) {
 	target := fmt.Sprintf("unix://%s", socketPath)
 	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
 
-	return &client{
+	return &Client{
 		ClientConn: conn,
 		APIClient:  rpc.NewAPIClient(conn),
 	}, nil
