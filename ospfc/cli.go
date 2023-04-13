@@ -323,6 +323,11 @@ func (cli *CLI) Register(command string, description string, handlerFunc any) er
 		if err != nil {
 			return err
 		}
+
+		err = l.SetDescription(description)
+		if err != nil {
+			return err
+		}
 	}
 
 	newRoot, err := cli.root.Merge(n)
