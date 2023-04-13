@@ -53,7 +53,7 @@ type CLI struct {
 }
 
 func NewCLI() *CLI {
-	cli := &CLI{prompt: "ospfc# "}
+	cli := &CLI{prompt: "chatterc# "}
 
 	cli.MustRegister("exit", "Exit the CLI", func(w io.Writer) error {
 		cli.running = false

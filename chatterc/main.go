@@ -12,7 +12,7 @@ func main() {
 	cli := NewCLI()
 
 	cli.MustDocument("show", "Show running system information")
-	cli.MustRegister("show version", "Show ospfd version", func(w io.Writer) error {
+	cli.MustRegister("show version", "Show Chatter version", func(w io.Writer) error {
 		fmt.Fprintln(w, "v0.0.1")
 
 		return nil
