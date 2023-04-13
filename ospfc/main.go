@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"net/netip"
 	"os"
 	"sort"
 	"strings"
@@ -248,14 +247,6 @@ func (root *node) walkPartialTokens(query string, sep byte, fn walkPartialTokens
 	return walkNode("", root, queryParts[0], queryParts[1:])
 }
 
-func autocompleteBGPNeighborsV4() ([]string, error) {
-	return []string{"1.2.3.4", "5.6.7.8"}, nil
-}
-
-func autocompleteBGPNeighborsV6() ([]string, error) {
-	return []string{"2001:db8::1", "2001:db8::2"}, nil
-}
-
 func main() {
 	cli := NewCLI()
 
@@ -265,60 +256,6 @@ func main() {
 
 		return nil
 	})
-
-	cli.MustDocument("show ip", "IP information")
-	cli.MustDocument("show ip route", "IP routing table")
-	cli.MustRegister(
-		"show ip route A.B.C.D",
-		"Network in the IP routing table to display",
-		func(w io.Writer, addr netip.Addr) error {
-			fmt.Fprintln(w, "addr:", addr)
-
-			return nil
-		})
-
-	cli.MustDocument("show ipv6", "IPv6 information")
-	cli.MustDocument("show ipv6 route", "IPv6 routing table")
-	cli.MustRegister(
-		"show ipv6 route X:X:X::X",
-		"Network in the IPv6 routing table to display",
-		func(w io.Writer, addr netip.Addr) error {
-			fmt.Fprintln(w, "addr:", addr)
-
-			return nil
-		})
-
-	cli.MustDocument("show bgp", "BGP information")
-	cli.Register("show bgp neighbors", "Detailed information on TCP and BGP neighbor connections", func(w io.Writer) error {
-		fmt.Fprintln(w, "BGP neighbors")
-
-		return nil
-	})
-
-	// If the last node is a choice, the description will be set on all options in the choice.
-	// To override the description of a particular option, you can call MustDocument after MustRegister (see below).
-	cli.MustRegister(
-		"show bgp neighbors <A.B.C.D|X:X:X::X|all>",
-		"Neighbor to display information about",
-		func(w io.Writer, neighbor netip.Addr, all bool) error {
-			if all {
-				fmt.Fprintln(w, "All neighbors")
-			} else {
-				fmt.Fprintln(w, "Neighbor:", neighbor)
-			}
-
-			return nil
-		})
-
-	// Here we're overriding the description of the "all" option.
-	cli.MustDocument("show bgp neighbors all", "Display information about all neighbors")
-
-	// Last node must be a variable type
-	// If you want to set autocomplete different options of a Choice node, you
-	// register each option separately, like below – unlike in MustRegister,
-	// we assume that setting autocomplete options on Choice nodes doesn't make sense.
-	cli.MustRegisterAutocomplete("show bgp neighbors A.B.C.D", autocompleteBGPNeighborsV4)
-	cli.MustRegisterAutocomplete("show bgp <some|all> neighbors X:X:X::X", autocompleteBGPNeighborsV6)
 
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
