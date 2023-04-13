@@ -68,43 +68,50 @@ func NewCLI() *CLI {
 	return cli
 }
 
-func (cli *CLI) runLine(line string, w io.Writer) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return
+func tabulate(f fder, indent int, words []string) []string {
+	width, _, err := term.GetSize(int(f.Fd()))
+	if err != nil {
+		return words
 	}
 
-	matches := cli.root.Match(line)
-	completeMatches := make([]*commands.Match, 0, len(matches))
+	width -= indent
 
-	for _, m := range matches {
-		if m.IsComplete() {
-			completeMatches = append(completeMatches, m)
+	longestLen := 0
+	for _, w := range words {
+		if len(w) > longestLen {
+			longestLen = len(w)
 		}
 	}
 
-	if len(completeMatches) == 0 && len(matches) == 0 {
-		fmt.Fprintf(w, "%% Unknown command: %s\n", line)
-		return
-	} else if len(completeMatches) == 0 {
-		fmt.Fprintf(w, "%% Command incomplete: %s\n", line)
-		return
-	} else if len(completeMatches) > 1 {
-		fmt.Fprintf(w, "%% Ambiguous command: %s\n", line)
-		return
+	perRow := width / (longestLen + 2)
+
+	if perRow == 0 {
+		return words
 	}
 
-	invoker, err := matches[0].Invoker()
-	if err != nil {
-		fmt.Fprintf(w, "%% Error running command: %v\n", err)
-		return
+	rows := len(words) / perRow
+	if len(words)%perRow != 0 {
+		rows++
 	}
 
-	err = invoker.Run(w)
-	if err != nil {
-		fmt.Fprintf(w, "%% Error running command: %v\n", err)
-		return
+	lines := make([]string, rows)
+	for i := 0; i < rows; i++ {
+		lines[i] = strings.Repeat(" ", indent)
+
+		for j := 0; j < perRow; j++ {
+			index := i + j*rows
+			if index >= len(words) {
+				break
+			}
+
+			lines[i] += words[index]
+			if j != perRow-1 {
+				lines[i] += strings.Repeat(" ", longestLen-len(words[index])+2)
+			}
+		}
 	}
+
+	return lines
 }
 
 func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine string, newPos int, ok bool) {
@@ -159,52 +166,6 @@ func (ns NodeSlice) Less(i, j int) bool {
 
 func (ns NodeSlice) Swap(i, j int) {
 	ns[i], ns[j] = ns[j], ns[i]
-}
-
-func tabulate(f fder, indent int, words []string) []string {
-	width, _, err := term.GetSize(int(f.Fd()))
-	if err != nil {
-		return words
-	}
-
-	width -= indent
-
-	longestLen := 0
-	for _, w := range words {
-		if len(w) > longestLen {
-			longestLen = len(w)
-		}
-	}
-
-	perRow := width / (longestLen + 2)
-
-	if perRow == 0 {
-		return words
-	}
-
-	rows := len(words) / perRow
-	if len(words)%perRow != 0 {
-		rows++
-	}
-
-	lines := make([]string, rows)
-	for i := 0; i < rows; i++ {
-		lines[i] = strings.Repeat(" ", indent)
-
-		for j := 0; j < perRow; j++ {
-			index := i + j*rows
-			if index >= len(words) {
-				break
-			}
-
-			lines[i] += words[index]
-			if j != perRow-1 {
-				lines[i] += strings.Repeat(" ", longestLen-len(words[index])+2)
-			}
-		}
-	}
-
-	return lines
 }
 
 func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) (newLine string, newPos int, ok bool) {
@@ -285,6 +246,45 @@ func (cli *CLI) autocomplete(w writeFder, line string, pos int, key rune) (newLi
 type terminal struct {
 	*term.Terminal
 	fder
+}
+
+func (cli *CLI) runLine(line string, w io.Writer) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return
+	}
+
+	matches := cli.root.Match(line)
+	completeMatches := make([]*commands.Match, 0, len(matches))
+
+	for _, m := range matches {
+		if m.IsComplete() {
+			completeMatches = append(completeMatches, m)
+		}
+	}
+
+	if len(completeMatches) == 0 && len(matches) == 0 {
+		fmt.Fprintf(w, "%% Unknown command: %s\n", line)
+		return
+	} else if len(completeMatches) == 0 {
+		fmt.Fprintf(w, "%% Command incomplete: %s\n", line)
+		return
+	} else if len(completeMatches) > 1 {
+		fmt.Fprintf(w, "%% Ambiguous command: %s\n", line)
+		return
+	}
+
+	invoker, err := matches[0].Invoker()
+	if err != nil {
+		fmt.Fprintf(w, "%% Error running command: %v\n", err)
+		return
+	}
+
+	err = invoker.Run(w)
+	if err != nil {
+		fmt.Fprintf(w, "%% Error running command: %v\n", err)
+		return
+	}
 }
 
 func (cli *CLI) Run(rw readWriteFder) {
