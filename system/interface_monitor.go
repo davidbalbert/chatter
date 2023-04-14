@@ -24,9 +24,9 @@ func getInterfaces() ([]Interface, error) {
 }
 
 type InterfaceMonitor interface {
-	Run(ctx context.Context) error
+	Run(context.Context) error
 	Interfaces() []Interface
-	WaitInterfaces() []Interface
+	WaitInterfaces(context.Context) []Interface
 }
 
 type baseInterfaceMonitor struct {
@@ -70,11 +70,15 @@ func (m *baseInterfaceMonitor) notify() error {
 	return nil
 }
 
-func (m *baseInterfaceMonitor) WaitInterfaces() []Interface {
+func (m *baseInterfaceMonitor) WaitInterfaces(ctx context.Context) []Interface {
 	c := <-m.events
 	m.events <- c
 
-	<-c
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-c:
+	}
 
 	return m.Interfaces()
 }
