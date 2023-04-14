@@ -11,7 +11,7 @@ import (
 )
 
 type Server struct {
-	InterfaceManager *system.InterfaceManager
+	InterfaceMonitor system.InterfaceMonitor
 	ShutdownFunc     context.CancelFunc
 }
 
@@ -51,5 +51,5 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
-	return s.InterfaceManager.GetInterfaces()
+	return s.InterfaceMonitor.GetInterfaces()
 }

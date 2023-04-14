@@ -106,14 +106,14 @@ func main() {
 	// - A way to specify command hierarchy - e.g. we have to be able to specify "show" (and a help text for show)
 	//   and then a way to specify that "rand" is an object that you can show
 
-	interfaceManager := &system.InterfaceManager{}
+	interfaceMonitor := system.NewInterfaceMonitor()
 
 	g.Go(func() error {
-		return interfaceManager.Run(ctx)
+		return interfaceMonitor.Run(ctx)
 	})
 
 	g.Go(func() error {
-		apiServer := &api.Server{InterfaceManager: interfaceManager, ShutdownFunc: cancel}
+		apiServer := &api.Server{InterfaceMonitor: interfaceMonitor, ShutdownFunc: cancel}
 		return apiServer.ListenAndServe(ctx)
 	})
 
