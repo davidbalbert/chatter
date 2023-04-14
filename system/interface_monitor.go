@@ -2,7 +2,6 @@ package system
 
 import (
 	"context"
-	"fmt"
 	"net"
 )
 
@@ -10,52 +9,10 @@ type Interface struct {
 	net.Interface
 }
 
-type InterfaceEvent struct {
-	detail string
-}
-
-type EventListener interface {
-	OnEvents(event []InterfaceEvent)
-}
-
-type InterfaceMonitor interface {
-	Run(ctx context.Context) error
-	Subscribe(listener EventListener)
-	Unsubscribe(listener EventListener)
-	Interfaces() ([]Interface, error)
-}
-
-type baseInterfaceMonitor struct {
-	interfaces []Interface
-	listeners  []EventListener
-}
-
-func (m *baseInterfaceMonitor) Subscribe(listener EventListener) {
-	m.listeners = append(m.listeners, listener)
-}
-
-func (m *baseInterfaceMonitor) Unsubscribe(listener EventListener) {
-	for i, l := range m.listeners {
-		if l == listener {
-			m.listeners = append(m.listeners[:i], m.listeners[i+1:]...)
-			return
-		}
-	}
-}
-
-func (m *baseInterfaceMonitor) notify(events []InterfaceEvent) {
-	fmt.Printf("notify: %v\n", events)
-
-	for _, listener := range m.listeners {
-		listener.OnEvents(events)
-	}
-}
-
-func (m *baseInterfaceMonitor) getInterfaces() error {
+func getInterfaces() ([]Interface, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		m.interfaces = nil
-		return err
+		return nil, err
 	}
 
 	interfaces := make([]Interface, len(ifaces))
@@ -63,18 +20,72 @@ func (m *baseInterfaceMonitor) getInterfaces() error {
 		interfaces[i] = Interface{iface}
 	}
 
-	m.interfaces = interfaces
+	return interfaces, nil
+}
+
+type InterfaceMonitor interface {
+	Run(ctx context.Context) error
+	Interfaces() []Interface
+	WaitInterfaces() []Interface
+}
+
+type baseInterfaceMonitor struct {
+	events     chan chan struct{}
+	interfaces chan []Interface
+}
+
+func newBaseInterfaceMonitor() (*baseInterfaceMonitor, error) {
+	events := make(chan chan struct{}, 1)
+	events <- make(chan struct{})
+
+	interfaces := make(chan []Interface, 1)
+
+	ifaces, err := getInterfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	interfaces <- ifaces
+
+	return &baseInterfaceMonitor{
+		interfaces: interfaces,
+		events:     events,
+	}, nil
+}
+
+func (m *baseInterfaceMonitor) notify() error {
+	<-m.interfaces
+
+	interfaces, err := getInterfaces()
+	if err != nil {
+		return err
+	}
+
+	m.interfaces <- interfaces
+
+	e := <-m.events
+	close(e)
+	m.events <- make(chan struct{})
 
 	return nil
 }
 
-func (m *baseInterfaceMonitor) Interfaces() ([]Interface, error) {
-	if m.interfaces == nil {
-		err := m.getInterfaces()
-		if err != nil {
-			return nil, err
-		}
-	}
+func (m *baseInterfaceMonitor) WaitInterfaces() []Interface {
+	c := <-m.events
+	m.events <- c
 
-	return m.interfaces, nil
+	<-c
+
+	return m.Interfaces()
+}
+
+func (m *baseInterfaceMonitor) Interfaces() []Interface {
+	i1 := <-m.interfaces
+
+	i2 := make([]Interface, len(i1))
+	copy(i2, i1)
+
+	m.interfaces <- i1
+
+	return i2
 }

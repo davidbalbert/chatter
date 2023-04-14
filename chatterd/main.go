@@ -106,7 +106,11 @@ func main() {
 	// - A way to specify command hierarchy - e.g. we have to be able to specify "show" (and a help text for show)
 	//   and then a way to specify that "rand" is an object that you can show
 
-	interfaceMonitor := system.NewInterfaceMonitor()
+	interfaceMonitor, err := system.NewInterfaceMonitor()
+	if err != nil {
+		fmt.Printf("error enumerating interfaces: %v\n", err)
+		os.Exit(1)
+	}
 
 	g.Go(func() error {
 		return interfaceMonitor.Run(ctx)
@@ -117,9 +121,9 @@ func main() {
 		return apiServer.ListenAndServe(ctx)
 	})
 
-	err := g.Wait()
+	err = g.Wait()
 	if err != nil {
-		fmt.Printf("x: %v\n", err)
+		fmt.Printf("error: %v\n", err)
 		os.Exit(1)
 	}
 

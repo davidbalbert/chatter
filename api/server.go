@@ -51,5 +51,5 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
-	return s.InterfaceMonitor.GetInterfaces()
+	return s.InterfaceMonitor.Interfaces(), nil
 }

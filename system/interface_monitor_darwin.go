@@ -12,33 +12,18 @@ import (
 )
 
 type macosInterfaceMonitor struct {
-	baseInterfaceMonitor
+	*baseInterfaceMonitor
 }
 
-func NewInterfaceMonitor() InterfaceMonitor {
-	return &macosInterfaceMonitor{}
-}
-
-func (m *macosInterfaceMonitor) readEvent(r *bufio.Reader) (*InterfaceEvent, error) {
-	line, err := r.ReadString('\n')
+func NewInterfaceMonitor() (InterfaceMonitor, error) {
+	base, err := newBaseInterfaceMonitor()
 	if err != nil {
 		return nil, err
 	}
 
-	if !strings.Contains(line, "changedKey") {
-		return nil, nil
-	}
-
-	trimmed := strings.TrimSpace(line)
-
-	i := strings.LastIndex(trimmed, "State:/Network/Interface/")
-	if i == -1 {
-		return nil, nil
-	}
-
-	key := trimmed[i:]
-
-	return &InterfaceEvent{detail: key}, nil
+	return &macosInterfaceMonitor{
+		baseInterfaceMonitor: base,
+	}, nil
 }
 
 func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
@@ -59,7 +44,7 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 		return err
 	}
 
-	eventCh := make(chan *InterfaceEvent)
+	events := make(chan struct{})
 
 	g.Go(func() error {
 		defer stdin.Close()
@@ -79,8 +64,6 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 
 		<-ctx.Done()
 
-		close(eventCh)
-
 		return nil
 	})
 
@@ -88,15 +71,18 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 		r := bufio.NewReader(stdout)
 
 		for {
-			event, err := m.readEvent(r)
+			line, err := r.ReadString('\n')
 			if err == io.EOF {
 				return nil
 			} else if err != nil {
 				return err
 			}
 
-			if event != nil {
-				eventCh <- event
+			if strings.Contains(line, "State:/Network/Interface/") {
+				select {
+				case events <- struct{}{}:
+				default:
+				}
 			}
 		}
 	})
@@ -109,33 +95,31 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 		var (
 			notifyTimer *time.Timer
 			notifyCh    <-chan time.Time
-			events      []InterfaceEvent
+			pending     bool
 		)
 
 		for {
 			select {
-			case event, ok := <-eventCh:
-				if !ok {
-					if notifyTimer != nil && !notifyTimer.Stop() {
-						<-notifyTimer.C
-					}
-
-					if len(events) > 0 {
-						m.notify(events)
-					}
-
-					return nil
+			case <-ctx.Done():
+				if notifyTimer != nil && !notifyTimer.Stop() {
+					<-notifyTimer.C
 				}
 
-				events = append(events, *event)
+				if pending {
+					m.notify()
+				}
+
+				return nil
+			case <-events:
+				pending = true
 
 				if notifyTimer == nil {
 					notifyTimer = time.NewTimer(200 * time.Millisecond)
 					notifyCh = notifyTimer.C
 				}
 			case <-notifyCh:
-				m.notify(events)
-				events = nil
+				m.notify()
+				pending = false
 				notifyCh = nil
 				notifyTimer = nil
 			}
