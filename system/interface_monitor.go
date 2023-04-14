@@ -30,7 +30,7 @@ type InterfaceMonitor interface {
 }
 
 type baseInterfaceMonitor struct {
-	events     chan chan struct{}
+	events     chan chan struct{} // could this just be chan struct{}?
 	interfaces chan []Interface
 }
 
