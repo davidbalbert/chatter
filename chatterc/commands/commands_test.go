@@ -729,8 +729,8 @@ func TestMergeExplicitChoiceSameChildrenWithDescendents(t *testing.T) {
 			choice[
 				param:ipv4[
 					choice.1[
-						literal:detail.1,
-						literal:summary.1
+						literal:detail,
+						literal:summary
 					],
 				],
 				param:ipv6[
