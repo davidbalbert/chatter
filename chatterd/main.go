@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/ospf"
 	"github.com/davidbalbert/chatter/system"
@@ -24,8 +25,8 @@ ospf:
 func main() {
 	fmt.Printf("Starting chatterd v0.0.1 with uid %d\n", os.Getuid())
 
-	config.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)
-	config.MustRegisterServiceType(config.ServiceTypeOSPF, ospf.NewInstance)
+	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)
+	services.MustRegisterServiceType(config.ServiceTypeOSPF, ospf.NewInstance)
 
 	var configPath string
 
@@ -42,7 +43,7 @@ func main() {
 	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)
 
-	serviceManager := config.NewServiceManager(configManager)
+	serviceManager := services.NewServiceManager(configManager)
 
 	g.Go(func() error {
 		return configManager.Run(ctx)

@@ -5,7 +5,7 @@ import (
 	"net/netip"
 
 	"github.com/davidbalbert/chatter/chatterd/common"
-	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/chatterd/services"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -22,10 +22,10 @@ type Instance struct {
 	// TODO: LSDB (or maybe just AS external?)
 	// TODO: RIB
 
-	serviceManager *config.ServiceManager
+	serviceManager *services.ServiceManager
 }
 
-func NewInstance(serviceManager *config.ServiceManager) (config.Runner, error) {
+func NewInstance(serviceManager *services.ServiceManager) (services.Runner, error) {
 	backboneID := common.AreaID(0)
 	backbone := newArea(backboneID)
 

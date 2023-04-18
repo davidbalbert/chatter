@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/chatterd/services"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -16,7 +16,7 @@ type macosInterfaceMonitor struct {
 	*baseInterfaceMonitor
 }
 
-func NewInterfaceMonitor(serviceManager *config.ServiceManager) (config.Runner, error) {
+func NewInterfaceMonitor(serviceManager *services.ServiceManager) (services.Runner, error) {
 	base, err := newBaseInterfaceMonitor()
 	if err != nil {
 		return nil, err
