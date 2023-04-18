@@ -21,19 +21,14 @@ var (
 	socketPath string
 )
 
-func init() {
-	flag.StringVar(&configPath, "config", "/etc/chatterd/chatterd.conf", "path to chatterd.conf")
-	flag.StringVar(&configPath, "c", "/etc/chatterd/chatterd.conf", "path to chatterd.conf (shorthand)")
-
-	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
-	flag.StringVar(&socketPath, "s", "/var/run/chatterd.sock", "path to chatterd socket (shorthand)")
-}
-
 func main() {
 	fmt.Printf("Starting chatterd v%s with uid %d\n", version, os.Getuid())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)
+
+	flag.StringVar(&configPath, "config", "/etc/chatterd/chatterd.conf", "path to chatterd.conf")
+	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
 
 	flag.Parse()
 

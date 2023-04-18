@@ -13,12 +13,9 @@ import (
 
 var socketPath string
 
-func init() {
-	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
-	flag.StringVar(&socketPath, "s", "/var/run/chatterd.sock", "path to chatterd socket (shorthand)")
-}
-
 func main() {
+	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
+
 	flag.Parse()
 
 	ctx := context.Background()
