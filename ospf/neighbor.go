@@ -1,6 +1,10 @@
 package ospf
 
-import "net/netip"
+import (
+	"net/netip"
+
+	"github.com/davidbalbert/chatter/chatterd/common"
+)
 
 type Neighbor struct {
 	state neighborState
@@ -8,12 +12,12 @@ type Neighbor struct {
 	Master                 bool
 	DDSequenceNumber       uint32
 	LastReceivedDD         *DD
-	ID                     RouterID
+	ID                     common.RouterID
 	Priority               uint8
 	Addr                   netip.Addr
 	Options                uint8
-	DesignatedRouter       RouterID
-	BackupDesignatedRouter RouterID
+	DesignatedRouter       common.RouterID
+	BackupDesignatedRouter common.RouterID
 
 	// TODO: make a type for these lists?
 	RetransmissionList   []*lsaHeader

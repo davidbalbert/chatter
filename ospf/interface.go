@@ -1,12 +1,18 @@
 package ospf
 
-import "net/netip"
+import (
+	"context"
+	"net/netip"
+
+	"github.com/davidbalbert/chatter/chatterd/common"
+	"golang.org/x/sync/errgroup"
+)
 
 type Interface struct {
 	Type               interfaceType
 	State              interfaceState
 	Prefix             netip.Prefix // IP interface address and IP interface mask
-	AreaID             AreaID
+	AreaID             common.AreaID
 	HelloInterval      uint16
 	RouterDeadInterval uint16
 	InfTransDelay      int
@@ -15,10 +21,10 @@ type Interface struct {
 	// TODO: HelloTimer
 	// TODO: WaitTimer
 
-	Neighbors []Neighbor // TODO: probably change to map
-	DRID      RouterID
+	Neighbors map[common.RouterID]Neighbor
+	DRID      common.RouterID
 	DRAddr    netip.Addr
-	BDRID     RouterID
+	BDRID     common.RouterID
 	BDRAddr   netip.Addr
 
 	Cost              uint16
@@ -121,4 +127,19 @@ func (ie interfaceEvent) String() string {
 	default:
 		return "Unknown"
 	}
+}
+
+func (i *Interface) run(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		return i.listen()
+	})
+
+	return g.Wait()
+}
+
+func (i *Interface) listen() error {
+
+	return nil
 }

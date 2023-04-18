@@ -1,10 +1,12 @@
 package ospf
 
 import (
-	"encoding/binary"
-	"fmt"
+	"context"
 	"net/netip"
-	"strconv"
+
+	"github.com/davidbalbert/chatter/chatterd/common"
+	"github.com/davidbalbert/chatter/config"
+	"golang.org/x/sync/errgroup"
 )
 
 var (
@@ -12,35 +14,39 @@ var (
 	AllDRouters   = netip.MustParseAddr("224.0.0.6")
 )
 
-type RouterID uint32
-type AreaID uint32
+type Instance struct {
+	RouterID common.RouterID
+	Areas    map[common.AreaID]*Area
+	// TODO: VirtualLinks
+	// TODO: ExternalRoutes
+	// TODO: LSDB (or maybe just AS external?)
+	// TODO: RIB
 
-func parseID(s string) (uint32, error) {
-	n, err := strconv.ParseUint(s, 10, 32)
-	if err == nil {
-		return uint32(n), nil
-	}
-
-	addr, err := netip.ParseAddr(s)
-	if err != nil || !addr.Is4() {
-		return 0, fmt.Errorf("must be an IPv4 address or an unsigned 32 bit integer")
-	}
-
-	return binary.BigEndian.Uint32(addr.AsSlice()), nil
+	serviceManager *config.ServiceManager
 }
 
-func (r RouterID) String() string {
-	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], uint32(r))
-	addr := netip.AddrFrom4(b)
+func NewInstance(serviceManager *config.ServiceManager) (config.Runner, error) {
+	backboneID := common.AreaID(0)
+	backbone := newArea(backboneID)
 
-	return addr.String()
+	return &Instance{
+		Areas: map[common.AreaID]*Area{
+			backboneID: backbone,
+		},
+
+		serviceManager: serviceManager,
+	}, nil
 }
 
-func (a AreaID) String() string {
-	var b [4]byte
-	binary.BigEndian.PutUint32(b[:], uint32(a))
-	addr := netip.AddrFrom4(b)
+func (p *Instance) Run(ctx context.Context) error {
+	g, ctx := errgroup.WithContext(ctx)
 
-	return addr.String()
+	for _, area := range p.Areas {
+		area := area
+		g.Go(func() error {
+			return area.run(ctx)
+		})
+	}
+
+	return g.Wait()
 }

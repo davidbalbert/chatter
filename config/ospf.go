@@ -1,37 +1,101 @@
-package ospf
+package config
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math"
+	"net/netip"
+	"strconv"
 	"strings"
+
+	"github.com/davidbalbert/chatter/chatterd/common"
 )
 
-type Config struct {
-	RouterID      RouterID
+func parseID(s string) (uint32, error) {
+	n, err := strconv.ParseUint(s, 10, 32)
+	if err == nil {
+		return uint32(n), nil
+	}
+
+	addr, err := netip.ParseAddr(s)
+	if err != nil || !addr.Is4() {
+		return 0, fmt.Errorf("must be an IPv4 address or an unsigned 32 bit integer")
+	}
+
+	return binary.BigEndian.Uint32(addr.AsSlice()), nil
+}
+
+type OSPFConfig struct {
+	RouterID      common.RouterID
 	Cost          uint16
 	HelloInterval uint16
 	DeadInterval  uint32
-	Areas         map[AreaID]AreaConfig
+	Areas         map[common.AreaID]OSPFAreaConfig
 }
 
-type AreaConfig struct {
+func (c *OSPFConfig) ShouldRun() bool {
+	for _, area := range c.Areas {
+		if len(area.Interfaces) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (c *OSPFConfig) Dependencies() []Service {
+	return []Service{ServiceInterfaceMonitor}
+}
+
+func (c *OSPFConfig) Copy() protocolConfig {
+	newConfig := OSPFConfig{
+		RouterID:      c.RouterID,
+		Cost:          c.Cost,
+		HelloInterval: c.HelloInterval,
+		DeadInterval:  c.DeadInterval,
+		Areas:         make(map[common.AreaID]OSPFAreaConfig),
+	}
+
+	for k, v := range c.Areas {
+		newConfig.Areas[k] = v.Copy()
+	}
+
+	return &newConfig
+}
+
+type OSPFAreaConfig struct {
 	Cost          uint16
 	HelloInterval uint16
 	DeadInterval  uint32
 	Interfaces    map[string]InterfaceConfig
 }
 
+func (c *OSPFAreaConfig) Copy() OSPFAreaConfig {
+	newConfig := OSPFAreaConfig{
+		Cost:          c.Cost,
+		HelloInterval: c.HelloInterval,
+		DeadInterval:  c.DeadInterval,
+		Interfaces:    make(map[string]InterfaceConfig),
+	}
+
+	for k, v := range c.Interfaces {
+		newConfig.Interfaces[k] = v
+	}
+
+	return newConfig
+}
+
 type InterfaceConfig struct {
 	Cost uint16
 }
 
-func ParseConfig(data map[string]interface{}) (*Config, error) {
-	c := &Config{
+func parseOSPFConfig(data map[string]interface{}) (*OSPFConfig, error) {
+	c := &OSPFConfig{
 		RouterID:      0,
 		Cost:          1,
 		HelloInterval: 10,
 		DeadInterval:  40,
-		Areas:         make(map[AreaID]AreaConfig),
+		Areas:         make(map[common.AreaID]OSPFAreaConfig),
 	}
 
 	for k, v := range data {
@@ -43,7 +107,7 @@ func ParseConfig(data map[string]interface{}) (*Config, error) {
 					return nil, fmt.Errorf("ospf: invalid router-id: %s", err)
 				}
 
-				c.RouterID = RouterID(id)
+				c.RouterID = common.RouterID(id)
 			case int:
 				if v < 0 {
 					return nil, fmt.Errorf("ospf: router-id must be positive: %d", v)
@@ -51,7 +115,7 @@ func ParseConfig(data map[string]interface{}) (*Config, error) {
 					return nil, fmt.Errorf("ospf: router-id too big: %d", v)
 				}
 
-				c.RouterID = RouterID(v)
+				c.RouterID = common.RouterID(v)
 			default:
 				return nil, fmt.Errorf("ospf: router-id must be an IPv4 address or an unsigned 32 bit integer")
 			}
@@ -112,7 +176,7 @@ func ParseConfig(data map[string]interface{}) (*Config, error) {
 				return nil, err
 			}
 
-			c.Areas[AreaID(id)] = *ac
+			c.Areas[common.AreaID(id)] = *ac
 		} else {
 			return nil, fmt.Errorf("ospf: unknown key: %s", k)
 		}
@@ -123,7 +187,7 @@ func ParseConfig(data map[string]interface{}) (*Config, error) {
 		c.Areas[k] = ac
 	}
 
-	_, ok := c.Areas[AreaID(0)]
+	_, ok := c.Areas[common.AreaID(0)]
 	if !ok {
 		return nil, fmt.Errorf("ospf: backbone area must be configured")
 	}
@@ -131,7 +195,7 @@ func ParseConfig(data map[string]interface{}) (*Config, error) {
 	return c, nil
 }
 
-func (ac *AreaConfig) setDefaults(c *Config) {
+func (ac *OSPFAreaConfig) setDefaults(c *OSPFConfig) {
 	if ac.HelloInterval == 0 {
 		ac.HelloInterval = c.HelloInterval
 	}
@@ -150,14 +214,14 @@ func (ac *AreaConfig) setDefaults(c *Config) {
 	}
 }
 
-func (ic *InterfaceConfig) setDefaults(ac *AreaConfig) {
+func (ic *InterfaceConfig) setDefaults(ac *OSPFAreaConfig) {
 	if ic.Cost == 0 {
 		ic.Cost = ac.Cost
 	}
 }
 
-func parseAreaConfig(areaID string, data map[string]interface{}) (*AreaConfig, error) {
-	ac := AreaConfig{
+func parseAreaConfig(areaID string, data map[string]interface{}) (*OSPFAreaConfig, error) {
+	ac := OSPFAreaConfig{
 		Cost:          0,
 		HelloInterval: 0,
 		DeadInterval:  0,

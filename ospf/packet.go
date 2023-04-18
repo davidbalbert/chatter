@@ -1,13 +1,15 @@
 package ospf
 
+import "github.com/davidbalbert/chatter/chatterd/common"
+
 type Packet interface {
 }
 
 type PacketHeader struct {
-	type_    packetType
+	t        packetType
 	length   uint16
-	routerID RouterID
-	areaID   AreaID
+	routerID common.RouterID
+	areaID   common.AreaID
 	checksum uint16
 	authType uint16
 	authData uint64

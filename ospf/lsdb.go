@@ -5,6 +5,8 @@ import (
 	"math"
 	"net/netip"
 	"time"
+
+	"github.com/davidbalbert/chatter/chatterd/common"
 )
 
 const (
@@ -20,7 +22,7 @@ type LSAMetadata interface {
 	Options() uint8
 	Type() lsType
 	ID() netip.Addr
-	AdvertisingRouter() RouterID
+	AdvertisingRouter() common.RouterID
 	SequenceNumber() int32
 	Checksum() uint16
 	Length() uint16
@@ -39,7 +41,7 @@ type LSA interface {
 type lsdbKey struct {
 	Type              lsType
 	ID                netip.Addr
-	AdvertisingRouter RouterID
+	AdvertisingRouter common.RouterID
 }
 
 type lsdb map[lsdbKey]*installedLSA
@@ -64,7 +66,7 @@ type lsaHeader struct {
 	options           uint8
 	type_             lsType
 	id                netip.Addr
-	advertisingRouter RouterID
+	advertisingRouter common.RouterID
 	sequenceNumber    int32
 	checksum          uint16
 	length            uint16
@@ -107,7 +109,7 @@ func (h *lsaHeader) ID() netip.Addr {
 	return h.id
 }
 
-func (h *lsaHeader) AdvertisingRouter() RouterID {
+func (h *lsaHeader) AdvertisingRouter() common.RouterID {
 	return h.advertisingRouter
 }
 
