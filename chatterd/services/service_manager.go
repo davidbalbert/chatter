@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/davidbalbert/chatter/config"
+	"golang.org/x/sync/errgroup"
 )
 
 type Runner interface {
@@ -48,17 +49,82 @@ func (c *ServiceController) Wait() error {
 }
 
 type ServiceManager struct {
-	configManager *config.ConfigManager
-	services      map[string]ServiceController
+	services map[string]ServiceController
 }
 
-func NewServiceManager(configManager *config.ConfigManager) *ServiceManager {
+func NewServiceManager() *ServiceManager {
 	return &ServiceManager{
-		configManager: configManager,
-		services:      make(map[string]ServiceController),
+		services: make(map[string]ServiceController),
 	}
 }
 
-func (s *ServiceManager) Run(ctx context.Context) error {
+func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigManager) error {
+	g, ctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case event := <-configManager.Events():
+				switch event.Type {
+				case config.ConfigUpdated:
+					for _, service := range s.services {
+						service.Stop()
+					}
+
+					for name, service := range s.services {
+						service.Wait()
+						delete(s.services, name)
+					}
+
+					for _, service := range configManager.GetConfig().ServicesInBootOrder() {
+						err := s.start(ctx, g, service)
+						if err != nil {
+							return err
+						}
+					}
+				default:
+					return fmt.Errorf("unknown config event type: %v", event.Type)
+				}
+			}
+		}
+	})
+
+	return g.Wait()
+}
+
+func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service config.Service) error {
+	_, ok := s.services[service.Name]
+	if ok {
+		return fmt.Errorf("service already running: %s", service.Name)
+	}
+
+	builder, ok := builders[service.Type]
+	if !ok {
+		return fmt.Errorf("unknown service type: %v", service.Type)
+	}
+
+	runner, err := builder(s)
+	if err != nil {
+		return err
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+
+	done := make(chan struct{})
+
+	s.services[service.Name] = ServiceController{
+		cancel: cancel,
+		done:   done,
+	}
+
+	// TODO: is it kosher to call g.Go() from within g.Go()?
+	g.Go(func() error {
+		err := runner.Run(ctx)
+		close(done)
+		return err
+	})
+
 	return nil
 }

@@ -4,15 +4,16 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "sockrm",
+            "label": "Remove /tmp/chatterd.sock",
             "type": "shell",
-            "command": "${workspaceFolder}/script/sockrm.sh",
+            "command": "rm",
+            "args": ["-f", "/tmp/chatterd.sock"],
             "presentation": {
                 "reveal": "silent",
             }
         },
         {
-            "label": "sockwait",
+            "label": "Wait for /tmp/chatterd.sock",
             "type": "shell",
             "command": "${workspaceFolder}/script/sockwait.sh",
             "presentation": {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -10,10 +11,19 @@ import (
 	"golang.org/x/term"
 )
 
+var socketPath string
+
+func init() {
+	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
+	flag.StringVar(&socketPath, "s", "/var/run/chatterd.sock", "path to chatterd socket (shorthand)")
+}
+
 func main() {
+	flag.Parse()
+
 	ctx := context.Background()
 
-	client, err := api.NewClient()
+	client, err := api.NewClient(socketPath)
 	if err != nil {
 		fmt.Printf("Failed to create client: %v\n", err)
 		os.Exit(1)

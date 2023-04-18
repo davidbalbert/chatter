@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 
+	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/rpc"
 	"github.com/davidbalbert/chatter/system"
 	"golang.org/x/sync/errgroup"
@@ -11,12 +12,23 @@ import (
 )
 
 type Server struct {
-	InterfaceMonitor system.InterfaceMonitor
-	ShutdownFunc     context.CancelFunc
+	serviceManager *services.ServiceManager
+	shutdown       context.CancelFunc
+	socket         string
+	version        string
 }
 
-func (s *Server) ListenAndServe(ctx context.Context) error {
-	listener, err := net.Listen("unix", socketPath)
+func NewServer(serviceManager *services.ServiceManager, socket string, shutdown context.CancelFunc, version string) *Server {
+	return &Server{
+		serviceManager: serviceManager,
+		shutdown:       shutdown,
+		socket:         socket,
+		version:        version,
+	}
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	listener, err := net.Listen("unix", s.socket)
 	if err != nil {
 		return err
 	}
@@ -42,14 +54,15 @@ func (s *Server) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *Server) GetVersion(ctx context.Context) (string, error) {
-	return "0.0.1", nil
+	return s.version, nil
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.ShutdownFunc()
+	s.shutdown()
 	return nil
 }
 
 func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
-	return s.InterfaceMonitor.Interfaces(), nil
+	// return s.InterfaceMonitor.Interfaces(), nil
+	return nil, nil
 }

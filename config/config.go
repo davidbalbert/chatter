@@ -11,7 +11,8 @@ import (
 type ServiceType int
 
 const (
-	ServiceTypeInterfaceMonitor ServiceType = iota
+	ServiceTypeAPIServer ServiceType = iota
+	ServiceTypeInterfaceMonitor
 	ServiceTypeOSPF
 )
 
@@ -21,14 +22,52 @@ type Service struct {
 }
 
 var (
+	ServiceAPIServer        = Service{Type: ServiceTypeAPIServer, Name: "APIServer"}
 	ServiceInterfaceMonitor = Service{Type: ServiceTypeInterfaceMonitor, Name: "InterfaceMonitor"}
 	ServiceOSPF             = Service{Type: ServiceTypeOSPF, Name: "OSPF"}
 )
 
+type graph struct {
+	nodes map[Service][]Service
+}
+
+func newGraph() *graph {
+	return &graph{nodes: make(map[Service][]Service)}
+}
+
+func (g *graph) addNode(service Service, deps ...Service) {
+	g.nodes[service] = deps
+}
+
+func (g *graph) topologicalSort() []Service {
+	visited := make(map[Service]bool)
+	stack := []Service{}
+
+	var visit func(Service)
+
+	visit = func(service Service) {
+		if _, ok := visited[service]; !ok {
+			visited[service] = true
+
+			for _, dep := range g.nodes[service] {
+				visit(dep)
+			}
+
+			stack = append(stack, service)
+		}
+	}
+
+	for service := range g.nodes {
+		visit(service)
+	}
+
+	return stack
+}
+
 type protocolConfig interface {
-	ShouldRun() bool
-	Dependencies() []Service
-	Copy() protocolConfig
+	shouldRun() bool
+	dependencies() []Service
+	copy() protocolConfig
 }
 
 type Config struct {
@@ -87,13 +126,27 @@ func parseConfig(s string) (*Config, error) {
 	return &c, nil
 }
 
-func (c *Config) Copy() *Config {
+func (c *Config) ServicesInBootOrder() []Service {
+	g := newGraph()
+
+	g.addNode(ServiceAPIServer)
+
+	for s, p := range c.protocols {
+		if p.shouldRun() {
+			g.addNode(s, p.dependencies()...)
+		}
+	}
+
+	return g.topologicalSort()
+}
+
+func (c *Config) copy() *Config {
 	newConfig := Config{
 		protocols: make(map[Service]protocolConfig),
 	}
 
 	for k, v := range c.protocols {
-		newConfig.protocols[k] = v.Copy()
+		newConfig.protocols[k] = v.copy()
 	}
 
 	return &newConfig
@@ -135,10 +188,15 @@ func NewConfigManager(path string) (*ConfigManager, error) {
 		runningConfig: config,
 	}
 
+	events := make(chan Event, 1)
+	events <- Event{
+		Type: ConfigUpdated,
+	}
+
 	return &ConfigManager{
 		s:       s,
 		configs: make(chan Config),
-		events:  make(chan Event),
+		events:  events,
 		path:    path,
 	}, nil
 }
@@ -177,7 +235,7 @@ func (c *ConfigManager) UpdateConfig(config *Config) error {
 
 func (c *ConfigManager) GetConfig() *Config {
 	state := <-c.s
-	config := state.runningConfig.Copy()
+	config := state.runningConfig.copy()
 	c.s <- state
 
 	return config

@@ -10,8 +10,9 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/chatterd",
+            "args": ["-c", "${workspaceFolder}/chatterd.yaml", "-s", "/tmp/chatterd.sock"],
             "console": "integratedTerminal",
-            "postDebugTask": "sockrm",
+            "postDebugTask": "Remove /tmp/chatterd.sock",
             // "asRoot": true,
         },
         {
@@ -20,8 +21,9 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/chatterc",
+            "args": ["-s", "/tmp/chatterd.sock"],
             "console": "integratedTerminal",
-            // "preLaunchTask": "sockwait",
+            // "preLaunchTask": "Wait for /tmp/chatterd.sock",
         },
     ],
     "compounds": [

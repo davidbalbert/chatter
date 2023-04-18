@@ -33,7 +33,7 @@ type OSPFConfig struct {
 	Areas         map[common.AreaID]OSPFAreaConfig
 }
 
-func (c *OSPFConfig) ShouldRun() bool {
+func (c *OSPFConfig) shouldRun() bool {
 	for _, area := range c.Areas {
 		if len(area.Interfaces) > 0 {
 			return true
@@ -43,11 +43,11 @@ func (c *OSPFConfig) ShouldRun() bool {
 	return false
 }
 
-func (c *OSPFConfig) Dependencies() []Service {
+func (c *OSPFConfig) dependencies() []Service {
 	return []Service{ServiceInterfaceMonitor}
 }
 
-func (c *OSPFConfig) Copy() protocolConfig {
+func (c *OSPFConfig) copy() protocolConfig {
 	newConfig := OSPFConfig{
 		RouterID:      c.RouterID,
 		Cost:          c.Cost,
@@ -57,7 +57,7 @@ func (c *OSPFConfig) Copy() protocolConfig {
 	}
 
 	for k, v := range c.Areas {
-		newConfig.Areas[k] = v.Copy()
+		newConfig.Areas[k] = v.copy()
 	}
 
 	return &newConfig
@@ -70,7 +70,7 @@ type OSPFAreaConfig struct {
 	Interfaces    map[string]InterfaceConfig
 }
 
-func (c *OSPFAreaConfig) Copy() OSPFAreaConfig {
+func (c *OSPFAreaConfig) copy() OSPFAreaConfig {
 	newConfig := OSPFAreaConfig{
 		Cost:          c.Cost,
 		HelloInterval: c.HelloInterval,

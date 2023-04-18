@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/davidbalbert/chatter/api"
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/ospf"
@@ -14,25 +15,33 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const s = `
-ospf:
-  router-id: 192.168.200.1
+var (
+	version    = "0.0.1"
+	configPath string
+	socketPath string
+)
 
-  area 0:
-    interface bridge100: {}
-`
-
-func main() {
-	fmt.Printf("Starting chatterd v0.0.1 with uid %d\n", os.Getuid())
-
-	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)
-	services.MustRegisterServiceType(config.ServiceTypeOSPF, ospf.NewInstance)
-
-	var configPath string
-
+func init() {
 	flag.StringVar(&configPath, "config", "/etc/chatterd/chatterd.conf", "path to chatterd.conf")
 	flag.StringVar(&configPath, "c", "/etc/chatterd/chatterd.conf", "path to chatterd.conf (shorthand)")
+
+	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
+	flag.StringVar(&socketPath, "s", "/var/run/chatterd.sock", "path to chatterd socket (shorthand)")
+}
+
+func main() {
+	fmt.Printf("Starting chatterd v%s with uid %d\n", version, os.Getuid())
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	g, ctx := errgroup.WithContext(ctx)
+
 	flag.Parse()
+
+	services.MustRegisterServiceType(config.ServiceTypeAPIServer, func(serviceManager *services.ServiceManager) (services.Runner, error) {
+		return api.NewServer(serviceManager, socketPath, cancel, version), nil
+	})
+	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)
+	services.MustRegisterServiceType(config.ServiceTypeOSPF, ospf.NewInstance)
 
 	configManager, err := config.NewConfigManager(configPath)
 	if err != nil {
@@ -40,17 +49,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx, _ := signal.NotifyContext(context.Background(), os.Interrupt)
-	g, ctx := errgroup.WithContext(ctx)
-
-	serviceManager := services.NewServiceManager(configManager)
+	serviceManager := services.NewServiceManager()
 
 	g.Go(func() error {
 		return configManager.Run(ctx)
 	})
 
 	g.Go(func() error {
-		return serviceManager.Run(ctx)
+		return serviceManager.Run(ctx, configManager)
 	})
 
 	err = g.Wait()

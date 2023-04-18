@@ -16,8 +16,8 @@ type Client struct {
 	rpcClient rpc.APIClient
 }
 
-func NewClient() (*Client, error) {
-	target := fmt.Sprintf("unix://%s", socketPath)
+func NewClient(socket string) (*Client, error) {
+	target := fmt.Sprintf("unix://%s", socket)
 	conn, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
