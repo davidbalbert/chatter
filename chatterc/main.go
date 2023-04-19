@@ -17,7 +17,6 @@ var (
 )
 
 func main() {
-	fmt.Printf("chatterc %s\n", version)
 	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
 
 	flag.Parse()
@@ -30,6 +29,18 @@ func main() {
 		os.Exit(1)
 	}
 	defer client.Close()
+
+	serverVersion, err := client.GetVersion(ctx)
+	if err != nil {
+		fmt.Printf("Failed to get server version: %v\n", err)
+		os.Exit(1)
+	}
+
+	if serverVersion == version {
+		fmt.Printf("chatterd %s\n", version)
+	} else {
+		fmt.Printf("chatterd %s (client %s)\n", serverVersion, version)
+	}
 
 	cli := NewCLI()
 
