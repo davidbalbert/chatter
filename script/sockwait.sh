@@ -1,5 +1,5 @@
 #!/bin/sh
 
-while [ ! -S /tmp/ospfd.sock ]; do
+while [ ! -S "$1" ]; do
     sleep 1
 done

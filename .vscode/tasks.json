@@ -16,6 +16,7 @@
             "label": "Wait for /tmp/chatterd.sock",
             "type": "shell",
             "command": "${workspaceFolder}/script/sockwait.sh",
+            "args": ["/tmp/chatterd.sock"],
             "presentation": {
                 "reveal": "silent",
             }
@@ -27,6 +28,10 @@
             "presentation": {
                 "reveal": "silent",
             }
+        },
+        {
+            "label": "Prep chatterc",
+            "dependsOn": ["Wait for /tmp/chatterd.sock", "Generate .env"],
         }
     ],
 }
