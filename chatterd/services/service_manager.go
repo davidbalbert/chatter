@@ -49,13 +49,24 @@ func (c *ServiceController) Wait() error {
 	return nil
 }
 
-type ServiceManager struct {
+type state struct {
 	services map[string]ServiceController
 }
 
+type ServiceManager struct {
+	c chan state
+}
+
 func NewServiceManager() *ServiceManager {
-	return &ServiceManager{
+	st := state{
 		services: make(map[string]ServiceController),
+	}
+
+	c := make(chan state, 1)
+	c <- st
+
+	return &ServiceManager{
+		c: c,
 	}
 }
 
@@ -70,21 +81,25 @@ func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigMa
 			case event := <-configManager.Events():
 				switch event.Type {
 				case config.ConfigUpdated:
-					for _, service := range s.services {
+					st := <-s.c
+
+					for _, service := range st.services {
 						service.Stop()
 					}
 
-					for name, service := range s.services {
+					for name, service := range st.services {
 						service.Wait()
-						delete(s.services, name)
+						delete(st.services, name)
 					}
 
 					for _, service := range configManager.GetConfig().ServicesInBootOrder() {
-						err := s.start(ctx, g, service)
+						err := s.start(ctx, g, st, service)
 						if err != nil {
 							return err
 						}
 					}
+
+					s.c <- st
 				default:
 					return fmt.Errorf("unknown config event type: %v", event.Type)
 				}
@@ -95,8 +110,8 @@ func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigMa
 	return g.Wait()
 }
 
-func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service config.Service) error {
-	_, ok := s.services[service.Name]
+func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, service config.Service) error {
+	_, ok := st.services[service.Name]
 	if ok {
 		return fmt.Errorf("service already running: %s", service.Name)
 	}
@@ -115,7 +130,7 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service c
 
 	done := make(chan struct{})
 
-	s.services[service.Name] = ServiceController{
+	st.services[service.Name] = ServiceController{
 		service: runner,
 		cancel:  cancel,
 		done:    done,
@@ -132,7 +147,12 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service c
 }
 
 func (s *ServiceManager) Get(service config.Service) (any, error) {
-	controller, ok := s.services[service.Name]
+	st := <-s.c
+	defer func() {
+		s.c <- st
+	}()
+
+	controller, ok := st.services[service.Name]
 	if !ok {
 		return nil, fmt.Errorf("service not running: %s", service.Name)
 	}
