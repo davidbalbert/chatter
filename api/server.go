@@ -2,9 +2,11 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net"
 
 	"github.com/davidbalbert/chatter/chatterd/services"
+	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/rpc"
 	"github.com/davidbalbert/chatter/system"
 	"golang.org/x/sync/errgroup"
@@ -63,6 +65,15 @@ func (s *Server) Shutdown(ctx context.Context) error {
 }
 
 func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
-	// return s.InterfaceMonitor.Interfaces(), nil
-	return nil, nil
+	service, err := s.serviceManager.Get(config.ServiceInterfaceMonitor)
+	if err != nil {
+		return nil, err
+	}
+
+	interfaceMonitor, ok := service.(system.InterfaceMonitor)
+	if !ok {
+		return nil, fmt.Errorf("service %v is not an InterfaceMonitor", interfaceMonitor)
+	}
+
+	return interfaceMonitor.Interfaces(), nil
 }

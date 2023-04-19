@@ -35,8 +35,9 @@ func MustRegisterServiceType(t config.ServiceType, fn BuilderFunc) {
 }
 
 type ServiceController struct {
-	cancel context.CancelFunc
-	done   chan struct{}
+	service any
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 func (c *ServiceController) Stop() {
@@ -115,8 +116,9 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service c
 	done := make(chan struct{})
 
 	s.services[service.Name] = ServiceController{
-		cancel: cancel,
-		done:   done,
+		service: runner,
+		cancel:  cancel,
+		done:    done,
 	}
 
 	// TODO: is it kosher to call g.Go() from within g.Go()?
@@ -127,4 +129,13 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, service c
 	})
 
 	return nil
+}
+
+func (s *ServiceManager) Get(service config.Service) (any, error) {
+	controller, ok := s.services[service.Name]
+	if !ok {
+		return nil, fmt.Errorf("service not running: %s", service.Name)
+	}
+
+	return controller.service, nil
 }
