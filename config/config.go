@@ -16,6 +16,19 @@ const (
 	ServiceTypeOSPF
 )
 
+func (t ServiceType) String() string {
+	switch t {
+	case ServiceTypeAPIServer:
+		return "APIServer"
+	case ServiceTypeInterfaceMonitor:
+		return "InterfaceMonitor"
+	case ServiceTypeOSPF:
+		return "OSPF"
+	default:
+		return fmt.Sprintf("unknown service type: %d", t)
+	}
+}
+
 type Service struct {
 	Type ServiceType
 	Name string

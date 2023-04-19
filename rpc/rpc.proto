@@ -4,22 +4,33 @@ package rpc;
 option go_package = "github.com/davidbalbert/chatter/rpc";
 
 service API {
-    rpc GetVersion (GetVersionRequest) returns (GetVersionResponse) {}
-    rpc Shutdown (ShutdownRequest) returns (ShutdownResponse) {}
+    rpc GetVersion (GetVersionRequest) returns (GetVersionReply) {}
+    rpc Shutdown (ShutdownRequest) returns (ShutdownReply) {}
+    rpc GetServices (GetServicesRequest) returns (GetServicesReply) {}
     
-    rpc GetInterfaces (GetInterfacesRequest) returns (GetInterfacesResponse) {}
+    rpc GetInterfaces (GetInterfacesRequest) returns (GetInterfacesReply) {}
 }
 
 message GetVersionRequest {}
-message GetVersionResponse {
+message GetVersionReply {
     string version = 1;
 }
 
 message ShutdownRequest {}
-message ShutdownResponse {}
+message ShutdownReply {}
+
+message GetServicesRequest {}
+message GetServicesReply {
+    repeated Service services = 1;
+}
+
+message Service {
+    int32 type = 1;
+    string name = 2;
+}
 
 message GetInterfacesRequest {}
-message GetInterfacesResponse {
+message GetInterfacesReply {
     repeated Interface interfaces = 1;
 }
 

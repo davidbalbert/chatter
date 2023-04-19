@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/davidbalbert/chatter/api"
+	"github.com/davidbalbert/chatter/config"
 	"golang.org/x/term"
 )
 
@@ -64,6 +65,26 @@ func main() {
 		}
 
 		cli.running = false
+
+		return nil
+	})
+
+	cli.MustRegister("show processes", "Show running processes", func(w io.Writer) error {
+		services, err := client.GetServices(ctx)
+		if err != nil {
+			return err
+		}
+
+		table, err := tabulate(services, []string{"Name", "Type"}, func(service config.Service) []string {
+			return []string{service.Name, service.Type.String()}
+		})
+		if err != nil {
+			return err
+		}
+
+		for _, line := range table {
+			fmt.Fprintf(w, "%s\n", line)
+		}
 
 		return nil
 	})

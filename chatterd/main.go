@@ -44,14 +44,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	serviceManager := services.NewServiceManager()
+	serviceManager := services.NewServiceManager(configManager)
 
 	g.Go(func() error {
 		return configManager.Run(ctx)
 	})
 
 	g.Go(func() error {
-		return serviceManager.Run(ctx, configManager)
+		return serviceManager.Run(ctx)
 	})
 
 	err = g.Wait()

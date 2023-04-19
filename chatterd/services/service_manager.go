@@ -36,6 +36,7 @@ func MustRegisterServiceType(t config.ServiceType, fn BuilderFunc) {
 
 type ServiceController struct {
 	service any
+	desc    config.Service
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
@@ -50,27 +51,29 @@ func (c *ServiceController) Wait() error {
 }
 
 type state struct {
-	services map[string]ServiceController
+	controllers map[string]ServiceController
 }
 
 type ServiceManager struct {
-	c chan state
+	c             chan state
+	configManager *config.ConfigManager
 }
 
-func NewServiceManager() *ServiceManager {
+func NewServiceManager(configManager *config.ConfigManager) *ServiceManager {
 	st := state{
-		services: make(map[string]ServiceController),
+		controllers: make(map[string]ServiceController),
 	}
 
 	c := make(chan state, 1)
 	c <- st
 
 	return &ServiceManager{
-		c: c,
+		c:             c,
+		configManager: configManager,
 	}
 }
 
-func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigManager) error {
+func (s *ServiceManager) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	g.Go(func() error {
@@ -78,21 +81,21 @@ func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigMa
 			select {
 			case <-ctx.Done():
 				return nil
-			case event := <-configManager.Events():
+			case event := <-s.configManager.Events():
 				switch event.Type {
 				case config.ConfigUpdated:
 					st := <-s.c
 
-					for _, service := range st.services {
-						service.Stop()
+					for _, controller := range st.controllers {
+						controller.Stop()
 					}
 
-					for name, service := range st.services {
-						service.Wait()
-						delete(st.services, name)
+					for name, controller := range st.controllers {
+						controller.Wait()
+						delete(st.controllers, name)
 					}
 
-					for _, service := range configManager.GetConfig().ServicesInBootOrder() {
+					for _, service := range s.configManager.GetConfig().ServicesInBootOrder() {
 						err := s.start(ctx, g, st, service)
 						if err != nil {
 							return err
@@ -111,7 +114,7 @@ func (s *ServiceManager) Run(ctx context.Context, configManager *config.ConfigMa
 }
 
 func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, service config.Service) error {
-	_, ok := st.services[service.Name]
+	_, ok := st.controllers[service.Name]
 	if ok {
 		return fmt.Errorf("service already running: %s", service.Name)
 	}
@@ -130,11 +133,14 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state,
 
 	done := make(chan struct{})
 
-	st.services[service.Name] = ServiceController{
+	st.controllers[service.Name] = ServiceController{
 		service: runner,
+		desc:    service,
 		cancel:  cancel,
 		done:    done,
 	}
+
+	fmt.Printf("starting service: %s\n", service.Name)
 
 	// TODO: is it kosher to call g.Go() from within g.Go()?
 	g.Go(func() error {
@@ -152,10 +158,29 @@ func (s *ServiceManager) Get(service config.Service) (any, error) {
 		s.c <- st
 	}()
 
-	controller, ok := st.services[service.Name]
+	controller, ok := st.controllers[service.Name]
 	if !ok {
 		return nil, fmt.Errorf("service not running: %s", service.Name)
 	}
 
 	return controller.service, nil
+}
+
+func (s *ServiceManager) ConfigManager() *config.ConfigManager {
+	return s.configManager
+}
+
+func (s *ServiceManager) RunningServices() []config.Service {
+	st := <-s.c
+	defer func() {
+		s.c <- st
+	}()
+
+	var services []config.Service
+
+	for _, controller := range st.controllers {
+		services = append(services, controller.desc)
+	}
+
+	return services
 }

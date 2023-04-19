@@ -64,6 +64,10 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func (s *Server) GetServices(ctx context.Context) ([]config.Service, error) {
+	return s.serviceManager.RunningServices(), nil
+}
+
 func (s *Server) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
 	service, err := s.serviceManager.Get(config.ServiceInterfaceMonitor)
 	if err != nil {

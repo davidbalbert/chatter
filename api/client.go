@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/rpc"
 	"github.com/davidbalbert/chatter/system"
 	"google.golang.org/grpc"
@@ -65,4 +66,21 @@ func (c *Client) GetInterfaces(ctx context.Context) ([]system.Interface, error) 
 	}
 
 	return interfaces, nil
+}
+
+func (c *Client) GetServices(ctx context.Context) ([]config.Service, error) {
+	resp, err := c.rpcClient.GetServices(ctx, &rpc.GetServicesRequest{})
+	if err != nil {
+		return nil, err
+	}
+
+	services := make([]config.Service, len(resp.Services))
+	for i, service := range resp.Services {
+		services[i] = config.Service{
+			Type: config.ServiceType(service.Type),
+			Name: service.Name,
+		}
+	}
+
+	return services, nil
 }

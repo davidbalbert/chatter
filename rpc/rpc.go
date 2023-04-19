@@ -5,12 +5,14 @@ package rpc
 import (
 	context "context"
 
+	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/system"
 )
 
 type APIService interface {
 	GetVersion(ctx context.Context) (string, error)
 	Shutdown(ctx context.Context) error
+	GetServices(ctx context.Context) ([]config.Service, error)
 
 	GetInterfaces(ctx context.Context) ([]system.Interface, error)
 }
@@ -26,27 +28,47 @@ func NewAPIServer(apiService APIService) *Server {
 	}
 }
 
-func (s *Server) GetVersion(ctx context.Context, req *GetVersionRequest) (*GetVersionResponse, error) {
+func (s *Server) GetVersion(ctx context.Context, req *GetVersionRequest) (*GetVersionReply, error) {
 	version, err := s.apiService.GetVersion(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &GetVersionResponse{
+	return &GetVersionReply{
 		Version: version,
 	}, nil
 }
 
-func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownResponse, error) {
+func (s *Server) Shutdown(ctx context.Context, req *ShutdownRequest) (*ShutdownReply, error) {
 	err := s.apiService.Shutdown(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return &ShutdownResponse{}, nil
+	return &ShutdownReply{}, nil
 }
 
-func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (*GetInterfacesResponse, error) {
+func (s *Server) GetServices(ctx context.Context, req *GetServicesRequest) (*GetServicesReply, error) {
+	services, err := s.apiService.GetServices(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	srvcs := make([]*Service, len(services))
+
+	for i, service := range services {
+		srvcs[i] = &Service{
+			Type: int32(service.Type),
+			Name: service.Name,
+		}
+	}
+
+	return &GetServicesReply{
+		Services: srvcs,
+	}, nil
+}
+
+func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (*GetInterfacesReply, error) {
 	interfaces, err := s.apiService.GetInterfaces(ctx)
 	if err != nil {
 		return nil, err
@@ -63,7 +85,7 @@ func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (
 		}
 	}
 
-	return &GetInterfacesResponse{
+	return &GetInterfacesReply{
 		Interfaces: ifaces,
 	}, nil
 }

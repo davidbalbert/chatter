@@ -68,7 +68,64 @@ func NewCLI() *CLI {
 	return cli
 }
 
-func tabulate(f fder, indent int, words []string) []string {
+// A generic function Tabulate that takes a list of rows of type T (any),
+// a list of strings (the headers), and a function that takes a row and
+// returns a list of strings (the columns). It returns a string that
+// contains the tabulated data.
+func tabulate[T any](items []T, headers []string, f func(T) []string) ([]string, error) {
+	// Get the column widths
+	columnWidths := make([]int, len(headers))
+	for i, h := range headers {
+		columnWidths[i] = len(h)
+	}
+
+	cells := make([][]string, len(items))
+
+	for i, item := range items {
+		cells[i] = f(item)
+
+		if len(cells[i]) != len(headers) {
+			return nil, fmt.Errorf("invalid number of columns for item %d", i)
+		}
+
+		for j, cell := range cells[i] {
+			if len(cell) > columnWidths[j] {
+				columnWidths[j] = len(cell)
+			}
+		}
+	}
+
+	// Build the table
+	table := make([]string, len(items)+2)
+
+	// Header
+	header := ""
+	for i, h := range headers {
+		header += fmt.Sprintf("%-*s", columnWidths[i]+3, h)
+	}
+
+	table[0] = header
+
+	// Separator
+	separator := ""
+	for i := range headers {
+		separator += fmt.Sprintf("%-*s", columnWidths[i]+3, strings.Repeat("-", columnWidths[i]))
+	}
+
+	table[1] = separator
+
+	// Rows
+	for i, row := range cells {
+		table[i+2] = ""
+		for j, cell := range row {
+			table[i+2] += fmt.Sprintf("%-*s", columnWidths[j]+3, cell)
+		}
+	}
+
+	return table, nil
+}
+
+func wrap(f fder, indent int, words []string) []string {
 	width, _, err := term.GetSize(int(f.Fd()))
 	if err != nil {
 		return words
@@ -146,7 +203,7 @@ func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine 
 	} else {
 		fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
-		for _, l := range tabulate(w, 0, options) {
+		for _, l := range wrap(w, 0, options) {
 			fmt.Fprintf(w, "%s\n", l)
 		}
 
@@ -226,7 +283,7 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 			continue
 		}
 
-		for _, l := range tabulate(w, 5, opts) {
+		for _, l := range wrap(w, 5, opts) {
 			fmt.Fprintf(w, "%s\n", l)
 		}
 	}
