@@ -240,11 +240,9 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 	lastRune, _ := utf8.DecodeLastRuneInString(line)
 	if unicode.IsSpace(lastRune) {
 		matches := cli.root.Match(line)
-		for _, m := range matches {
-			if m.IsComplete() {
-				cr = true
-				break
-			}
+
+		if len(matches) == 1 && matches[0].IsComplete() {
+			cr = true
 		}
 	}
 
@@ -331,7 +329,7 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 	} else if len(completeMatches) == 0 {
 		fmt.Fprintf(w, "%% Command incomplete: %s\n", line)
 		return
-	} else if len(completeMatches) > 1 {
+	} else if len(completeMatches) > 1 || len(matches) > 1 {
 		fmt.Fprintf(w, "%% Ambiguous command: %s\n", line)
 		return
 	}
