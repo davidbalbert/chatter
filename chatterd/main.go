@@ -32,7 +32,7 @@ func main() {
 
 	flag.Parse()
 
-	services.MustRegisterServiceType(config.ServiceTypeAPIServer, func(serviceManager *services.ServiceManager) (services.Runner, error) {
+	services.MustRegisterServiceType(config.ServiceTypeAPIServer, func(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
 		return api.NewServer(serviceManager, socketPath, cancel, version), nil
 	})
 	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)

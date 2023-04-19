@@ -48,8 +48,8 @@ func newGraph() *graph {
 	return &graph{nodes: make(map[ServiceID][]ServiceID)}
 }
 
-func (g *graph) addNode(service ServiceID, deps ...ServiceID) {
-	g.nodes[service] = deps
+func (g *graph) addNode(id ServiceID, deps ...ServiceID) {
+	g.nodes[id] = deps
 }
 
 func (g *graph) topologicalSort() []ServiceID {
@@ -84,7 +84,7 @@ type protocolConfig interface {
 }
 
 type Config struct {
-	protocols map[ServiceID]protocolConfig
+	protocolConfigs map[ServiceID]protocolConfig
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -114,7 +114,7 @@ func parseConfig(s string) (*Config, error) {
 	}
 
 	c := Config{
-		protocols: make(map[ServiceID]protocolConfig),
+		protocolConfigs: make(map[ServiceID]protocolConfig),
 	}
 
 	for k, v := range data {
@@ -130,7 +130,7 @@ func parseConfig(s string) (*Config, error) {
 				return nil, err
 			}
 
-			c.protocols[ServiceOSPF] = ospfConfig
+			c.protocolConfigs[ServiceOSPF] = ospfConfig
 		default:
 			return nil, fmt.Errorf("unknown top level key: %s", k)
 		}
@@ -139,27 +139,48 @@ func parseConfig(s string) (*Config, error) {
 	return &c, nil
 }
 
-func (c *Config) ServicesInBootOrder() []ServiceID {
+type Bootstrap struct {
+	ID     ServiceID
+	Config any
+}
+
+func (c *Config) Bootstraps() []Bootstrap {
 	g := newGraph()
 
 	g.addNode(ServiceAPIServer)
 
-	for s, p := range c.protocols {
-		if p.shouldRun() {
-			g.addNode(s, p.dependencies()...)
+	for s, conf := range c.protocolConfigs {
+		if conf.shouldRun() {
+			g.addNode(s, conf.dependencies()...)
 		}
 	}
 
-	return g.topologicalSort()
+	ids := g.topologicalSort()
+
+	bootstraps := make([]Bootstrap, 0, len(ids))
+
+	for _, id := range ids {
+		conf, ok := c.protocolConfigs[id]
+		if ok {
+			conf = conf.copy()
+		}
+
+		bootstraps = append(bootstraps, Bootstrap{
+			ID:     id,
+			Config: conf,
+		})
+	}
+
+	return bootstraps
 }
 
 func (c *Config) copy() *Config {
 	newConfig := Config{
-		protocols: make(map[ServiceID]protocolConfig),
+		protocolConfigs: make(map[ServiceID]protocolConfig),
 	}
 
-	for k, v := range c.protocols {
-		newConfig.protocols[k] = v.copy()
+	for k, v := range c.protocolConfigs {
+		newConfig.protocolConfigs[k] = v.copy()
 	}
 
 	return &newConfig
@@ -169,15 +190,15 @@ func (c *Config) validate() error {
 	return nil
 }
 
-type EventType int
+type EventType string
 
 const (
-	ConfigUpdated EventType = iota
+	ConfigUpdated EventType = "ConfigUpdated"
 )
 
 type Event struct {
 	Type EventType
-	data any
+	Data any
 }
 
 type managerState struct {
@@ -205,6 +226,7 @@ func NewConfigManager(path string) (*ConfigManager, error) {
 	events := make(chan Event, 1)
 	events <- Event{
 		Type: ConfigUpdated,
+		Data: config.copy(),
 	}
 
 	return &ConfigManager{
@@ -227,6 +249,7 @@ func (c *ConfigManager) Run(ctx context.Context) error {
 
 			c.events <- Event{
 				Type: ConfigUpdated,
+				Data: config.copy(),
 			}
 		}
 	}
@@ -245,12 +268,4 @@ func (c *ConfigManager) UpdateConfig(config *Config) error {
 	c.configs <- *config
 
 	return nil
-}
-
-func (c *ConfigManager) GetConfig() *Config {
-	state := <-c.s
-	config := state.runningConfig.copy()
-	c.s <- state
-
-	return config
 }

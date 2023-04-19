@@ -2,7 +2,10 @@ package system
 
 import (
 	"context"
+	"fmt"
 	"net"
+
+	"github.com/davidbalbert/chatter/config"
 )
 
 type Interface struct {
@@ -92,4 +95,8 @@ func (m *baseInterfaceMonitor) Interfaces() []Interface {
 	m.interfaces <- i1
 
 	return i2
+}
+
+func (m *baseInterfaceMonitor) SendEvent(e config.Event) error {
+	return fmt.Errorf("interface monitor does not receive events")
 }

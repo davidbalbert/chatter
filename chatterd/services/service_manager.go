@@ -8,11 +8,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type Runner interface {
+type Service interface {
 	Run(ctx context.Context) error
+	SendEvent(e config.Event) error
 }
 
-type BuilderFunc func(*ServiceManager) (Runner, error)
+type BuilderFunc func(m *ServiceManager, conf any) (Service, error)
 
 var builders = make(map[config.ServiceType]BuilderFunc)
 
@@ -86,6 +87,11 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 				case config.ConfigUpdated:
 					st := <-s.c
 
+					conf, ok := event.Data.(*config.Config)
+					if !ok {
+						return fmt.Errorf("invalid ConfigUpdated event data: %v", event.Data)
+					}
+
 					for _, controller := range st.controllers {
 						controller.Stop()
 					}
@@ -95,8 +101,8 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 						delete(st.controllers, name)
 					}
 
-					for _, service := range s.configManager.GetConfig().ServicesInBootOrder() {
-						err := s.start(ctx, g, st, service)
+					for _, b := range conf.Bootstraps() {
+						err := s.start(ctx, g, st, b)
 						if err != nil {
 							return err
 						}
@@ -113,18 +119,18 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, id config.ServiceID) error {
-	_, ok := st.controllers[id.Name]
+func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, b config.Bootstrap) error {
+	_, ok := st.controllers[b.ID.Name]
 	if ok {
-		return fmt.Errorf("service already running: %s", id.Name)
+		return fmt.Errorf("service already running: %s", b.ID.Name)
 	}
 
-	builder, ok := builders[id.Type]
+	builder, ok := builders[b.ID.Type]
 	if !ok {
-		return fmt.Errorf("unknown service type: %v", id.Type)
+		return fmt.Errorf("unknown service type: %v", b.ID.Type)
 	}
 
-	runner, err := builder(s)
+	service, err := builder(s, b.Config)
 	if err != nil {
 		return err
 	}
@@ -133,18 +139,18 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state,
 
 	done := make(chan struct{})
 
-	st.controllers[id.Name] = ServiceController{
-		service: runner,
-		id:      id,
+	st.controllers[b.ID.Name] = ServiceController{
+		service: service,
+		id:      b.ID,
 		cancel:  cancel,
 		done:    done,
 	}
 
-	fmt.Printf("starting service: %s\n", id.Name)
+	fmt.Printf("starting service: %s\n", b.ID.Name)
 
 	// TODO: is it kosher to call g.Go() from within g.Go()?
 	g.Go(func() error {
-		err := runner.Run(ctx)
+		err := service.Run(ctx)
 		close(done)
 		return err
 	})

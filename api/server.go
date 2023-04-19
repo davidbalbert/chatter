@@ -55,6 +55,10 @@ func (s *Server) Run(ctx context.Context) error {
 	return g.Wait()
 }
 
+func (s *Server) SendEvent(event config.Event) error {
+	return fmt.Errorf("api server does not support sending events")
+}
+
 func (s *Server) GetVersion(ctx context.Context) (string, error) {
 	return s.version, nil
 }

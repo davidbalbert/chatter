@@ -25,7 +25,7 @@
             "program": "${workspaceFolder}/chatterc",
             "args": ["-socket", "/tmp/chatterd.sock"],
             "console": "integratedTerminal",
-            "preLaunchTask": "Prep chatterc",
+            "preLaunchTask": "Wait for /tmp/chatterd.sock",
             "envFile": "${workspaceFolder}/.env"
         },
     ],

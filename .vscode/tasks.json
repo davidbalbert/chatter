@@ -28,10 +28,6 @@
             "presentation": {
                 "reveal": "silent",
             }
-        },
-        {
-            "label": "Prep chatterc",
-            "dependsOn": ["Wait for /tmp/chatterd.sock", "Generate .env"],
         }
     ],
 }

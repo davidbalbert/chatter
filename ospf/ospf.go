@@ -2,11 +2,12 @@ package ospf
 
 import (
 	"context"
+	"fmt"
 	"net/netip"
 
 	"github.com/davidbalbert/chatter/chatterd/common"
 	"github.com/davidbalbert/chatter/chatterd/services"
-	"golang.org/x/sync/errgroup"
+	"github.com/davidbalbert/chatter/config"
 )
 
 var (
@@ -23,11 +24,24 @@ type Instance struct {
 	// TODO: RIB
 
 	serviceManager *services.ServiceManager
+	events         chan config.Event
+	config         *config.OSPFConfig
 }
 
-func NewInstance(serviceManager *services.ServiceManager) (services.Runner, error) {
+func NewInstance(serviceManager *services.ServiceManager, data any) (services.Service, error) {
+	if data == nil {
+		return nil, fmt.Errorf("no ospf config provided")
+	}
+
+	conf, ok := data.(*config.OSPFConfig)
+	if !ok {
+		return nil, fmt.Errorf("expected OSPFConfig, but got %T", data)
+	}
+
 	backboneID := common.AreaID(0)
 	backbone := newArea(backboneID)
+
+	events := make(chan config.Event)
 
 	return &Instance{
 		Areas: map[common.AreaID]*Area{
@@ -35,18 +49,24 @@ func NewInstance(serviceManager *services.ServiceManager) (services.Runner, erro
 		},
 
 		serviceManager: serviceManager,
+		events:         events,
+		config:         conf,
 	}, nil
 }
 
-func (p *Instance) Run(ctx context.Context) error {
-	g, ctx := errgroup.WithContext(ctx)
+func (i *Instance) SendEvent(e config.Event) error {
+	i.events <- e
 
-	for _, area := range p.Areas {
-		area := area
-		g.Go(func() error {
-			return area.run(ctx)
-		})
+	return nil
+}
+
+func (i *Instance) Run(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case e := <-i.events:
+			fmt.Printf("got event: %s\n", e.Type)
+		}
 	}
-
-	return g.Wait()
 }
