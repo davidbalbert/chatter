@@ -12,7 +12,9 @@
             "program": "${workspaceFolder}/chatterd",
             "args": ["-config", "${workspaceFolder}/chatterd.yaml", "-socket", "/tmp/chatterd.sock"],
             "console": "integratedTerminal",
+            "preLaunchTask": "Generate .env",
             "postDebugTask": "Remove /tmp/chatterd.sock",
+            "envFile": "${workspaceFolder}/.env"
             // "asRoot": true,
         },
         {

@@ -16,13 +16,13 @@ import (
 )
 
 var (
-	version    = "0.0.1"
+	version    string
 	configPath string
 	socketPath string
 )
 
 func main() {
-	fmt.Printf("Starting chatterd v%s with uid %d\n", version, os.Getuid())
+	fmt.Printf("Starting chatterd %s with uid %d\n", version, os.Getuid())
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)

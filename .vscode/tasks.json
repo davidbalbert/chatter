@@ -20,5 +20,13 @@
                 "reveal": "silent",
             }
         },
+        {
+            "label": "Generate .env",
+            "type": "shell",
+            "command": "${workspaceFolder}/script/env.sh",
+            "presentation": {
+                "reveal": "silent",
+            }
+        }
     ],
 }

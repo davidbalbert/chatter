@@ -11,9 +11,13 @@ import (
 	"golang.org/x/term"
 )
 
-var socketPath string
+var (
+	version    string
+	socketPath string
+)
 
 func main() {
+	fmt.Printf("chatterc %s\n", version)
 	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
 
 	flag.Parse()
@@ -37,7 +41,7 @@ func main() {
 			return err
 		}
 
-		fmt.Fprintf(w, "v%s\n", version)
+		fmt.Fprintf(w, "%s\n", version)
 
 		return nil
 	})
