@@ -28,29 +28,33 @@ type Instance struct {
 	config         *config.OSPFConfig
 }
 
-func NewInstance(serviceManager *services.ServiceManager, data any) (services.Service, error) {
-	if data == nil {
+func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
+	if conf == nil {
 		return nil, fmt.Errorf("no ospf config provided")
 	}
 
-	conf, ok := data.(*config.OSPFConfig)
+	ospfConf, ok := conf.(*config.OSPFConfig)
 	if !ok {
-		return nil, fmt.Errorf("expected OSPFConfig, but got %T", data)
+		return nil, fmt.Errorf("expected *config.OSPFConfig, but got %T", conf)
 	}
 
-	backboneID := common.AreaID(0)
-	backbone := newArea(backboneID)
+	areas := make(map[common.AreaID]*Area)
 
-	events := make(chan config.Event)
+	for id, areaConf := range ospfConf.Areas {
+		area, err := newArea(id, areaConf)
+		if err != nil {
+			return nil, err
+		}
+		areas[id] = area
+	}
 
 	return &Instance{
-		Areas: map[common.AreaID]*Area{
-			backboneID: backbone,
-		},
+		RouterID: ospfConf.RouterID,
+		Areas:    areas,
 
 		serviceManager: serviceManager,
-		events:         events,
-		config:         conf,
+		events:         make(chan config.Event),
+		config:         ospfConf,
 	}, nil
 }
 

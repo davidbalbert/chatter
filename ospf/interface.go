@@ -1,11 +1,10 @@
 package ospf
 
 import (
-	"context"
 	"net/netip"
 
 	"github.com/davidbalbert/chatter/chatterd/common"
-	"golang.org/x/sync/errgroup"
+	"github.com/davidbalbert/chatter/config"
 )
 
 type Interface struct {
@@ -14,7 +13,7 @@ type Interface struct {
 	Prefix             netip.Prefix // IP interface address and IP interface mask
 	AreaID             common.AreaID
 	HelloInterval      uint16
-	RouterDeadInterval uint16
+	RouterDeadInterval uint32
 	InfTransDelay      int
 	RouterPriority     uint8
 
@@ -129,17 +128,19 @@ func (ie interfaceEvent) String() string {
 	}
 }
 
-func (i *Interface) run(ctx context.Context) error {
-	g, ctx := errgroup.WithContext(ctx)
-
-	g.Go(func() error {
-		return i.listen()
-	})
-
-	return g.Wait()
-}
-
-func (i *Interface) listen() error {
-
-	return nil
+func newInterface(conf config.OSPFInterfaceConfig, areaID common.AreaID, prefix netip.Prefix) (*Interface, error) {
+	return &Interface{
+		Type:               InterfacePointToPoint,
+		State:              iDown,
+		Prefix:             prefix,
+		HelloInterval:      conf.HelloInterval,
+		RouterDeadInterval: conf.RouterDeadInterval,
+		// InfTransDelay:      conf.InfTransDelay,
+		// RouterPriority:     conf.RouterPriority,
+		Neighbors: make(map[common.RouterID]Neighbor),
+		Cost:      conf.Cost,
+		// RxmtInterval:       conf.RxmtInterval,
+		// AuType:             conf.AuType,
+		// AuthenticationKey:  conf.AuthenticationKey,
+	}, nil
 }

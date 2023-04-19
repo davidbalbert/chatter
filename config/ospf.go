@@ -26,11 +26,11 @@ func parseID(s string) (uint32, error) {
 }
 
 type OSPFConfig struct {
-	RouterID      common.RouterID
-	Cost          uint16
-	HelloInterval uint16
-	DeadInterval  uint32
-	Areas         map[common.AreaID]OSPFAreaConfig
+	RouterID           common.RouterID
+	Cost               uint16
+	HelloInterval      uint16
+	RouterDeadInterval uint32
+	Areas              map[common.AreaID]OSPFAreaConfig
 }
 
 func (c *OSPFConfig) shouldRun() bool {
@@ -49,11 +49,11 @@ func (c *OSPFConfig) dependencies() []ServiceID {
 
 func (c *OSPFConfig) copy() protocolConfig {
 	newConfig := OSPFConfig{
-		RouterID:      c.RouterID,
-		Cost:          c.Cost,
-		HelloInterval: c.HelloInterval,
-		DeadInterval:  c.DeadInterval,
-		Areas:         make(map[common.AreaID]OSPFAreaConfig),
+		RouterID:           c.RouterID,
+		Cost:               c.Cost,
+		HelloInterval:      c.HelloInterval,
+		RouterDeadInterval: c.RouterDeadInterval,
+		Areas:              make(map[common.AreaID]OSPFAreaConfig),
 	}
 
 	for k, v := range c.Areas {
@@ -64,18 +64,18 @@ func (c *OSPFConfig) copy() protocolConfig {
 }
 
 type OSPFAreaConfig struct {
-	Cost          uint16
-	HelloInterval uint16
-	DeadInterval  uint32
-	Interfaces    map[string]InterfaceConfig
+	Cost               uint16
+	HelloInterval      uint16
+	RouterDeadInterval uint32
+	Interfaces         map[string]OSPFInterfaceConfig
 }
 
 func (c *OSPFAreaConfig) copy() OSPFAreaConfig {
 	newConfig := OSPFAreaConfig{
-		Cost:          c.Cost,
-		HelloInterval: c.HelloInterval,
-		DeadInterval:  c.DeadInterval,
-		Interfaces:    make(map[string]InterfaceConfig),
+		Cost:               c.Cost,
+		HelloInterval:      c.HelloInterval,
+		RouterDeadInterval: c.RouterDeadInterval,
+		Interfaces:         make(map[string]OSPFInterfaceConfig),
 	}
 
 	for k, v := range c.Interfaces {
@@ -85,17 +85,19 @@ func (c *OSPFAreaConfig) copy() OSPFAreaConfig {
 	return newConfig
 }
 
-type InterfaceConfig struct {
-	Cost uint16
+type OSPFInterfaceConfig struct {
+	Cost               uint16
+	HelloInterval      uint16
+	RouterDeadInterval uint32
 }
 
 func parseOSPFConfig(data map[string]interface{}) (*OSPFConfig, error) {
 	c := &OSPFConfig{
-		RouterID:      0,
-		Cost:          1,
-		HelloInterval: 10,
-		DeadInterval:  40,
-		Areas:         make(map[common.AreaID]OSPFAreaConfig),
+		RouterID:           0,
+		Cost:               1,
+		HelloInterval:      10,
+		RouterDeadInterval: 40,
+		Areas:              make(map[common.AreaID]OSPFAreaConfig),
 	}
 
 	for k, v := range data {
@@ -157,7 +159,7 @@ func parseOSPFConfig(data map[string]interface{}) (*OSPFConfig, error) {
 				return nil, fmt.Errorf("ospf: dead-interval too big: %d", v)
 			}
 
-			c.DeadInterval = uint32(v)
+			c.RouterDeadInterval = uint32(v)
 		} else if strings.HasPrefix(k, "area ") {
 			name := strings.TrimPrefix(k, "area ")
 
@@ -200,8 +202,8 @@ func (ac *OSPFAreaConfig) setDefaults(c *OSPFConfig) {
 		ac.HelloInterval = c.HelloInterval
 	}
 
-	if ac.DeadInterval == 0 {
-		ac.DeadInterval = c.DeadInterval
+	if ac.RouterDeadInterval == 0 {
+		ac.RouterDeadInterval = c.RouterDeadInterval
 	}
 
 	if ac.Cost == 0 {
@@ -214,18 +216,26 @@ func (ac *OSPFAreaConfig) setDefaults(c *OSPFConfig) {
 	}
 }
 
-func (ic *InterfaceConfig) setDefaults(ac *OSPFAreaConfig) {
+func (ic *OSPFInterfaceConfig) setDefaults(ac *OSPFAreaConfig) {
 	if ic.Cost == 0 {
 		ic.Cost = ac.Cost
+	}
+
+	if ic.HelloInterval == 0 {
+		ic.HelloInterval = ac.HelloInterval
+	}
+
+	if ic.RouterDeadInterval == 0 {
+		ic.RouterDeadInterval = ac.RouterDeadInterval
 	}
 }
 
 func parseAreaConfig(areaID string, data map[string]interface{}) (*OSPFAreaConfig, error) {
 	ac := OSPFAreaConfig{
-		Cost:          0,
-		HelloInterval: 0,
-		DeadInterval:  0,
-		Interfaces:    make(map[string]InterfaceConfig),
+		Cost:               0,
+		HelloInterval:      0,
+		RouterDeadInterval: 0,
+		Interfaces:         make(map[string]OSPFInterfaceConfig),
 	}
 
 	for k, v := range data {
@@ -267,7 +277,7 @@ func parseAreaConfig(areaID string, data map[string]interface{}) (*OSPFAreaConfi
 				return nil, fmt.Errorf("ospf area %s: dead-interval too big: %d", areaID, v)
 			}
 
-			ac.DeadInterval = uint32(v)
+			ac.RouterDeadInterval = uint32(v)
 		} else if strings.HasPrefix(k, "interface ") {
 			interfaceName := strings.TrimPrefix(k, "interface ")
 
@@ -290,8 +300,8 @@ func parseAreaConfig(areaID string, data map[string]interface{}) (*OSPFAreaConfi
 	return &ac, nil
 }
 
-func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*InterfaceConfig, error) {
-	ic := InterfaceConfig{
+func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*OSPFInterfaceConfig, error) {
+	ic := OSPFInterfaceConfig{
 		Cost: 0,
 	}
 
@@ -309,6 +319,32 @@ func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*
 			}
 
 			ic.Cost = uint16(v)
+		} else if k == "hello-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf: hello-interval must be an integer")
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf: hello-interval too small: %d", v)
+			} else if v > math.MaxUint16 {
+				return nil, fmt.Errorf("ospf: hello-interval too big: %d", v)
+			}
+
+			ic.HelloInterval = uint16(v)
+		} else if k == "dead-interval" {
+			v, ok := v.(int)
+			if !ok {
+				return nil, fmt.Errorf("ospf: dead-interval must be an integer")
+			}
+
+			if v < 1 {
+				return nil, fmt.Errorf("ospf: dead-interval too small: %d", v)
+			} else if v > math.MaxUint32 {
+				return nil, fmt.Errorf("ospf: dead-interval too big: %d", v)
+			}
+
+			ic.RouterDeadInterval = uint32(v)
 		} else {
 			return nil, fmt.Errorf("ospf area %s interface %s: unknown key: %s", areaName, name, k)
 		}
