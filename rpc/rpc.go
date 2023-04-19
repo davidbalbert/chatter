@@ -12,7 +12,7 @@ import (
 type APIService interface {
 	GetVersion(ctx context.Context) (string, error)
 	Shutdown(ctx context.Context) error
-	GetServices(ctx context.Context) ([]config.Service, error)
+	GetServices(ctx context.Context) ([]config.ServiceID, error)
 
 	GetInterfaces(ctx context.Context) ([]system.Interface, error)
 }

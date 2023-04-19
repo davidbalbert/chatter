@@ -43,8 +43,8 @@ func (c *OSPFConfig) shouldRun() bool {
 	return false
 }
 
-func (c *OSPFConfig) dependencies() []Service {
-	return []Service{ServiceInterfaceMonitor}
+func (c *OSPFConfig) dependencies() []ServiceID {
+	return []ServiceID{ServiceInterfaceMonitor}
 }
 
 func (c *OSPFConfig) copy() protocolConfig {

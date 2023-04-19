@@ -36,7 +36,7 @@ func MustRegisterServiceType(t config.ServiceType, fn BuilderFunc) {
 
 type ServiceController struct {
 	service any
-	desc    config.Service
+	id      config.ServiceID
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
@@ -113,15 +113,15 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 	return g.Wait()
 }
 
-func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, service config.Service) error {
-	_, ok := st.controllers[service.Name]
+func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state, id config.ServiceID) error {
+	_, ok := st.controllers[id.Name]
 	if ok {
-		return fmt.Errorf("service already running: %s", service.Name)
+		return fmt.Errorf("service already running: %s", id.Name)
 	}
 
-	builder, ok := builders[service.Type]
+	builder, ok := builders[id.Type]
 	if !ok {
-		return fmt.Errorf("unknown service type: %v", service.Type)
+		return fmt.Errorf("unknown service type: %v", id.Type)
 	}
 
 	runner, err := builder(s)
@@ -133,14 +133,14 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state,
 
 	done := make(chan struct{})
 
-	st.controllers[service.Name] = ServiceController{
+	st.controllers[id.Name] = ServiceController{
 		service: runner,
-		desc:    service,
+		id:      id,
 		cancel:  cancel,
 		done:    done,
 	}
 
-	fmt.Printf("starting service: %s\n", service.Name)
+	fmt.Printf("starting service: %s\n", id.Name)
 
 	// TODO: is it kosher to call g.Go() from within g.Go()?
 	g.Go(func() error {
@@ -152,15 +152,15 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state,
 	return nil
 }
 
-func (s *ServiceManager) Get(service config.Service) (any, error) {
+func (s *ServiceManager) Get(id config.ServiceID) (any, error) {
 	st := <-s.c
 	defer func() {
 		s.c <- st
 	}()
 
-	controller, ok := st.controllers[service.Name]
+	controller, ok := st.controllers[id.Name]
 	if !ok {
-		return nil, fmt.Errorf("service not running: %s", service.Name)
+		return nil, fmt.Errorf("service not running: %s", id.Name)
 	}
 
 	return controller.service, nil
@@ -170,17 +170,17 @@ func (s *ServiceManager) ConfigManager() *config.ConfigManager {
 	return s.configManager
 }
 
-func (s *ServiceManager) RunningServices() []config.Service {
+func (s *ServiceManager) RunningServices() []config.ServiceID {
 	st := <-s.c
 	defer func() {
 		s.c <- st
 	}()
 
-	var services []config.Service
+	var ids []config.ServiceID
 
 	for _, controller := range st.controllers {
-		services = append(services, controller.desc)
+		ids = append(ids, controller.id)
 	}
 
-	return services
+	return ids
 }

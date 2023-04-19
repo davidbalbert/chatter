@@ -64,7 +64,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (s *Server) GetServices(ctx context.Context) ([]config.Service, error) {
+func (s *Server) GetServices(ctx context.Context) ([]config.ServiceID, error) {
 	return s.serviceManager.RunningServices(), nil
 }
 

@@ -29,36 +29,36 @@ func (t ServiceType) String() string {
 	}
 }
 
-type Service struct {
+type ServiceID struct {
 	Type ServiceType
 	Name string
 }
 
 var (
-	ServiceAPIServer        = Service{Type: ServiceTypeAPIServer, Name: "APIServer"}
-	ServiceInterfaceMonitor = Service{Type: ServiceTypeInterfaceMonitor, Name: "InterfaceMonitor"}
-	ServiceOSPF             = Service{Type: ServiceTypeOSPF, Name: "OSPF"}
+	ServiceAPIServer        = ServiceID{Type: ServiceTypeAPIServer, Name: "APIServer"}
+	ServiceInterfaceMonitor = ServiceID{Type: ServiceTypeInterfaceMonitor, Name: "InterfaceMonitor"}
+	ServiceOSPF             = ServiceID{Type: ServiceTypeOSPF, Name: "OSPF"}
 )
 
 type graph struct {
-	nodes map[Service][]Service
+	nodes map[ServiceID][]ServiceID
 }
 
 func newGraph() *graph {
-	return &graph{nodes: make(map[Service][]Service)}
+	return &graph{nodes: make(map[ServiceID][]ServiceID)}
 }
 
-func (g *graph) addNode(service Service, deps ...Service) {
+func (g *graph) addNode(service ServiceID, deps ...ServiceID) {
 	g.nodes[service] = deps
 }
 
-func (g *graph) topologicalSort() []Service {
-	visited := make(map[Service]bool)
-	stack := []Service{}
+func (g *graph) topologicalSort() []ServiceID {
+	visited := make(map[ServiceID]bool)
+	stack := []ServiceID{}
 
-	var visit func(Service)
+	var visit func(ServiceID)
 
-	visit = func(service Service) {
+	visit = func(service ServiceID) {
 		if _, ok := visited[service]; !ok {
 			visited[service] = true
 
@@ -79,12 +79,12 @@ func (g *graph) topologicalSort() []Service {
 
 type protocolConfig interface {
 	shouldRun() bool
-	dependencies() []Service
+	dependencies() []ServiceID
 	copy() protocolConfig
 }
 
 type Config struct {
-	protocols map[Service]protocolConfig
+	protocols map[ServiceID]protocolConfig
 }
 
 func loadConfig(path string) (*Config, error) {
@@ -114,7 +114,7 @@ func parseConfig(s string) (*Config, error) {
 	}
 
 	c := Config{
-		protocols: make(map[Service]protocolConfig),
+		protocols: make(map[ServiceID]protocolConfig),
 	}
 
 	for k, v := range data {
@@ -139,7 +139,7 @@ func parseConfig(s string) (*Config, error) {
 	return &c, nil
 }
 
-func (c *Config) ServicesInBootOrder() []Service {
+func (c *Config) ServicesInBootOrder() []ServiceID {
 	g := newGraph()
 
 	g.addNode(ServiceAPIServer)
@@ -155,7 +155,7 @@ func (c *Config) ServicesInBootOrder() []Service {
 
 func (c *Config) copy() *Config {
 	newConfig := Config{
-		protocols: make(map[Service]protocolConfig),
+		protocols: make(map[ServiceID]protocolConfig),
 	}
 
 	for k, v := range c.protocols {
@@ -177,6 +177,7 @@ const (
 
 type Event struct {
 	Type EventType
+	data any
 }
 
 type managerState struct {

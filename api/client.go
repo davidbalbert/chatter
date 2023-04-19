@@ -68,15 +68,15 @@ func (c *Client) GetInterfaces(ctx context.Context) ([]system.Interface, error) 
 	return interfaces, nil
 }
 
-func (c *Client) GetServices(ctx context.Context) ([]config.Service, error) {
+func (c *Client) GetServices(ctx context.Context) ([]config.ServiceID, error) {
 	resp, err := c.rpcClient.GetServices(ctx, &rpc.GetServicesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	services := make([]config.Service, len(resp.Services))
+	services := make([]config.ServiceID, len(resp.Services))
 	for i, service := range resp.Services {
-		services[i] = config.Service{
+		services[i] = config.ServiceID{
 			Type: config.ServiceType(service.Type),
 			Name: service.Name,
 		}
