@@ -37,9 +37,9 @@ func main() {
 	}
 
 	if serverVersion == version {
-		fmt.Printf("chatterd %s\n", version)
+		fmt.Printf("connected to chatterd %s\n", version)
 	} else {
-		fmt.Printf("chatterd %s (client %s)\n", serverVersion, version)
+		fmt.Printf("connected to chatterd %s (client %s)\n", serverVersion, version)
 	}
 
 	cli := NewCLI()
