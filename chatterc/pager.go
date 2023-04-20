@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"os"
+	"io"
 	"strings"
 
 	"golang.org/x/term"
@@ -11,6 +11,7 @@ import (
 type pager struct {
 	strings.Builder
 	w writeFder
+	r io.Reader
 }
 
 func (p *pager) print() {
@@ -36,10 +37,8 @@ func (p *pager) print() {
 			end = len(lines)
 		}
 
-		fmt.Fprint(p.w, strings.Join(lines[i:end], "\n"))
-
-		if end < len(lines) {
-			fmt.Fprint(p.w, "\n--More--")
+		if end > i {
+			fmt.Fprintf(p.w, "%s", strings.Join(lines[i:end], "\n"))
 		}
 
 		i += n
@@ -48,22 +47,34 @@ func (p *pager) print() {
 			break
 		}
 
-		b := make([]byte, 1)
-		_, err := os.Stdin.Read(b)
-		if err != nil {
-			fmt.Fprint(p.w, s)
-			return
-		}
+		fmt.Fprintf(p.w, "\n")
 
-		fmt.Fprint(p.w, "\r"+strings.Repeat(" ", len("--More--"))+"\r")
+	ReadChar:
+		for {
+			fmt.Fprintf(p.w, "--More--")
 
-		switch b[0] {
-		case 'q':
-			return
-		case ' ':
-			n = height
-		case '\r', 'j':
-			n = 1
+			b := make([]byte, 1)
+			_, err := p.r.Read(b)
+			if err != nil {
+				fmt.Fprint(p.w, s)
+				return
+			}
+
+			fmt.Fprintf(p.w, "%s", "\r"+strings.Repeat(" ", len("--More--"))+"\r")
+
+			switch b[0] {
+			case 'q':
+				return
+			case ' ':
+				n = height
+				break ReadChar
+			case '\r', 'j':
+				n = 1
+				break ReadChar
+			}
+
+			// invalid character, ring bell
+			fmt.Fprintf(p.w, "\a")
 		}
 	}
 }
