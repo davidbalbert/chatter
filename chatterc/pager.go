@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"golang.org/x/term"
@@ -29,20 +28,43 @@ func (p *pager) print() {
 		return
 	}
 
-	_, err = exec.LookPath("less")
-	if err != nil {
-		fmt.Fprint(p.w, s)
-		return
-	}
+	lines := strings.Split(s, "\n")
 
-	cmd := exec.Command("less")
-	cmd.Stdin = strings.NewReader(s)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	i := 0
+	for {
+		end := i + height
+		if end > len(lines) {
+			end = len(lines)
+		}
 
-	err = cmd.Run()
-	if err != nil {
-		fmt.Fprint(p.w, s)
-		return
+		fmt.Fprint(p.w, strings.Join(lines[i:end], "\n"))
+
+		if end < len(lines) {
+			fmt.Fprint(p.w, "\n--More--")
+		}
+
+		i += height
+
+		if i >= len(lines) {
+			break
+		}
+
+		b := make([]byte, 1)
+		_, err := os.Stdin.Read(b)
+		if err != nil {
+			fmt.Fprint(p.w, s)
+			return
+		}
+		c := b[0]
+
+		fmt.Fprint(p.w, "\r"+strings.Repeat(" ", len("--More--"))+"\r")
+
+		if c == 'q' {
+			break
+		}
+
+		if i >= len(lines) {
+			break
+		}
 	}
 }
