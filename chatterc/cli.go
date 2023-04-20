@@ -389,7 +389,7 @@ func (cli *CLI) Run(rw readWriteFder) {
 			break
 		}
 
-		p := NewPager(rw, t)
+		p := newPager(rw, t)
 		cli.runLine(line, p)
 	}
 }

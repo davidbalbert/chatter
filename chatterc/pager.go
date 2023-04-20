@@ -14,7 +14,7 @@ import (
 // it must be put in raw mode with term.MakeRaw(). If r is not a terminal,
 // Pager is a no-op and all output is directly written to w.
 
-type Pager struct {
+type pager struct {
 	fd      int
 	w       io.Writer
 	r       io.Reader
@@ -24,7 +24,7 @@ type Pager struct {
 	stopped bool
 }
 
-func NewPager(r io.Reader, w io.Writer) *Pager {
+func newPager(r io.Reader, w io.Writer) *pager {
 	isTerm := false
 	fd := 0
 
@@ -34,7 +34,7 @@ func NewPager(r io.Reader, w io.Writer) *Pager {
 		isTerm = term.IsTerminal(fd)
 	}
 
-	return &Pager{
+	return &pager{
 		fd:     fd,
 		w:      w,
 		r:      r,
@@ -43,7 +43,7 @@ func NewPager(r io.Reader, w io.Writer) *Pager {
 	}
 }
 
-func (p *Pager) Write(b []byte) (n int, err error) {
+func (p *pager) Write(b []byte) (n int, err error) {
 	if !p.isTerm {
 		return p.w.Write(b)
 	}
