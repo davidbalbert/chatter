@@ -15,7 +15,6 @@ type pager struct {
 
 func (p *pager) print() {
 	s := p.String()
-	nlines := strings.Count(s, "\n")
 
 	_, height, err := term.GetSize(int(p.w.Fd()))
 	if err != nil {
@@ -23,16 +22,16 @@ func (p *pager) print() {
 		return
 	}
 
-	if nlines < height {
-		fmt.Fprint(p.w, s)
-		return
-	}
-
 	lines := strings.Split(s, "\n")
 
 	i := 0
+	n := height
 	for {
-		end := i + height
+		if i >= len(lines) {
+			break
+		}
+
+		end := i + n
 		if end > len(lines) {
 			end = len(lines)
 		}
@@ -43,7 +42,7 @@ func (p *pager) print() {
 			fmt.Fprint(p.w, "\n--More--")
 		}
 
-		i += height
+		i += n
 
 		if i >= len(lines) {
 			break
@@ -55,16 +54,16 @@ func (p *pager) print() {
 			fmt.Fprint(p.w, s)
 			return
 		}
-		c := b[0]
 
 		fmt.Fprint(p.w, "\r"+strings.Repeat(" ", len("--More--"))+"\r")
 
-		if c == 'q' {
-			break
-		}
-
-		if i >= len(lines) {
-			break
+		switch b[0] {
+		case 'q':
+			return
+		case ' ':
+			n = height
+		case '\r', 'j':
+			n = 1
 		}
 	}
 }
