@@ -389,7 +389,7 @@ func (cli *CLI) Run(rw readWriteFder) {
 			break
 		}
 
-		p := &pager{w: t, r: rw}
+		p := &pager{wfd: t, r: rw}
 		cli.runLine(line, p)
 		p.print()
 	}

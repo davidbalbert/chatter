@@ -10,16 +10,16 @@ import (
 
 type pager struct {
 	strings.Builder
-	w writeFder
-	r io.Reader
+	wfd writeFder
+	r   io.Reader
 }
 
 func (p *pager) print() {
 	s := p.String()
 
-	_, height, err := term.GetSize(int(p.w.Fd()))
+	_, height, err := term.GetSize(int(p.wfd.Fd()))
 	if err != nil {
-		fmt.Fprint(p.w, s)
+		fmt.Fprint(p.wfd, s)
 		return
 	}
 
@@ -38,7 +38,7 @@ func (p *pager) print() {
 		}
 
 		if end > i {
-			fmt.Fprintf(p.w, "%s", strings.Join(lines[i:end], "\n"))
+			fmt.Fprintf(p.wfd, "%s", strings.Join(lines[i:end], "\n"))
 		}
 
 		i += n
@@ -47,20 +47,20 @@ func (p *pager) print() {
 			break
 		}
 
-		fmt.Fprintf(p.w, "\n")
+		fmt.Fprintf(p.wfd, "\n")
 
 	ReadChar:
 		for {
-			fmt.Fprintf(p.w, "--More--")
+			fmt.Fprintf(p.wfd, "--More--")
 
 			b := make([]byte, 1)
 			_, err := p.r.Read(b)
 			if err != nil {
-				fmt.Fprint(p.w, s)
+				fmt.Fprint(p.wfd, s)
 				return
 			}
 
-			fmt.Fprintf(p.w, "%s", "\r"+strings.Repeat(" ", len("--More--"))+"\r")
+			fmt.Fprintf(p.wfd, "%s", "\r"+strings.Repeat(" ", len("--More--"))+"\r")
 
 			switch b[0] {
 			case 'q':
@@ -74,7 +74,7 @@ func (p *pager) print() {
 			}
 
 			// invalid character, ring bell
-			fmt.Fprintf(p.w, "\a")
+			fmt.Fprintf(p.wfd, "\a")
 		}
 	}
 }
