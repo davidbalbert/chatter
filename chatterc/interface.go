@@ -55,6 +55,5 @@ func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client
 		}
 
 		return nil
-
 	})
 }
