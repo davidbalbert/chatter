@@ -356,6 +356,13 @@ func (cli *CLI) runLine(line string, w io.Writer) {
 }
 
 func (cli *CLI) Run(rw readWriteFder) {
+	oldState, err := term.MakeRaw(int(rw.Fd()))
+	if err != nil {
+		fmt.Fprintf(rw, "%% Error making terminal raw: %v\n", err)
+		return
+	}
+	defer term.Restore(int(rw.Fd()), oldState)
+
 	t := &terminal{term.NewTerminal(rw, cli.prompt), rw}
 
 	autoCompleteCallback := func(line string, pos int, key rune) (newLine string, newPos int, ok bool) {
@@ -382,7 +389,9 @@ func (cli *CLI) Run(rw readWriteFder) {
 			break
 		}
 
-		cli.runLine(line, t)
+		p := &pager{w: t}
+		cli.runLine(line, p)
+		p.print()
 	}
 }
 

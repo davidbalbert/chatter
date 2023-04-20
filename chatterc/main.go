@@ -9,7 +9,6 @@ import (
 
 	"github.com/davidbalbert/chatter/api"
 	"github.com/davidbalbert/chatter/config"
-	"golang.org/x/term"
 )
 
 var (
@@ -75,7 +74,7 @@ func main() {
 			return err
 		}
 
-		table, err := tabulate(services, []string{"Name", "Type"}, func(service config.ServiceID) []string {
+		table, err := tabulate(services, []string{"Name", "Type"}, true, func(service config.ServiceID) []string {
 			return []string{service.Name, service.Type.String()}
 		})
 		if err != nil {
@@ -90,13 +89,6 @@ func main() {
 	})
 
 	registerInterfaceCommands(ctx, cli, client)
-
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		fmt.Printf("Failed to make terminal raw: %v\n", err)
-		os.Exit(1)
-	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
 	cli.Run(os.Stdin)
 }

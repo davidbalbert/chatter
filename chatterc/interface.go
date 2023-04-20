@@ -34,10 +34,10 @@ func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client
 
 		sort.Sort(interfaceSlice(interfaces))
 
-		table, err := tabulate(interfaces, []string{"Name", "State", "MTU"}, func(iface system.Interface) []string {
-			state := "down"
+		table, err := tabulate(interfaces, []string{"Name", "State", "MTU"}, false, func(iface system.Interface) []string {
+			state := "Down"
 			if iface.Flags&net.FlagUp != 0 {
-				state = "up"
+				state = "Up"
 			}
 
 			return []string{
