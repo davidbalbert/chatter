@@ -10,7 +10,8 @@ import (
 )
 
 type pager struct {
-	wfd     writeFder
+	fd      int
+	w       io.Writer
 	r       io.Reader
 	buf     bytes.Buffer
 	isTerm  bool
@@ -18,38 +19,38 @@ type pager struct {
 	stopped bool
 }
 
-func newPager(wfd writeFder, r io.Reader) *pager {
+func newPager(fd int, r io.Reader, w io.Writer) *pager {
 	return &pager{
-		wfd:    wfd,
+		fd:     fd,
+		w:      w,
 		r:      r,
 		buf:    bytes.Buffer{},
-		isTerm: term.IsTerminal(int(wfd.Fd())),
+		isTerm: term.IsTerminal(fd),
 	}
 }
 
 func (p *pager) Write(b []byte) (n int, err error) {
 	if !p.isTerm {
-		return p.wfd.Write(b)
+		return p.w.Write(b)
 	}
 
 	if p.stopped {
 		return 0, io.EOF
 	}
 
-	_, height, err := term.GetSize(int(p.wfd.Fd()))
+	_, height, err := term.GetSize(p.fd)
 	if err != nil {
-		return p.wfd.Write(b)
+		return p.w.Write(b)
 	}
 
 	p.buf.Write(b)
 
 	written := 0
-
 	for {
 		if p.line >= height-1 {
 		ReadChar:
 			for {
-				fmt.Fprintf(p.wfd, "--More--")
+				fmt.Fprintf(p.w, "--More--")
 
 				b := make([]byte, 1)
 				_, err := p.r.Read(b)
@@ -57,7 +58,7 @@ func (p *pager) Write(b []byte) (n int, err error) {
 					return written, err
 				}
 
-				fmt.Fprintf(p.wfd, "%s", "\r"+strings.Repeat(" ", len("--More--"))+"\r")
+				fmt.Fprintf(p.w, "%s", "\r"+strings.Repeat(" ", len("--More--"))+"\r")
 
 				switch b[0] {
 				case 'q':
@@ -72,7 +73,7 @@ func (p *pager) Write(b []byte) (n int, err error) {
 				}
 
 				// invalid character, ring bell
-				fmt.Fprintf(p.wfd, "\a")
+				fmt.Fprintf(p.w, "\a")
 			}
 		}
 
@@ -81,7 +82,7 @@ func (p *pager) Write(b []byte) (n int, err error) {
 			return written, err
 		}
 
-		n, err = fmt.Fprintf(p.wfd, "%s", line)
+		n, err = fmt.Fprintf(p.w, "%s", line)
 		written += n
 		if err != nil {
 			return written, err
@@ -93,14 +94,4 @@ func (p *pager) Write(b []byte) (n int, err error) {
 			return written, nil
 		}
 	}
-}
-
-func (p *pager) Close() error {
-	if p.stopped {
-		return nil
-	}
-
-	br := bytes.NewReader(p.buf.Bytes())
-	_, err := io.Copy(p.wfd, br)
-	return err
 }
