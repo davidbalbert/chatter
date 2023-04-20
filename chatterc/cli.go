@@ -72,7 +72,13 @@ func NewCLI() *CLI {
 // a list of strings (the headers), and a function that takes a row and
 // returns a list of strings (the columns). It returns a string that
 // contains the tabulated data.
-func tabulate[T any](items []T, headers []string, f func(T) []string) ([]string, error) {
+func tabulate[T any](items []T, headers []string, hasSeparator bool, f func(T) []string) ([]string, error) {
+	colSpace := 3
+	extraLines := 1
+	if hasSeparator {
+		extraLines++
+	}
+
 	// Get the column widths
 	columnWidths := make([]int, len(headers))
 	for i, h := range headers {
@@ -96,29 +102,31 @@ func tabulate[T any](items []T, headers []string, f func(T) []string) ([]string,
 	}
 
 	// Build the table
-	table := make([]string, len(items)+2)
+	table := make([]string, len(items)+extraLines)
 
 	// Header
 	header := ""
 	for i, h := range headers {
-		header += fmt.Sprintf("%-*s", columnWidths[i]+3, h)
+		header += fmt.Sprintf("%-*s", columnWidths[i]+colSpace, h)
 	}
 
 	table[0] = header
 
-	// Separator
-	separator := ""
-	for i := range headers {
-		separator += fmt.Sprintf("%-*s", columnWidths[i]+3, strings.Repeat("-", columnWidths[i]))
-	}
+	if hasSeparator {
+		// Separator
+		separator := ""
+		for i := range headers {
+			separator += fmt.Sprintf("%-*s", columnWidths[i]+colSpace, strings.Repeat("-", columnWidths[i]))
+		}
 
-	table[1] = separator
+		table[1] = separator
+	}
 
 	// Rows
 	for i, row := range cells {
-		table[i+2] = ""
+		table[i+extraLines] = ""
 		for j, cell := range row {
-			table[i+2] += fmt.Sprintf("%-*s", columnWidths[j]+3, cell)
+			table[i+extraLines] += fmt.Sprintf("%-*s", columnWidths[j]+colSpace, cell)
 		}
 	}
 
