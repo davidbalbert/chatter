@@ -27,6 +27,20 @@ func (s interfaceSlice) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
 }
 
+type prefixSlice []netip.Prefix
+
+func (s prefixSlice) Len() int {
+	return len(s)
+}
+
+func (s prefixSlice) Less(i, j int) bool {
+	return s[i].Addr().Less(s[j].Addr())
+}
+
+func (s prefixSlice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+
 func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client) {
 	cli.MustRegister("show interfaces", "Interface status and configuration", func(w io.Writer) error {
 		interfaces, err := client.GetInterfaces(ctx)
@@ -42,15 +56,21 @@ func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client
 				state = "Up"
 			}
 
-			addrs := make([]string, len(iface.Addrs))
+			prefixes := make([]netip.Prefix, len(iface.Addrs))
 			for i, p := range iface.Addrs {
 				addr, ok := netip.AddrFromSlice(p.Addr)
 				if !ok {
 					return nil, fmt.Errorf("invalid IP address: %v", p.Addr)
 				}
 
-				prefix := netip.PrefixFrom(addr, int(p.PrefixLen))
-				addrs[i] = prefix.String()
+				prefixes[i] = netip.PrefixFrom(addr, int(p.PrefixLen))
+			}
+
+			sort.Sort(prefixSlice(prefixes))
+
+			addrs := make([]string, len(prefixes))
+			for i, p := range prefixes {
+				addrs[i] = p.String()
 			}
 
 			return []string{
