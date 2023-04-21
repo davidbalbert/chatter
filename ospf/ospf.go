@@ -86,7 +86,7 @@ func (i *Instance) Run(ctx context.Context) error {
 	intCh <- struct{}{}
 
 	g.Go(func() error {
-		seq := interfaceMonitor.Seq()
+		var seq int64
 		for {
 			seq = interfaceMonitor.AwaitChange(ctx, seq)
 			select {

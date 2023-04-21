@@ -46,12 +46,3 @@ func (n *Notifier) AwaitChange(ctx context.Context, seq int64) (newSeq int64) {
 		return seq + 1
 	}
 }
-
-// Calling Seq is usually unnecessary. You can just start with 0, and AwaitChange
-// will give you the correct seq. But if getting signaled twice is expensive, you
-// can limit the likelyhood of getting signaled twice by calling Seq() first.
-func (n *Notifier) Seq() int64 {
-	st := <-n.st
-	n.st <- st
-	return st.seq
-}
