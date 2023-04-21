@@ -4,9 +4,9 @@ package rpc
 
 import (
 	context "context"
+	"net"
 
 	"github.com/davidbalbert/chatter/config"
-	"github.com/davidbalbert/chatter/system"
 )
 
 type APIService interface {
@@ -14,7 +14,7 @@ type APIService interface {
 	Shutdown(ctx context.Context) error
 	GetServices(ctx context.Context) ([]config.ServiceID, error)
 
-	GetInterfaces(ctx context.Context) ([]system.Interface, error)
+	GetInterfaces(ctx context.Context) ([]net.Interface, error)
 }
 
 type Server struct {

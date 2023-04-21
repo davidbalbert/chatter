@@ -3,69 +3,32 @@ package system
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/davidbalbert/chatter/config"
 )
 
-type Interface struct {
-	net.Interface
-}
-
-func getInterfaces() ([]Interface, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, err
-	}
-
-	interfaces := make([]Interface, len(ifaces))
-	for i, iface := range ifaces {
-		interfaces[i] = Interface{iface}
-	}
-
-	return interfaces, nil
-}
-
+// TODO: it's possible to miss events if it takes you too long to call wait again.
+// we should use the Notifier from the "Rethinking Classical Concurrency Patterns"
+// slides.
 type InterfaceMonitor interface {
 	Run(context.Context) error
-	Interfaces() []Interface
-	WaitInterfaces(context.Context) []Interface
+	Wait(context.Context)
 }
 
 type baseInterfaceMonitor struct {
-	events     chan chan struct{} // could this just be chan struct{}?
-	interfaces chan []Interface
+	events chan chan struct{}
 }
 
-func newBaseInterfaceMonitor() (*baseInterfaceMonitor, error) {
+func newBaseInterfaceMonitor() *baseInterfaceMonitor {
 	events := make(chan chan struct{}, 1)
 	events <- make(chan struct{})
 
-	interfaces := make(chan []Interface, 1)
-
-	ifaces, err := getInterfaces()
-	if err != nil {
-		return nil, err
-	}
-
-	interfaces <- ifaces
-
 	return &baseInterfaceMonitor{
-		interfaces: interfaces,
-		events:     events,
-	}, nil
+		events: events,
+	}
 }
 
 func (m *baseInterfaceMonitor) notify() error {
-	<-m.interfaces
-
-	interfaces, err := getInterfaces()
-	if err != nil {
-		return err
-	}
-
-	m.interfaces <- interfaces
-
 	e := <-m.events
 	close(e)
 	m.events <- make(chan struct{})
@@ -73,28 +36,15 @@ func (m *baseInterfaceMonitor) notify() error {
 	return nil
 }
 
-func (m *baseInterfaceMonitor) WaitInterfaces(ctx context.Context) []Interface {
+func (m *baseInterfaceMonitor) Wait(ctx context.Context) {
 	c := <-m.events
 	m.events <- c
 
 	select {
 	case <-ctx.Done():
-		return nil
+		return
 	case <-c:
 	}
-
-	return m.Interfaces()
-}
-
-func (m *baseInterfaceMonitor) Interfaces() []Interface {
-	i1 := <-m.interfaces
-
-	i2 := make([]Interface, len(i1))
-	copy(i2, i1)
-
-	m.interfaces <- i1
-
-	return i2
 }
 
 func (m *baseInterfaceMonitor) SendEvent(e config.Event) error {

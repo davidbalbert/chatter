@@ -18,10 +18,7 @@ type macosInterfaceMonitor struct {
 }
 
 func NewInterfaceMonitor(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
-	base, err := newBaseInterfaceMonitor()
-	if err != nil {
-		return nil, err
-	}
+	base := newBaseInterfaceMonitor()
 
 	return &macosInterfaceMonitor{
 		baseInterfaceMonitor: base,

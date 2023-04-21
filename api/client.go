@@ -7,7 +7,6 @@ import (
 
 	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/rpc"
-	"github.com/davidbalbert/chatter/system"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -46,22 +45,20 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) GetInterfaces(ctx context.Context) ([]system.Interface, error) {
+func (c *Client) GetInterfaces(ctx context.Context) ([]net.Interface, error) {
 	resp, err := c.rpcClient.GetInterfaces(ctx, &rpc.GetInterfacesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	interfaces := make([]system.Interface, len(resp.Interfaces))
+	interfaces := make([]net.Interface, len(resp.Interfaces))
 	for i, iface := range resp.Interfaces {
-		interfaces[i] = system.Interface{
-			Interface: net.Interface{
-				Index:        int(iface.Index),
-				MTU:          int(iface.Mtu),
-				Name:         iface.Name,
-				HardwareAddr: net.HardwareAddr(iface.HardwareAddr),
-				Flags:        net.Flags(iface.Flags),
-			},
+		interfaces[i] = net.Interface{
+			Index:        int(iface.Index),
+			MTU:          int(iface.Mtu),
+			Name:         iface.Name,
+			HardwareAddr: net.HardwareAddr(iface.HardwareAddr),
+			Flags:        net.Flags(iface.Flags),
 		}
 	}
 

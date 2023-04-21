@@ -8,10 +8,9 @@ import (
 	"sort"
 
 	"github.com/davidbalbert/chatter/api"
-	"github.com/davidbalbert/chatter/system"
 )
 
-type interfaceSlice []system.Interface
+type interfaceSlice []net.Interface
 
 func (s interfaceSlice) Len() int {
 	return len(s)
@@ -34,7 +33,7 @@ func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client
 
 		sort.Sort(interfaceSlice(interfaces))
 
-		table, err := tabulate(interfaces, []string{"Name", "State", "MTU"}, false, func(iface system.Interface) []string {
+		table, err := tabulate(interfaces, []string{"Name", "State", "MTU"}, false, func(iface net.Interface) []string {
 			state := "Down"
 			if iface.Flags&net.FlagUp != 0 {
 				state = "Up"
