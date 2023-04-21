@@ -13,38 +13,38 @@ import (
 // it must be put in raw mode with term.MakeRaw(). If r is not a terminal,
 // pager is a no-op and all output is directly written to w.
 type pager struct {
-	fd      int
-	w       io.Writer
-	r       *bufio.Reader
-	buf     bytes.Buffer
-	isTerm  bool
-	line    int
-	stopped bool
+	fd         int
+	w          io.Writer
+	r          *bufio.Reader
+	buf        bytes.Buffer
+	shouldPage bool
+	line       int
+	stopped    bool
 }
 
 var _ io.Writer = &pager{}
 
 func newPager(r io.Reader, w io.Writer) *pager {
-	isTerm := false
+	shouldPage := false
 	fd := -1
 
 	f, ok := r.(interface{ Fd() uintptr }) // usually *os.File
 	if ok {
 		fd = int(f.Fd())
-		isTerm = term.IsTerminal(fd)
+		shouldPage = term.IsTerminal(fd)
 	}
 
 	return &pager{
-		fd:     fd,
-		w:      w,
-		r:      bufio.NewReader(r),
-		buf:    bytes.Buffer{},
-		isTerm: isTerm,
+		fd:         fd,
+		w:          w,
+		r:          bufio.NewReader(r),
+		buf:        bytes.Buffer{},
+		shouldPage: shouldPage,
 	}
 }
 
 func (p *pager) Write(b []byte) (n int, err error) {
-	if !p.isTerm {
+	if !p.shouldPage {
 		return p.w.Write(b)
 	}
 
@@ -62,11 +62,19 @@ func (p *pager) Write(b []byte) (n int, err error) {
 	written := 0
 	for written < len(b) {
 		if p.line >= height-1 {
-			// we're at the bottom of the screen, so wait for user input
+			// We're at the bottom of the screen, so wait for user input
 			// before continuing. It's height-1 rather than height to
 			// leave room for "--More--".
 			err := p.paginate()
 			if err != nil {
+				return written, err
+			}
+
+			// We just pressed 'G' to go to the end. Pass through the rest
+			// of the buffer.
+			if !p.shouldPage {
+				n, err := p.w.Write(p.buf.Bytes())
+				written += n
 				return written, err
 			}
 		}
@@ -114,6 +122,9 @@ func (p *pager) paginate() error {
 			return nil
 		case '\r', 'j':
 			p.line--
+			return nil
+		case 'G':
+			p.shouldPage = false
 			return nil
 		case '\x1b': // escape sequence, read next two bytes
 			var b [2]byte
