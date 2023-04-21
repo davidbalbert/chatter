@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/davidbalbert/chatter/events"
 	"gopkg.in/yaml.v3"
 )
 
@@ -153,17 +154,6 @@ func (c *Config) validate() error {
 	return nil
 }
 
-type EventType string
-
-const (
-	ConfigUpdated EventType = "ConfigUpdated"
-)
-
-type Event struct {
-	Type EventType
-	Data any
-}
-
 type managerState struct {
 	runningConfig *Config
 }
@@ -171,7 +161,7 @@ type managerState struct {
 type ConfigManager struct {
 	s       chan managerState
 	configs chan Config
-	events  chan Event
+	events  chan events.Event
 	path    string
 }
 
@@ -186,16 +176,16 @@ func NewConfigManager(path string) (*ConfigManager, error) {
 		runningConfig: config,
 	}
 
-	events := make(chan Event, 1)
-	events <- Event{
-		Type: ConfigUpdated,
+	es := make(chan events.Event, 1)
+	es <- events.Event{
+		Type: events.ConfigUpdated,
 		Data: config.copy(),
 	}
 
 	return &ConfigManager{
 		s:       s,
 		configs: make(chan Config),
-		events:  events,
+		events:  es,
 		path:    path,
 	}, nil
 }
@@ -210,15 +200,15 @@ func (c *ConfigManager) Run(ctx context.Context) error {
 			state.runningConfig = &config
 			c.s <- state
 
-			c.events <- Event{
-				Type: ConfigUpdated,
+			c.events <- events.Event{
+				Type: events.ConfigUpdated,
 				Data: config.copy(),
 			}
 		}
 	}
 }
 
-func (c *ConfigManager) Events() <-chan Event {
+func (c *ConfigManager) Events() <-chan events.Event {
 	return c.events
 }
 

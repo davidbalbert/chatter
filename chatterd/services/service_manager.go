@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/events"
 	"golang.org/x/sync/errgroup"
 )
 
 type Service interface {
 	Run(ctx context.Context) error
-	SendEvent(e config.Event) error
+	events.Sender
 }
 
 type BuilderFunc func(m *ServiceManager, conf any) (Service, error)
@@ -84,7 +85,7 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 				return nil
 			case event := <-s.configManager.Events():
 				switch event.Type {
-				case config.ConfigUpdated:
+				case events.ConfigUpdated:
 					st := <-s.c
 
 					conf, ok := event.Data.(*config.Config)

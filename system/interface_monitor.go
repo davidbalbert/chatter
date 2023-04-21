@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/events"
 )
 
 // TODO: it's possible to miss events if it takes you too long to call wait again.
@@ -47,6 +47,6 @@ func (m *baseInterfaceMonitor) Wait(ctx context.Context) {
 	}
 }
 
-func (m *baseInterfaceMonitor) SendEvent(e config.Event) error {
+func (m *baseInterfaceMonitor) SendEvent(e events.Event) error {
 	return fmt.Errorf("interface monitor does not receive events")
 }

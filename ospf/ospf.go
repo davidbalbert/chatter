@@ -8,6 +8,7 @@ import (
 	"github.com/davidbalbert/chatter/chatterd/common"
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/events"
 )
 
 var (
@@ -24,7 +25,7 @@ type Instance struct {
 	// TODO: RIB
 
 	serviceManager *services.ServiceManager
-	events         chan config.Event
+	events         chan events.Event
 	config         *config.OSPFConfig
 }
 
@@ -53,12 +54,12 @@ func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Se
 		Areas:    areas,
 
 		serviceManager: serviceManager,
-		events:         make(chan config.Event),
+		events:         make(chan events.Event),
 		config:         ospfConf,
 	}, nil
 }
 
-func (i *Instance) SendEvent(e config.Event) error {
+func (i *Instance) SendEvent(e events.Event) error {
 	i.events <- e
 
 	return nil
