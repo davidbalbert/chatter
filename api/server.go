@@ -94,8 +94,13 @@ func (s *Server) GetInterfaces(ctx context.Context) ([]*rpc.Interface, error) {
 
 			ones, _ := ipnet.Mask.Size()
 
+			ip := ipnet.IP.To4()
+			if ip == nil {
+				ip = ipnet.IP
+			}
+
 			prefixes[j] = &rpc.Prefix{
-				Addr:      ipnet.IP,
+				Addr:      ip,
 				PrefixLen: int32(ones),
 			}
 		}
