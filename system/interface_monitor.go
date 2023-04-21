@@ -4,49 +4,31 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/events"
+	"github.com/davidbalbert/chatter/sync"
 )
 
-// TODO: it's possible to miss events if it takes you too long to call wait again.
-// we should use the Notifier from the "Rethinking Classical Concurrency Patterns"
-// slides.
-type InterfaceMonitor interface {
-	Run(context.Context) error
-	Wait(context.Context)
+type platformMonitor interface {
+	run(context.Context, *InterfaceMonitor) error
 }
 
-type baseInterfaceMonitor struct {
-	events chan chan struct{}
+type InterfaceMonitor struct {
+	*sync.Notifier
+	p platformMonitor
 }
 
-func newBaseInterfaceMonitor() *baseInterfaceMonitor {
-	events := make(chan chan struct{}, 1)
-	events <- make(chan struct{})
-
-	return &baseInterfaceMonitor{
-		events: events,
-	}
+func NewInterfaceMonitor(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
+	return &InterfaceMonitor{
+		Notifier: sync.NewNotifier(),
+		p:        newPlatformMonitor(),
+	}, nil
 }
 
-func (m *baseInterfaceMonitor) notify() error {
-	e := <-m.events
-	close(e)
-	m.events <- make(chan struct{})
-
-	return nil
+func (m *InterfaceMonitor) Run(ctx context.Context) error {
+	return m.p.run(ctx, m)
 }
 
-func (m *baseInterfaceMonitor) Wait(ctx context.Context) {
-	c := <-m.events
-	m.events <- c
-
-	select {
-	case <-ctx.Done():
-		return
-	case <-c:
-	}
-}
-
-func (m *baseInterfaceMonitor) SendEvent(e events.Event) error {
+func (m *InterfaceMonitor) SendEvent(e events.Event) error {
 	return fmt.Errorf("interface monitor does not receive events")
 }

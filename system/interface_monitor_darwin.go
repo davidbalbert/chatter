@@ -9,23 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davidbalbert/chatter/chatterd/services"
 	"golang.org/x/sync/errgroup"
 )
 
 type macosInterfaceMonitor struct {
-	*baseInterfaceMonitor
 }
 
-func NewInterfaceMonitor(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
-	base := newBaseInterfaceMonitor()
-
-	return &macosInterfaceMonitor{
-		baseInterfaceMonitor: base,
-	}, nil
+func newPlatformMonitor() platformMonitor {
+	return &macosInterfaceMonitor{}
 }
 
-func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
+func (m *macosInterfaceMonitor) run(ctx context.Context, interfaceMonitor *InterfaceMonitor) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// We want scutil to exit cleanly when ctx is canceled, which we can
@@ -107,7 +101,7 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 				}
 
 				if pending {
-					m.notify()
+					interfaceMonitor.NotifyChange()
 				}
 
 				return nil
@@ -119,7 +113,7 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 					notifyCh = notifyTimer.C
 				}
 			case <-notifyCh:
-				m.notify()
+				interfaceMonitor.NotifyChange()
 				pending = false
 				notifyCh = nil
 				notifyTimer = nil

@@ -77,28 +77,18 @@ func (i *Instance) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to get interface monitor service: %w", err)
 	}
 
-	interfaceMonitor, ok := s.(system.InterfaceMonitor)
+	interfaceMonitor, ok := s.(*system.InterfaceMonitor)
 	if !ok {
-		return fmt.Errorf("expected system.InterfaceMonitor but got %v", s)
+		return fmt.Errorf("expected *system.InterfaceMonitor but got %v", s)
 	}
 
 	intCh := make(chan struct{}, 1)
 	intCh <- struct{}{}
 
 	g.Go(func() error {
+		seq := interfaceMonitor.Seq()
 		for {
-			// TODO: I do need to make sure I don't miss any events. If two events come in quick succession
-			// and I miss the second one, I'll never get it, so I might have out of date interface info for
-			// a while.
-			//
-			// Two options:
-			// 1. interfaceMonitor.Subscribe(ctx, intCh)
-			// 2. seq := interfaceMonitor.Seq()
-			//    for {
-			//    	seq := interfaceMonitor.Wait(ctx, seq)
-			//      // send on intCh
-			//    }
-			interfaceMonitor.Wait(ctx)
+			seq = interfaceMonitor.AwaitChange(ctx, seq)
 			select {
 			case <-ctx.Done():
 				return nil
