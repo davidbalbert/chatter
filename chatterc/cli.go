@@ -219,17 +219,17 @@ func (cli *CLI) autocompleteWithTab(w writeFder, line string, pos int) (newLine 
 	}
 }
 
-type NodeSlice []*commands.Node
+type nodeSlice []*commands.Node
 
-func (ns NodeSlice) Len() int {
+func (ns nodeSlice) Len() int {
 	return len(ns)
 }
 
-func (ns NodeSlice) Less(i, j int) bool {
+func (ns nodeSlice) Less(i, j int) bool {
 	return ns[i].String() < ns[j].String()
 }
 
-func (ns NodeSlice) Swap(i, j int) {
+func (ns nodeSlice) Swap(i, j int) {
 	ns[i], ns[j] = ns[j], ns[i]
 }
 
@@ -267,7 +267,7 @@ func (cli *CLI) autocompleteWithQuestionMark(w writeFder, line string, pos int) 
 		}
 	}
 
-	sort.Sort(NodeSlice(nodes))
+	sort.Sort(nodeSlice(nodes))
 
 	fmt.Fprintf(w, "%s%s\n", cli.prompt, line)
 
