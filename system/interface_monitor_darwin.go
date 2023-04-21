@@ -3,6 +3,7 @@ package system
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -37,12 +38,12 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get scutil stdin pipe: %w", err)
 	}
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get scutil stdout pipe: %w", err)
 	}
 
 	events := make(chan struct{})
@@ -60,7 +61,7 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 
 		_, err := io.WriteString(stdin, input)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to write to scutil stdin: %w", err)
 		}
 
 		<-ctx.Done()
@@ -76,7 +77,7 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 			if err == io.EOF {
 				return nil
 			} else if err != nil {
-				return err
+				return fmt.Errorf("failed to read from scutil stdout: %w", err)
 			}
 
 			if strings.Contains(line, "State:/Network/Interface/") {
