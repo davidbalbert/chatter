@@ -48,6 +48,8 @@ func (m *macosInterfaceMonitor) Run(ctx context.Context) error {
 	g.Go(func() error {
 		defer stdin.Close()
 
+		// TODO: is there a way to get a notification when an interface
+		// goes from loopback to not loopback?
 		input := `
 			n.add State:/Network/Interface
 			n.add State:/Network/Interface/[^/]+/Link "pattern"

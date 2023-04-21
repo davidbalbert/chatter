@@ -90,7 +90,7 @@ func (s *Server) GetInterfaces(ctx context.Context) ([]*rpc.Interface, error) {
 		for j, addr := range addrs {
 			ipnet, ok := addr.(*net.IPNet)
 			if !ok {
-				return nil, fmt.Errorf("failed to convert address to IPNet")
+				return nil, fmt.Errorf("failed to convert address to net.IPNet: %v", addr)
 			}
 
 			ones, _ := ipnet.Mask.Size()

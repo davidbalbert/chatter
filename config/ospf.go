@@ -63,6 +63,18 @@ func (c *OSPFConfig) copy() protocolConfig {
 	return &newConfig
 }
 
+func (c *OSPFConfig) InterfaceConfigs() map[string]OSPFInterfaceConfig {
+	configs := make(map[string]OSPFInterfaceConfig)
+
+	for _, area := range c.Areas {
+		for name, conf := range area.Interfaces {
+			configs[name] = conf
+		}
+	}
+
+	return configs
+}
+
 type OSPFAreaConfig struct {
 	Cost               uint16
 	HelloInterval      uint16
@@ -86,6 +98,7 @@ func (c *OSPFAreaConfig) copy() OSPFAreaConfig {
 }
 
 type OSPFInterfaceConfig struct {
+	AreaID             common.AreaID
 	Cost               uint16
 	HelloInterval      uint16
 	RouterDeadInterval uint32
@@ -301,8 +314,14 @@ func parseAreaConfig(areaID string, data map[string]interface{}) (*OSPFAreaConfi
 }
 
 func parseInterfaceConfig(areaName, name string, data map[string]interface{}) (*OSPFInterfaceConfig, error) {
+	id, err := parseID(areaName)
+	if err != nil {
+		return nil, fmt.Errorf("ospf: invalid area id: %s", err)
+	}
+
 	ic := OSPFInterfaceConfig{
-		Cost: 0,
+		AreaID: common.AreaID(id),
+		Cost:   0,
 	}
 
 	for k, v := range data {

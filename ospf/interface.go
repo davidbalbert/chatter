@@ -1,11 +1,26 @@
 package ospf
 
 import (
+	"fmt"
 	"net/netip"
 
 	"github.com/davidbalbert/chatter/chatterd/common"
 	"github.com/davidbalbert/chatter/config"
 )
+
+type interfaceID struct {
+	name   string
+	prefix netip.Prefix
+}
+
+type Router struct {
+	ID   common.RouterID
+	Addr netip.Addr
+}
+
+func (r Router) IsValid() bool {
+	return r.ID != 0
+}
 
 type Interface struct {
 	Type               interfaceType
@@ -21,15 +36,15 @@ type Interface struct {
 	// TODO: WaitTimer
 
 	Neighbors map[common.RouterID]Neighbor
-	DRID      common.RouterID
-	DRAddr    netip.Addr
-	BDRID     common.RouterID
-	BDRAddr   netip.Addr
+	DR        Router
+	BDR       Router
 
 	Cost              uint16
 	RxmtInterval      int
 	AuType            uint16
 	AuthenticationKey uint64
+
+	name string
 }
 
 type interfaceType int
@@ -128,7 +143,7 @@ func (ie interfaceEvent) String() string {
 	}
 }
 
-func newInterface(conf config.OSPFInterfaceConfig, areaID common.AreaID, prefix netip.Prefix) (*Interface, error) {
+func newInterface(conf config.OSPFInterfaceConfig, areaID common.AreaID, name string, prefix netip.Prefix) *Interface {
 	return &Interface{
 		Type:               InterfacePointToPoint,
 		State:              iDown,
@@ -142,5 +157,35 @@ func newInterface(conf config.OSPFInterfaceConfig, areaID common.AreaID, prefix 
 		// RxmtInterval:       conf.RxmtInterval,
 		// AuType:             conf.AuType,
 		// AuthenticationKey:  conf.AuthenticationKey,
-	}, nil
+
+		name: name,
+	}
+}
+
+func (i *Interface) isUp() bool {
+	return i.State != iDown
+}
+
+func (i *Interface) isLoopback() bool {
+	return i.State == iLoopback
+}
+
+func (i *Interface) handleEvent(e interfaceEvent) {
+	fmt.Printf("interface event: %s %s: %s\n", i.name, i.Prefix, e)
+	switch e {
+	case ieInterfaceUp:
+		i.State = iPointToPoint
+	case ieWaitTimer:
+		// TODO
+	case ieBackupSeen:
+		// TODO
+	case ieNeighborChange:
+		// TODO
+	case ieLoopInd:
+		i.State = iLoopback
+	case ieUnloopInd:
+		i.State = iPointToPoint
+	case ieInterfaceDown:
+		i.State = iDown
+	}
 }
