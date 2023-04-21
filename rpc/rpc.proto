@@ -40,4 +40,10 @@ message Interface {
     string name = 3;
     bytes hardware_addr = 4;
     uint32 flags = 5;
+    repeated Prefix addrs = 6;
+}
+
+message Prefix {
+    bytes addr = 1;
+    int32 prefix_len = 2;
 }

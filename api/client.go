@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"net"
 
 	"github.com/davidbalbert/chatter/config"
 	"github.com/davidbalbert/chatter/rpc"
@@ -45,24 +44,13 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	return err
 }
 
-func (c *Client) GetInterfaces(ctx context.Context) ([]net.Interface, error) {
+func (c *Client) GetInterfaces(ctx context.Context) ([]*rpc.Interface, error) {
 	resp, err := c.rpcClient.GetInterfaces(ctx, &rpc.GetInterfacesRequest{})
 	if err != nil {
 		return nil, err
 	}
 
-	interfaces := make([]net.Interface, len(resp.Interfaces))
-	for i, iface := range resp.Interfaces {
-		interfaces[i] = net.Interface{
-			Index:        int(iface.Index),
-			MTU:          int(iface.Mtu),
-			Name:         iface.Name,
-			HardwareAddr: net.HardwareAddr(iface.HardwareAddr),
-			Flags:        net.Flags(iface.Flags),
-		}
-	}
-
-	return interfaces, nil
+	return resp.Interfaces, nil
 }
 
 func (c *Client) GetServices(ctx context.Context) ([]config.ServiceID, error) {

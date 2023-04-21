@@ -411,11 +411,12 @@ type Interface struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Index        int32  `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
-	Mtu          int32  `protobuf:"varint,2,opt,name=mtu,proto3" json:"mtu,omitempty"`
-	Name         string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	HardwareAddr []byte `protobuf:"bytes,4,opt,name=hardware_addr,json=hardwareAddr,proto3" json:"hardware_addr,omitempty"`
-	Flags        uint32 `protobuf:"varint,5,opt,name=flags,proto3" json:"flags,omitempty"`
+	Index        int32     `protobuf:"varint,1,opt,name=index,proto3" json:"index,omitempty"`
+	Mtu          int32     `protobuf:"varint,2,opt,name=mtu,proto3" json:"mtu,omitempty"`
+	Name         string    `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	HardwareAddr []byte    `protobuf:"bytes,4,opt,name=hardware_addr,json=hardwareAddr,proto3" json:"hardware_addr,omitempty"`
+	Flags        uint32    `protobuf:"varint,5,opt,name=flags,proto3" json:"flags,omitempty"`
+	Addrs        []*Prefix `protobuf:"bytes,6,rep,name=addrs,proto3" json:"addrs,omitempty"`
 }
 
 func (x *Interface) Reset() {
@@ -485,6 +486,68 @@ func (x *Interface) GetFlags() uint32 {
 	return 0
 }
 
+func (x *Interface) GetAddrs() []*Prefix {
+	if x != nil {
+		return x.Addrs
+	}
+	return nil
+}
+
+type Prefix struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Addr      []byte `protobuf:"bytes,1,opt,name=addr,proto3" json:"addr,omitempty"`
+	PrefixLen int32  `protobuf:"varint,2,opt,name=prefix_len,json=prefixLen,proto3" json:"prefix_len,omitempty"`
+}
+
+func (x *Prefix) Reset() {
+	*x = Prefix{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_rpc_proto_msgTypes[10]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Prefix) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Prefix) ProtoMessage() {}
+
+func (x *Prefix) ProtoReflect() protoreflect.Message {
+	mi := &file_rpc_proto_msgTypes[10]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Prefix.ProtoReflect.Descriptor instead.
+func (*Prefix) Descriptor() ([]byte, []int) {
+	return file_rpc_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *Prefix) GetAddr() []byte {
+	if x != nil {
+		return x.Addr
+	}
+	return nil
+}
+
+func (x *Prefix) GetPrefixLen() int32 {
+	if x != nil {
+		return x.PrefixLen
+	}
+	return 0
+}
+
 var File_rpc_proto protoreflect.FileDescriptor
 
 var file_rpc_proto_rawDesc = []byte{
@@ -509,7 +572,7 @@ var file_rpc_proto_rawDesc = []byte{
 	0x72, 0x66, 0x61, 0x63, 0x65, 0x73, 0x52, 0x65, 0x70, 0x6c, 0x79, 0x12, 0x2e, 0x0a, 0x0a, 0x69,
 	0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x73, 0x18, 0x01, 0x20, 0x03, 0x28, 0x0b, 0x32,
 	0x0e, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x52,
-	0x0a, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x73, 0x22, 0x82, 0x01, 0x0a, 0x09,
+	0x0a, 0x69, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x73, 0x22, 0xa5, 0x01, 0x0a, 0x09,
 	0x49, 0x6e, 0x74, 0x65, 0x72, 0x66, 0x61, 0x63, 0x65, 0x12, 0x14, 0x0a, 0x05, 0x69, 0x6e, 0x64,
 	0x65, 0x78, 0x18, 0x01, 0x20, 0x01, 0x28, 0x05, 0x52, 0x05, 0x69, 0x6e, 0x64, 0x65, 0x78, 0x12,
 	0x10, 0x0a, 0x03, 0x6d, 0x74, 0x75, 0x18, 0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x03, 0x6d, 0x74,
@@ -518,6 +581,12 @@ var file_rpc_proto_rawDesc = []byte{
 	0x65, 0x5f, 0x61, 0x64, 0x64, 0x72, 0x18, 0x04, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x0c, 0x68, 0x61,
 	0x72, 0x64, 0x77, 0x61, 0x72, 0x65, 0x41, 0x64, 0x64, 0x72, 0x12, 0x14, 0x0a, 0x05, 0x66, 0x6c,
 	0x61, 0x67, 0x73, 0x18, 0x05, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x05, 0x66, 0x6c, 0x61, 0x67, 0x73,
+	0x12, 0x21, 0x0a, 0x05, 0x61, 0x64, 0x64, 0x72, 0x73, 0x18, 0x06, 0x20, 0x03, 0x28, 0x0b, 0x32,
+	0x0b, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x52, 0x05, 0x61, 0x64,
+	0x64, 0x72, 0x73, 0x22, 0x3b, 0x0a, 0x06, 0x50, 0x72, 0x65, 0x66, 0x69, 0x78, 0x12, 0x12, 0x0a,
+	0x04, 0x61, 0x64, 0x64, 0x72, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0c, 0x52, 0x04, 0x61, 0x64, 0x64,
+	0x72, 0x12, 0x1d, 0x0a, 0x0a, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x5f, 0x6c, 0x65, 0x6e, 0x18,
+	0x02, 0x20, 0x01, 0x28, 0x05, 0x52, 0x09, 0x70, 0x72, 0x65, 0x66, 0x69, 0x78, 0x4c, 0x65, 0x6e,
 	0x32, 0x83, 0x02, 0x0a, 0x03, 0x41, 0x50, 0x49, 0x12, 0x3c, 0x0a, 0x0a, 0x47, 0x65, 0x74, 0x56,
 	0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x12, 0x16, 0x2e, 0x72, 0x70, 0x63, 0x2e, 0x47, 0x65, 0x74,
 	0x56, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x14,
@@ -552,7 +621,7 @@ func file_rpc_proto_rawDescGZIP() []byte {
 	return file_rpc_proto_rawDescData
 }
 
-var file_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_rpc_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_rpc_proto_goTypes = []interface{}{
 	(*GetVersionRequest)(nil),    // 0: rpc.GetVersionRequest
 	(*GetVersionReply)(nil),      // 1: rpc.GetVersionReply
@@ -564,23 +633,25 @@ var file_rpc_proto_goTypes = []interface{}{
 	(*GetInterfacesRequest)(nil), // 7: rpc.GetInterfacesRequest
 	(*GetInterfacesReply)(nil),   // 8: rpc.GetInterfacesReply
 	(*Interface)(nil),            // 9: rpc.Interface
+	(*Prefix)(nil),               // 10: rpc.Prefix
 }
 var file_rpc_proto_depIdxs = []int32{
-	6, // 0: rpc.GetServicesReply.services:type_name -> rpc.Service
-	9, // 1: rpc.GetInterfacesReply.interfaces:type_name -> rpc.Interface
-	0, // 2: rpc.API.GetVersion:input_type -> rpc.GetVersionRequest
-	2, // 3: rpc.API.Shutdown:input_type -> rpc.ShutdownRequest
-	4, // 4: rpc.API.GetServices:input_type -> rpc.GetServicesRequest
-	7, // 5: rpc.API.GetInterfaces:input_type -> rpc.GetInterfacesRequest
-	1, // 6: rpc.API.GetVersion:output_type -> rpc.GetVersionReply
-	3, // 7: rpc.API.Shutdown:output_type -> rpc.ShutdownReply
-	5, // 8: rpc.API.GetServices:output_type -> rpc.GetServicesReply
-	8, // 9: rpc.API.GetInterfaces:output_type -> rpc.GetInterfacesReply
-	6, // [6:10] is the sub-list for method output_type
-	2, // [2:6] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	6,  // 0: rpc.GetServicesReply.services:type_name -> rpc.Service
+	9,  // 1: rpc.GetInterfacesReply.interfaces:type_name -> rpc.Interface
+	10, // 2: rpc.Interface.addrs:type_name -> rpc.Prefix
+	0,  // 3: rpc.API.GetVersion:input_type -> rpc.GetVersionRequest
+	2,  // 4: rpc.API.Shutdown:input_type -> rpc.ShutdownRequest
+	4,  // 5: rpc.API.GetServices:input_type -> rpc.GetServicesRequest
+	7,  // 6: rpc.API.GetInterfaces:input_type -> rpc.GetInterfacesRequest
+	1,  // 7: rpc.API.GetVersion:output_type -> rpc.GetVersionReply
+	3,  // 8: rpc.API.Shutdown:output_type -> rpc.ShutdownReply
+	5,  // 9: rpc.API.GetServices:output_type -> rpc.GetServicesReply
+	8,  // 10: rpc.API.GetInterfaces:output_type -> rpc.GetInterfacesReply
+	7,  // [7:11] is the sub-list for method output_type
+	3,  // [3:7] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_rpc_proto_init() }
@@ -709,6 +780,18 @@ func file_rpc_proto_init() {
 				return nil
 			}
 		}
+		file_rpc_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*Prefix); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -716,7 +799,7 @@ func file_rpc_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_rpc_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -68,11 +68,18 @@ func NewCLI() *CLI {
 	return cli
 }
 
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 // A generic function Tabulate that takes a list of rows of type T (any),
 // a list of strings (the headers), and a function that takes a row and
 // returns a list of strings (the columns). It returns a string that
 // contains the tabulated data.
-func tabulate[T any](items []T, headers []string, hasSeparator bool, f func(T) []string) ([]string, error) {
+func tabulate[T any](items []T, headers []string, hasSeparator bool, f func(T) ([]string, error)) ([]string, error) {
 	colSpace := 3
 	extraLines := 1
 	if hasSeparator {
@@ -85,24 +92,43 @@ func tabulate[T any](items []T, headers []string, hasSeparator bool, f func(T) [
 		columnWidths[i] = len(h)
 	}
 
-	cells := make([][]string, len(items))
+	var rows [][]string
 
 	for i, item := range items {
-		cells[i] = f(item)
+		row, err := f(item)
+		if err != nil {
+			return nil, err
+		}
 
-		if len(cells[i]) != len(headers) {
+		if len(row) != len(headers) {
 			return nil, fmt.Errorf("invalid number of columns for item %d", i)
 		}
 
-		for j, cell := range cells[i] {
-			if len(cell) > columnWidths[j] {
-				columnWidths[j] = len(cell)
+		// Row may contain cells with newlines, so we split them into
+		// multiple rows.
+		nrows := 1
+		for _, cell := range row {
+			nrows = max(nrows, strings.Count(cell, "\n")+1)
+		}
+
+		newRows := make([][]string, nrows)
+		for j := 0; j < nrows; j++ {
+			newRows[j] = make([]string, len(row))
+		}
+
+		for j, cell := range row {
+			explodedCells := strings.Split(cell, "\n")
+			for k, c := range explodedCells {
+				newRows[k][j] = c
+				columnWidths[j] = max(columnWidths[j], len(c))
 			}
 		}
+
+		rows = append(rows, newRows...)
 	}
 
 	// Build the table
-	table := make([]string, len(items)+extraLines)
+	table := make([]string, len(rows)+extraLines)
 
 	// Header
 	header := ""
@@ -123,7 +149,7 @@ func tabulate[T any](items []T, headers []string, hasSeparator bool, f func(T) [
 	}
 
 	// Rows
-	for i, row := range cells {
+	for i, row := range rows {
 		table[i+extraLines] = ""
 		for j, cell := range row {
 			table[i+extraLines] += fmt.Sprintf("%-*s", columnWidths[j]+colSpace, cell)

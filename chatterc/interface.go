@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"sort"
+	"strings"
 
 	"github.com/davidbalbert/chatter/api"
+	"github.com/davidbalbert/chatter/rpc"
 )
 
-type interfaceSlice []net.Interface
+type interfaceSlice []*rpc.Interface
 
 func (s interfaceSlice) Len() int {
 	return len(s)
@@ -33,17 +36,29 @@ func registerInterfaceCommands(ctx context.Context, cli *CLI, client *api.Client
 
 		sort.Sort(interfaceSlice(interfaces))
 
-		table, err := tabulate(interfaces, []string{"Name", "State", "MTU"}, false, func(iface net.Interface) []string {
+		table, err := tabulate(interfaces, []string{"Name", "State", "MTU", "Addresses"}, false, func(iface *rpc.Interface) ([]string, error) {
 			state := "Down"
-			if iface.Flags&net.FlagUp != 0 {
+			if net.Flags(iface.Flags)&net.FlagUp != 0 {
 				state = "Up"
+			}
+
+			addrs := make([]string, len(iface.Addrs))
+			for i, p := range iface.Addrs {
+				addr, ok := netip.AddrFromSlice(p.Addr)
+				if !ok {
+					return nil, fmt.Errorf("invalid IP address: %v", p.Addr)
+				}
+
+				prefix := netip.PrefixFrom(addr, int(p.PrefixLen))
+				addrs[i] = prefix.String()
 			}
 
 			return []string{
 				iface.Name,
 				state,
-				fmt.Sprintf("%d", iface.MTU),
-			}
+				fmt.Sprintf("%d", iface.Mtu),
+				strings.Join(addrs, "\n"),
+			}, nil
 		})
 		if err != nil {
 			return err

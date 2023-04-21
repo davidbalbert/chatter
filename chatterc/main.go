@@ -74,8 +74,8 @@ func main() {
 			return err
 		}
 
-		table, err := tabulate(services, []string{"Name", "Type"}, true, func(service config.ServiceID) []string {
-			return []string{service.Name, service.Type.String()}
+		table, err := tabulate(services, []string{"Name", "Type"}, true, func(service config.ServiceID) ([]string, error) {
+			return []string{service.Name, service.Type.String()}, nil
 		})
 		if err != nil {
 			return err

@@ -71,6 +71,44 @@ func (s *Server) GetServices(ctx context.Context) ([]config.ServiceID, error) {
 	return s.serviceManager.RunningServices(), nil
 }
 
-func (s *Server) GetInterfaces(ctx context.Context) ([]net.Interface, error) {
-	return net.Interfaces()
+func (s *Server) GetInterfaces(ctx context.Context) ([]*rpc.Interface, error) {
+	netifs, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+
+	ifaces := make([]*rpc.Interface, len(netifs))
+
+	for i, netif := range netifs {
+		addrs, err := netif.Addrs()
+		if err != nil {
+			return nil, err
+		}
+
+		prefixes := make([]*rpc.Prefix, len(addrs))
+		for j, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				return nil, fmt.Errorf("failed to convert address to IPNet")
+			}
+
+			ones, _ := ipnet.Mask.Size()
+
+			prefixes[j] = &rpc.Prefix{
+				Addr:      ipnet.IP,
+				PrefixLen: int32(ones),
+			}
+		}
+
+		ifaces[i] = &rpc.Interface{
+			Index:        int32(netif.Index),
+			Mtu:          int32(netif.MTU),
+			Name:         netif.Name,
+			HardwareAddr: netif.HardwareAddr,
+			Flags:        uint32(netif.Flags),
+			Addrs:        prefixes,
+		}
+	}
+
+	return ifaces, nil
 }

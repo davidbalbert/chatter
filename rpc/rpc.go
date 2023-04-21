@@ -4,7 +4,6 @@ package rpc
 
 import (
 	context "context"
-	"net"
 
 	"github.com/davidbalbert/chatter/config"
 )
@@ -14,7 +13,7 @@ type APIService interface {
 	Shutdown(ctx context.Context) error
 	GetServices(ctx context.Context) ([]config.ServiceID, error)
 
-	GetInterfaces(ctx context.Context) ([]net.Interface, error)
+	GetInterfaces(ctx context.Context) ([]*Interface, error)
 }
 
 type Server struct {
@@ -69,20 +68,9 @@ func (s *Server) GetServices(ctx context.Context, req *GetServicesRequest) (*Get
 }
 
 func (s *Server) GetInterfaces(ctx context.Context, req *GetInterfacesRequest) (*GetInterfacesReply, error) {
-	interfaces, err := s.apiService.GetInterfaces(ctx)
+	ifaces, err := s.apiService.GetInterfaces(ctx)
 	if err != nil {
 		return nil, err
-	}
-
-	ifaces := make([]*Interface, len(interfaces))
-	for i, iface := range interfaces {
-		ifaces[i] = &Interface{
-			Index:        int32(iface.Index),
-			Mtu:          int32(iface.MTU),
-			Name:         iface.Name,
-			HardwareAddr: iface.HardwareAddr,
-			Flags:        uint32(iface.Flags),
-		}
 	}
 
 	return &GetInterfacesReply{
