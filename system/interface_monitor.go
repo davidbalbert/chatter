@@ -14,14 +14,14 @@ type platformMonitor interface {
 }
 
 type InterfaceMonitor struct {
-	*sync.Notifier
+	*sync.SimpleNotifier
 	p platformMonitor
 }
 
 func NewInterfaceMonitor(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
 	return &InterfaceMonitor{
-		Notifier: sync.NewNotifier(),
-		p:        newPlatformMonitor(),
+		SimpleNotifier: sync.NewSimpleNotifier(),
+		p:              newPlatformMonitor(),
 	}, nil
 }
 

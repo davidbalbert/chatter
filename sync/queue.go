@@ -4,7 +4,7 @@ import (
 	"context"
 )
 
-// Taken from the slides for "Rethinking Classical Concurrency Patterns" by Bryan C. Mills.
+// Adapted from the slides for "Rethinking Classical Concurrency Patterns" by Bryan C. Mills.
 
 type queue[T any] struct {
 	items chan []T  // contains 0 or 1 non-empty slices

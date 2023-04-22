@@ -2,11 +2,17 @@ package sync
 
 import "context"
 
-// Taken from the slides for "Rethinking Classical Concurrency Patterns" by Bryan C. Mills.
+// Adapted from the slides for "Rethinking Classical Concurrency Patterns" by Bryan C. Mills.
 
-type state struct {
-	seq     int64
-	changed chan struct{} // closed upon notify
+type signal[T any] struct {
+	seq int64
+	val T
+}
+
+type state[T any] struct {
+	seq  int64
+	val  T
+	wait []chan<- signal[T]
 }
 
 // A struct that facilitates one-to-many broadcast notifications. All listeners are guaranteed
@@ -16,42 +22,59 @@ type state struct {
 // Calling AwaitChange() with an out of date sequence number guarantees that you'll be notified
 // immediately with the latest seq, but if you've missed two notifications and call AwaitChange()
 // you'll only be notified once.
-type Notifier struct {
-	st chan state
+type Notifier[T any] struct {
+	st chan state[T]
 }
 
-func NewNotifier() *Notifier {
-	st := make(chan state, 1)
-	st <- state{
-		seq:     0,
-		changed: make(chan struct{}),
-	}
-	return &Notifier{st: st}
+func NewNotifier[T any]() *Notifier[T] {
+	st := make(chan state[T], 1)
+	st <- state[T]{seq: 0}
+	return &Notifier[T]{st}
 }
 
-func (n *Notifier) NotifyChange() {
+func (n *Notifier[T]) NotifyChange(newVal T) {
 	st := <-n.st
-	close(st.changed)
-	n.st <- state{
-		seq:     st.seq + 1,
-		changed: make(chan struct{}),
+	for _, c := range st.wait {
+		c <- signal[T]{st.seq + 1, newVal}
 	}
+	n.st <- state[T]{st.seq + 1, newVal, nil}
 }
 
 // If you call AwaitChange() with a wrong seq, it'll immediately notify you
 // with the current one.
-func (n *Notifier) AwaitChange(ctx context.Context, seq int64) (newSeq int64) {
+func (n *Notifier[T]) AwaitChange(ctx context.Context, seq int64) (val T, newSeq int64) {
+	c := make(chan signal[T], 1)
 	st := <-n.st
-	n.st <- st
 
-	if st.seq != seq {
-		return st.seq
+	if st.seq == seq {
+		st.wait = append(st.wait, c)
+	} else {
+		c <- signal[T]{seq: st.seq, val: st.val}
 	}
+	n.st <- st
 
 	select {
 	case <-ctx.Done():
-		return seq
-	case <-st.changed:
-		return seq + 1
+		return st.val, st.seq
+	case n := <-c:
+		return n.val, n.seq
 	}
+}
+
+// Same as Notifier, but with no value.
+type SimpleNotifier struct {
+	*Notifier[struct{}]
+}
+
+func NewSimpleNotifier() *SimpleNotifier {
+	return &SimpleNotifier{NewNotifier[struct{}]()}
+}
+
+func (n *SimpleNotifier) NotifyChange() {
+	n.Notifier.NotifyChange(struct{}{})
+}
+
+func (n *SimpleNotifier) AwaitChange(ctx context.Context, seq int64) (newSeq int64) {
+	_, newSeq = n.Notifier.AwaitChange(ctx, seq)
+	return
 }
