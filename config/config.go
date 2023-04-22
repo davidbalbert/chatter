@@ -122,10 +122,7 @@ func (c *Config) Bootstraps() []Bootstrap {
 	bootstraps := make([]Bootstrap, 0, len(ids))
 
 	for _, id := range ids {
-		conf, ok := c.protocolConfigs[id]
-		if ok {
-			conf = conf.copy()
-		}
+		conf := c.protocolConfigs[id]
 
 		bootstraps = append(bootstraps, Bootstrap{
 			ID:     id,
@@ -136,7 +133,7 @@ func (c *Config) Bootstraps() []Bootstrap {
 	return bootstraps
 }
 
-func (c *Config) copy() *Config {
+func (c *Config) Copy() *Config {
 	newConfig := Config{
 		protocolConfigs: make(map[ServiceID]protocolConfig),
 	}

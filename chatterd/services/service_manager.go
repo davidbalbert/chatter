@@ -108,7 +108,8 @@ func (s *ServiceManager) Run(ctx context.Context) error {
 					delete(st.controllers, name)
 				}
 
-				for _, b := range conf.Bootstraps() {
+				// This is a defensive copy. Is there a better way?
+				for _, b := range conf.Copy().Bootstraps() {
 					err := s.start(ctx, g, st, b)
 					if err != nil {
 						return err
