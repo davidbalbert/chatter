@@ -27,7 +27,9 @@ type Instance struct {
 	// TODO: LSDB (or maybe just AS external?)
 	// TODO: RIB
 
-	Interfaces map[interfaceID]*Interface
+	// TODO: this should be some sort of service tree. It's the same thing as service manager.
+	Interfaces  map[interfaceID]*Interface
+	cancelFuncs map[interfaceID]context.CancelFunc
 
 	serviceManager *services.ServiceManager
 	config         *config.OSPFConfig
@@ -53,7 +55,8 @@ func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Ru
 		RouterID: ospfConf.RouterID,
 		Areas:    areas,
 
-		Interfaces: make(map[interfaceID]*Interface),
+		Interfaces:  make(map[interfaceID]*Interface),
+		cancelFuncs: make(map[interfaceID]context.CancelFunc),
 
 		serviceManager: serviceManager,
 		config:         ospfConf,
@@ -88,17 +91,21 @@ func (i *Instance) Run(ctx context.Context) error {
 		}
 	})
 
-	for {
-		select {
-		case <-ctx.Done():
-			return g.Wait()
-		case <-intCh:
-			err := i.updateInterfaces()
-			if err != nil {
-				return err
+	g.Go(func() error {
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-intCh:
+				err := i.updateInterfaces(ctx, g)
+				if err != nil {
+					return err
+				}
 			}
 		}
-	}
+	})
+
+	return g.Wait()
 }
 
 type netifAndPrefixes struct {
@@ -106,7 +113,7 @@ type netifAndPrefixes struct {
 	prefixes []netip.Prefix
 }
 
-func (i *Instance) updateInterfaces() error {
+func (i *Instance) updateInterfaces(ctx context.Context, g *errgroup.Group) error {
 	netifs, err := net.Interfaces()
 	if err != nil {
 		return fmt.Errorf("failed to get interfaces: %w", err)
@@ -115,7 +122,6 @@ func (i *Instance) updateInterfaces() error {
 	nameToNetif := make(map[string]netifAndPrefixes)
 
 	for _, netif := range netifs {
-
 		prefixes, err := netifPrefixesV4(netif)
 		if err != nil {
 			return err
@@ -128,7 +134,13 @@ func (i *Instance) updateInterfaces() error {
 	for id, iface := range i.Interfaces {
 		nap, ok := nameToNetif[id.name]
 		if !ok { // interface was removed
-			iface.handleEvent(ieInterfaceDown)
+			iface.sendEventWait(ieInterfaceDown)
+
+			stop, ok := i.cancelFuncs[id]
+			if !ok {
+				return fmt.Errorf("no cancel func for interface %s %s", id.name, id.prefix)
+			}
+			stop()
 			delete(i.Interfaces, id)
 			continue
 		}
@@ -145,22 +157,27 @@ func (i *Instance) updateInterfaces() error {
 
 		// address was removed
 		if !found {
-			iface.handleEvent(ieInterfaceDown)
+			iface.sendEventWait(ieInterfaceDown)
+			stop, ok := i.cancelFuncs[id]
+			if !ok {
+				return fmt.Errorf("no cancel func for interface %s %s", id.name, id.prefix)
+			}
+			stop()
 			delete(i.Interfaces, id)
 			continue
 		}
 
 		// detect changes to interface state
 		if isUp(netif) && !iface.isUp() {
-			iface.handleEvent(ieInterfaceUp)
+			iface.sendEvent(ieInterfaceUp)
 		} else if !isUp(netif) && iface.isUp() {
-			iface.handleEvent(ieInterfaceDown)
+			iface.sendEvent(ieInterfaceDown)
 		}
 
 		if isLoopback(netif) && !iface.isLoopback() {
-			iface.handleEvent(ieLoopInd)
+			iface.sendEvent(ieLoopInd)
 		} else if !isLoopback(netif) && iface.isLoopback() {
-			iface.handleEvent(ieUnloopInd)
+			iface.sendEvent(ieUnloopInd)
 		}
 	}
 
@@ -183,12 +200,18 @@ func (i *Instance) updateInterfaces() error {
 
 			i.Interfaces[id] = newInterface(conf, conf.AreaID, name, prefix)
 
+			ctx, cancel := context.WithCancel(ctx)
+			g.Go(func() error {
+				return i.Interfaces[id].Run(ctx)
+			})
+			i.cancelFuncs[id] = cancel
+
 			if isUp(netif) {
-				i.Interfaces[id].handleEvent(ieInterfaceUp)
+				i.Interfaces[id].sendEvent(ieInterfaceUp)
 			}
 
 			if isLoopback(netif) {
-				i.Interfaces[id].handleEvent(ieLoopInd)
+				i.Interfaces[id].sendEvent(ieLoopInd)
 			}
 		}
 	}
