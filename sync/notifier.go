@@ -2,11 +2,20 @@ package sync
 
 import "context"
 
+// Taken from the slides for "Rethinking Classical Concurrency Patterns" by Bryan C. Mills.
+
 type state struct {
 	seq     int64
 	changed chan struct{} // closed upon notify
 }
 
+// A struct that facilitates one-to-many broadcast notifications. All listeners are guaranteed
+// to receive a notification, but if you spend too long between calls to AwaitChange(), you
+// can miss notifications.
+//
+// Calling AwaitChange() with an out of date sequence number guarantees that you'll be notified
+// immediately with the latest seq, but if you've missed two notifications and call AwaitChange()
+// you'll only be notified once.
 type Notifier struct {
 	st chan state
 }

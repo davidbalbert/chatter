@@ -83,17 +83,17 @@ func (i *Instance) Run(ctx context.Context) error {
 	}
 
 	intCh := make(chan struct{}, 1)
-	intCh <- struct{}{}
 
 	g.Go(func() error {
 		var seq int64
 		for {
-			seq = interfaceMonitor.AwaitChange(ctx, seq)
 			select {
 			case <-ctx.Done():
 				return nil
 			case intCh <- struct{}{}:
 			}
+
+			seq = interfaceMonitor.AwaitChange(ctx, seq)
 		}
 	})
 
