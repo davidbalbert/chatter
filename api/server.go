@@ -7,7 +7,6 @@ import (
 
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
-	"github.com/davidbalbert/chatter/events"
 	"github.com/davidbalbert/chatter/rpc"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -53,10 +52,6 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	return g.Wait()
-}
-
-func (s *Server) SendEvent(event events.Event) error {
-	return fmt.Errorf("api server does not support sending events")
 }
 
 func (s *Server) GetVersion(ctx context.Context) (string, error) {

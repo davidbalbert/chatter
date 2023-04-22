@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/davidbalbert/chatter/events"
+	"github.com/davidbalbert/chatter/sync"
 	"gopkg.in/yaml.v3"
 )
 
@@ -154,71 +154,31 @@ func (c *Config) validate() error {
 	return nil
 }
 
-type managerState struct {
-	runningConfig *Config
-}
-
 type ConfigManager struct {
-	s       chan managerState
-	configs chan Config
-	events  chan events.Event
-	path    string
+	*sync.Notifier[*Config]
 }
 
 func NewConfigManager(path string) (*ConfigManager, error) {
-	config, err := loadConfig(path)
+	conf, err := loadConfig(path)
 	if err != nil {
 		return nil, err
 	}
 
-	s := make(chan managerState, 1)
-	s <- managerState{
-		runningConfig: config,
-	}
-
-	es := make(chan events.Event, 1)
-	es <- events.Event{
-		Type: events.ConfigUpdated,
-		Data: config.copy(),
-	}
-
-	return &ConfigManager{
-		s:       s,
-		configs: make(chan Config),
-		events:  es,
-		path:    path,
-	}, nil
+	return &ConfigManager{sync.NewNotifier(conf)}, nil
 }
 
 func (c *ConfigManager) Run(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case config := <-c.configs:
-			state := <-c.s
-			state.runningConfig = &config
-			c.s <- state
-
-			c.events <- events.Event{
-				Type: events.ConfigUpdated,
-				Data: config.copy(),
-			}
-		}
-	}
+	<-ctx.Done()
+	return nil
 }
 
-func (c *ConfigManager) Events() <-chan events.Event {
-	return c.events
-}
-
-func (c *ConfigManager) UpdateConfig(config *Config) error {
-	err := config.validate()
+func (c *ConfigManager) UpdateConfig(conf *Config) error {
+	err := conf.validate()
 	if err != nil {
 		return err
 	}
 
-	c.configs <- *config
+	c.NotifyChange(conf)
 
 	return nil
 }

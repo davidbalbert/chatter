@@ -5,16 +5,14 @@ import (
 	"fmt"
 
 	"github.com/davidbalbert/chatter/config"
-	"github.com/davidbalbert/chatter/events"
 	"golang.org/x/sync/errgroup"
 )
 
-type Service interface {
+type Runner interface {
 	Run(ctx context.Context) error
-	events.Sender
 }
 
-type BuilderFunc func(m *ServiceManager, conf any) (Service, error)
+type BuilderFunc func(m *ServiceManager, conf any) (Runner, error)
 
 var builders = make(map[config.ServiceType]BuilderFunc)
 
@@ -57,7 +55,7 @@ type state struct {
 }
 
 type ServiceManager struct {
-	c             chan state
+	st            chan state
 	configManager *config.ConfigManager
 }
 
@@ -70,7 +68,7 @@ func NewServiceManager(configManager *config.ConfigManager) *ServiceManager {
 	c <- st
 
 	return &ServiceManager{
-		c:             c,
+		st:            c,
 		configManager: configManager,
 	}
 }
@@ -78,41 +76,46 @@ func NewServiceManager(configManager *config.ConfigManager) *ServiceManager {
 func (s *ServiceManager) Run(ctx context.Context) error {
 	g, ctx := errgroup.WithContext(ctx)
 
+	confCh := make(chan *config.Config, 1)
+
+	g.Go(func() error {
+		conf, seq := s.configManager.LastChange()
+		for {
+			select {
+			case <-ctx.Done():
+				return nil
+			case confCh <- conf:
+			}
+
+			conf, seq = s.configManager.AwaitChange(ctx, seq)
+		}
+	})
+
 	g.Go(func() error {
 		for {
 			select {
 			case <-ctx.Done():
 				return nil
-			case event := <-s.configManager.Events():
-				switch event.Type {
-				case events.ConfigUpdated:
-					st := <-s.c
+			case conf := <-confCh:
+				st := <-s.st
 
-					conf, ok := event.Data.(*config.Config)
-					if !ok {
-						return fmt.Errorf("invalid ConfigUpdated event data: %v", event.Data)
-					}
-
-					for _, controller := range st.controllers {
-						controller.Stop()
-					}
-
-					for name, controller := range st.controllers {
-						controller.Wait()
-						delete(st.controllers, name)
-					}
-
-					for _, b := range conf.Bootstraps() {
-						err := s.start(ctx, g, st, b)
-						if err != nil {
-							return err
-						}
-					}
-
-					s.c <- st
-				default:
-					return fmt.Errorf("unknown config event type: %v", event.Type)
+				for _, controller := range st.controllers {
+					controller.Stop()
 				}
+
+				for name, controller := range st.controllers {
+					controller.Wait()
+					delete(st.controllers, name)
+				}
+
+				for _, b := range conf.Bootstraps() {
+					err := s.start(ctx, g, st, b)
+					if err != nil {
+						return err
+					}
+				}
+
+				s.st <- st
 			}
 		}
 	})
@@ -160,9 +163,9 @@ func (s *ServiceManager) start(ctx context.Context, g *errgroup.Group, st state,
 }
 
 func (s *ServiceManager) Get(id config.ServiceID) (any, error) {
-	st := <-s.c
+	st := <-s.st
 	defer func() {
-		s.c <- st
+		s.st <- st
 	}()
 
 	controller, ok := st.controllers[id.Name]
@@ -178,9 +181,9 @@ func (s *ServiceManager) ConfigManager() *config.ConfigManager {
 }
 
 func (s *ServiceManager) RunningServices() []config.ServiceID {
-	st := <-s.c
+	st := <-s.st
 	defer func() {
-		s.c <- st
+		s.st <- st
 	}()
 
 	var ids []config.ServiceID

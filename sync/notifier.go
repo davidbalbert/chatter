@@ -26,9 +26,9 @@ type Notifier[T any] struct {
 	st chan state[T]
 }
 
-func NewNotifier[T any]() *Notifier[T] {
+func NewNotifier[T any](initialVal T) *Notifier[T] {
 	st := make(chan state[T], 1)
-	st <- state[T]{seq: 0}
+	st <- state[T]{seq: 0, val: initialVal}
 	return &Notifier[T]{st}
 }
 
@@ -61,20 +61,31 @@ func (n *Notifier[T]) AwaitChange(ctx context.Context, seq int64) (val T, newSeq
 	}
 }
 
+func (n *Notifier[T]) LastChange() (val T, seq int64) {
+	st := <-n.st
+	n.st <- st
+	return st.val, st.seq
+}
+
 // Same as Notifier, but with no value.
 type SimpleNotifier struct {
-	*Notifier[struct{}]
+	n *Notifier[struct{}]
 }
 
 func NewSimpleNotifier() *SimpleNotifier {
-	return &SimpleNotifier{NewNotifier[struct{}]()}
+	return &SimpleNotifier{NewNotifier(struct{}{})}
 }
 
 func (n *SimpleNotifier) NotifyChange() {
-	n.Notifier.NotifyChange(struct{}{})
+	n.n.NotifyChange(struct{}{})
 }
 
 func (n *SimpleNotifier) AwaitChange(ctx context.Context, seq int64) (newSeq int64) {
-	_, newSeq = n.Notifier.AwaitChange(ctx, seq)
+	_, newSeq = n.n.AwaitChange(ctx, seq)
 	return
+}
+
+func (n *SimpleNotifier) LastSeq() int64 {
+	_, seq := n.n.LastChange()
+	return seq
 }

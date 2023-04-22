@@ -9,7 +9,6 @@ import (
 	"github.com/davidbalbert/chatter/chatterd/common"
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
-	"github.com/davidbalbert/chatter/events"
 	"github.com/davidbalbert/chatter/system"
 	"go4.org/netipx"
 	"golang.org/x/sync/errgroup"
@@ -31,11 +30,10 @@ type Instance struct {
 	Interfaces map[interfaceID]*Interface
 
 	serviceManager *services.ServiceManager
-	events         chan events.Event
 	config         *config.OSPFConfig
 }
 
-func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Service, error) {
+func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Runner, error) {
 	if conf == nil {
 		return nil, fmt.Errorf("no ospf config provided")
 	}
@@ -58,15 +56,8 @@ func NewInstance(serviceManager *services.ServiceManager, conf any) (services.Se
 		Interfaces: make(map[interfaceID]*Interface),
 
 		serviceManager: serviceManager,
-		events:         make(chan events.Event),
 		config:         ospfConf,
 	}, nil
-}
-
-func (i *Instance) SendEvent(e events.Event) error {
-	i.events <- e
-
-	return nil
 }
 
 func (i *Instance) Run(ctx context.Context) error {
@@ -85,7 +76,7 @@ func (i *Instance) Run(ctx context.Context) error {
 	intCh := make(chan struct{}, 1)
 
 	g.Go(func() error {
-		var seq int64
+		seq := interfaceMonitor.LastSeq()
 		for {
 			select {
 			case <-ctx.Done():
@@ -101,8 +92,6 @@ func (i *Instance) Run(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return g.Wait()
-		case e := <-i.events:
-			fmt.Printf("got event: %s\n", e.Type)
 		case <-intCh:
 			err := i.updateInterfaces()
 			if err != nil {
