@@ -10,8 +10,8 @@ import (
 	"github.com/davidbalbert/chatter/api"
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
+	"github.com/davidbalbert/chatter/net/netmon"
 	"github.com/davidbalbert/chatter/ospf"
-	"github.com/davidbalbert/chatter/system"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -35,7 +35,7 @@ func main() {
 	services.MustRegisterServiceType(config.ServiceTypeAPIServer, func(serviceManager *services.ServiceManager, conf any) (services.Runner, error) {
 		return api.NewServer(serviceManager, socketPath, cancel, version), nil
 	})
-	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, system.NewInterfaceMonitor)
+	services.MustRegisterServiceType(config.ServiceTypeInterfaceMonitor, netmon.New)
 	services.MustRegisterServiceType(config.ServiceTypeOSPF, ospf.NewInstance)
 
 	configManager, err := config.NewConfigManager(configPath)

@@ -1,4 +1,4 @@
-package system
+package netmon
 
 import (
 	"context"
@@ -8,21 +8,21 @@ import (
 )
 
 type platformMonitor interface {
-	run(context.Context, *InterfaceMonitor) error
+	run(context.Context, *Monitor) error
 }
 
-type InterfaceMonitor struct {
+type Monitor struct {
 	*sync.SimpleNotifier
 	p platformMonitor
 }
 
-func NewInterfaceMonitor(serviceManager *services.ServiceManager, conf any) (services.Runner, error) {
-	return &InterfaceMonitor{
+func New(serviceManager *services.ServiceManager, conf any) (services.Runner, error) {
+	return &Monitor{
 		SimpleNotifier: sync.NewSimpleNotifier(),
 		p:              newPlatformMonitor(),
 	}, nil
 }
 
-func (m *InterfaceMonitor) Run(ctx context.Context) error {
+func (m *Monitor) Run(ctx context.Context) error {
 	return m.p.run(ctx, m)
 }

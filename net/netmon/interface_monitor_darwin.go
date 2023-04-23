@@ -1,4 +1,4 @@
-package system
+package netmon
 
 import (
 	"bufio"
@@ -12,14 +12,14 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type macosInterfaceMonitor struct {
+type macosMonitor struct {
 }
 
 func newPlatformMonitor() platformMonitor {
-	return &macosInterfaceMonitor{}
+	return &macosMonitor{}
 }
 
-func (m *macosInterfaceMonitor) run(ctx context.Context, interfaceMonitor *InterfaceMonitor) error {
+func (m *macosMonitor) run(ctx context.Context, interfaceMonitor *Monitor) error {
 	g, ctx := errgroup.WithContext(ctx)
 
 	// We want scutil to exit cleanly when ctx is canceled, which we can

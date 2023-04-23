@@ -9,7 +9,7 @@ import (
 	"github.com/davidbalbert/chatter/chatterd/common"
 	"github.com/davidbalbert/chatter/chatterd/services"
 	"github.com/davidbalbert/chatter/config"
-	"github.com/davidbalbert/chatter/system"
+	"github.com/davidbalbert/chatter/net/netmon"
 	"go4.org/netipx"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,9 +71,9 @@ func (i *Instance) Run(ctx context.Context) error {
 		return fmt.Errorf("failed to get interface monitor service: %w", err)
 	}
 
-	interfaceMonitor, ok := s.(*system.InterfaceMonitor)
+	interfaceMonitor, ok := s.(*netmon.Monitor)
 	if !ok {
-		return fmt.Errorf("expected *system.InterfaceMonitor but got %v", s)
+		return fmt.Errorf("expected *ifmon.Monitor but got %v", s)
 	}
 
 	intCh := make(chan struct{}, 1)
