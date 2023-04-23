@@ -180,6 +180,7 @@ func newInterface(conf config.OSPFInterfaceConfig, areaID common.AreaID, name st
 		InfTransDelay:      1, // TODO: conf.InfTransDelay,
 		RouterPriority:     1, // TODO: conf.RouterPriority,
 
+		// Maybe these should be time.Tickers?
 		HelloTimer: helloTimer,
 		WaitTimer:  waitTimer,
 
@@ -199,7 +200,21 @@ func (i *Interface) Run(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			if !i.HelloTimer.Stop() {
+				select {
+				case <-i.HelloTimer.C:
+				default:
+				}
+			}
+
+			if !i.WaitTimer.Stop() {
+				select {
+				case <-i.WaitTimer.C:
+				default:
+				}
+			}
+
+			return nil
 		case <-i.HelloTimer.C:
 			fmt.Printf("hello timer expired: %s %s\n", i.name, i.Prefix)
 			i.HelloTimer.Reset(time.Duration(i.HelloInterval) * time.Second)
