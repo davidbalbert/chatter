@@ -27,7 +27,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	g, ctx := errgroup.WithContext(ctx)
 
-	flag.StringVar(&configPath, "config", "/etc/chatterd/chatterd.yaml", "path to chatterd.conf")
+	flag.StringVar(&configPath, "config", "/etc/chatterd/chatterd.yaml", "path to chatterd.yaml")
 	flag.StringVar(&socketPath, "socket", "/var/run/chatterd.sock", "path to chatterd socket")
 
 	flag.Parse()
