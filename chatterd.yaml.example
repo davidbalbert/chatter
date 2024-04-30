@@ -1,0 +1,6 @@
+ospf:
+  router-id: 192.168.200.1
+
+  area 0:
+    interface en0: {}
+    interface en7: {}
