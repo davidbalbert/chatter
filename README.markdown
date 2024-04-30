@@ -6,7 +6,7 @@ Chatter is a work-in-progress implementation of [OSPF v2](https://www.rfc-editor
 
 ## Requirements
 
-Chatter currently requires macOS. To port to other OSs, the only thing needed is an implementation of `platformMonitor` for monitoring network interface changes. (see [interface_monitor.go](/net/netmon/interface_monitor.go) and [interface_monitor_darwin.go](/net/netmon/interface_monitor_darwin.go))
+Chatter currently requires macOS. To port to other OSs, the only thing needed is an implementation of `platformMonitor` for monitoring network interface changes (see [interface_monitor.go](/net/netmon/interface_monitor.go) and [interface_monitor_darwin.go](/net/netmon/interface_monitor_darwin.go)).
 
 ## Features
 
