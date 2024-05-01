@@ -44,7 +44,7 @@ interface event: en0 10.0.0.198/24: InterfaceUp
 In another, run the CLI. 
 
 ```
-$ build/chatterc  -socket /tmp/chatterd.sock
+$ build/chatterc -socket /tmp/chatterd.sock
 connected to chatterd v0.0.1-dev (2871e53; dirty)
 chatterc# 
 ```
