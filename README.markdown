@@ -121,4 +121,4 @@ $
 
 ## License
 
-Watt is copyright David Albert and released under the terms of the MIT License. See LICENSE.txt for details.
+Chatter is copyright David Albert and released under the terms of the MIT License. See LICENSE.txt for details.
