@@ -16,7 +16,6 @@ Chatter currently requires macOS. To port to other OSs, the only thing needed is
 - GRPC-based API.
 - Cisco IOS-style CLI interface with autocomplete, integrated help, and support for entering abbreviated commands.
 - A good portion of the OSPF interface state machine, but no actual sending and recieving of packets.
-- TODO: OSPF features supported.
 
 *File system monitoring for config changes is not implemented yet, but ServiceManager is ready to support it.
 
